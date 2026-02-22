@@ -120,12 +120,12 @@ class AlarmSystem(QObject):
         if self._sound_thread and self._sound_thread.is_alive():
             self._sound_thread.join(timeout=0.5)
         self._stop_sound.clear()
-        t = threading.Thread(
+        self._sound_thread = threading.Thread(
             target=self._play_sound_worker,
             args=("default", 3.0),
             daemon=True,
         )
-        t.start()
+        self._sound_thread.start()
 
     def _toggle_blink(self):
         self._blink_state = not self._blink_state

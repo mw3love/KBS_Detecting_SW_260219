@@ -34,7 +34,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.01")
+        self.setWindowTitle("KBS Peacock v1.02")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -80,9 +80,11 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._start_threads()
 
-        # TopBar 볼륨 초기값 동기화
-        init_vol = self._config.get("alarm", {}).get("volume", 80)
+        # TopBar 볼륨/뮤트 초기값 동기화
+        init_alarm = self._config.get("alarm", {})
+        init_vol = init_alarm.get("volume", 80)
         self._top_bar.set_volume_display(init_vol)
+        self._top_bar.set_mute_state(init_alarm.get("sound_enabled", True))
 
         self._logger.info("SYSTEM - 프로그램 시작")
 
@@ -121,7 +123,7 @@ class MainWindow(QMainWindow):
         self._top_bar.settings_requested.connect(self._open_settings)
         self._top_bar.roi_visibility_changed.connect(self._video_widget.set_show_rois)
         self._top_bar.detection_toggled.connect(self._on_detection_toggled)
-        self._top_bar.sound_toggled.connect(self._alarm.set_sound_enabled)
+        self._top_bar.sound_toggled.connect(self._on_sound_toggled)
         self._top_bar.volume_changed.connect(self._on_volume_changed)
         self._top_bar.clear_alarm_requested.connect(self._on_clear_alarm)
         self._top_bar.dark_mode_toggled.connect(self._on_dark_mode_toggled)
@@ -386,7 +388,7 @@ class MainWindow(QMainWindow):
     def _apply_detection_config(self, det: dict):
         """config dict에서 감지 파라미터 적용"""
         self._detector.black_threshold = det.get("black_threshold", 10)
-        self._detector.black_duration = det.get("black_duration", 20.0)
+        self._detector.black_duration = det.get("black_duration", 10.0)
         self._detector.black_alarm_duration = det.get("black_alarm_duration", 10.0)
         self._detector.still_threshold = det.get("still_threshold", 2)
         self._detector.still_duration = det.get("still_duration", 20.0)
@@ -518,7 +520,10 @@ class MainWindow(QMainWindow):
 
     def _apply_alarm_config(self, alarm: dict):
         """알림 설정을 AlarmSystem에 적용"""
-        self._alarm.set_sound_enabled(alarm.get("sound_enabled", True))
+        sound_enabled = alarm.get("sound_enabled", True)
+        self._alarm.set_sound_enabled(sound_enabled)
+        if hasattr(self, '_top_bar'):
+            self._top_bar.set_mute_state(sound_enabled)
         self._alarm.set_volume(alarm.get("volume", 80) / 100.0)
         for atype, path in alarm.get("sound_files", {}).items():
             self._alarm.set_sound_file(atype, path)
@@ -667,6 +672,10 @@ class MainWindow(QMainWindow):
             self._black_logged.clear()
             self._still_logged.clear()
             self._audio_level_logged.clear()
+
+    def _on_sound_toggled(self, enabled: bool):
+        self._alarm.set_sound_enabled(enabled)
+        self._config.setdefault("alarm", {})["sound_enabled"] = enabled
 
     def _on_volume_changed(self, volume: int):
         self._alarm.set_volume(volume / 100.0)

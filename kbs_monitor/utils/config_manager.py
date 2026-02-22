@@ -3,6 +3,7 @@
 JSON 파일 기반
 """
 import os
+import sys
 import json
 from typing import Any
 
@@ -11,10 +12,10 @@ DEFAULT_CONFIG = {
     "port": 0,
     "detection": {
         "black_threshold": 10,
-        "black_duration": 20,
+        "black_duration": 10,
         "black_alarm_duration": 10,
         "still_threshold": 2,
-        "still_duration": 20,
+        "still_duration": 30,
         "still_alarm_duration": 10,
         "audio_hsv_h_min": 40,
         "audio_hsv_h_max": 80,
@@ -98,8 +99,8 @@ class ConfigManager:
                 data = self._read_json(path)
                 # 기본값 병합 (새 키가 추가된 경우 대비)
                 return self._merge_defaults(data)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[ConfigManager] 설정 로드 실패 ({path}): {e}", file=sys.stderr)
 
         return dict(DEFAULT_CONFIG)
 
@@ -115,6 +116,9 @@ class ConfigManager:
     def save_to_path(self, config: dict, abs_path: str) -> bool:
         """절대 경로로 설정 저장"""
         try:
+            parent = os.path.dirname(abs_path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             self._write_json(abs_path, config)
             return True
         except Exception:

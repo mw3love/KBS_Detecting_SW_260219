@@ -170,7 +170,10 @@ class LogWidget(QWidget):
         """로그 폴더를 파일 탐색기로 열기"""
         log_path = os.path.abspath(self.LOG_DIR)
         os.makedirs(log_path, exist_ok=True)
-        if sys.platform == "win32":
-            os.startfile(log_path)
-        else:
-            subprocess.Popen(["xdg-open", log_path])
+        try:
+            if sys.platform == "win32":
+                os.startfile(log_path)
+            else:
+                subprocess.Popen(["xdg-open", log_path])
+        except Exception:
+            pass

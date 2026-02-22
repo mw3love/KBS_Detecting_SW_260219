@@ -33,10 +33,10 @@ class AppLogger(QObject):
         if today == self._current_date:
             return
 
-        # 기존 핸들러 제거
+        # 기존 핸들러 제거 (close 먼저 → 파일 잠금 해제 후 removeHandler)
         for h in list(self._file_logger.handlers):
-            self._file_logger.removeHandler(h)
             h.close()
+            self._file_logger.removeHandler(h)
 
         # 새 핸들러 추가 (일별 파일)
         log_path = os.path.join(self.LOG_DIR, f"{today}.txt")

@@ -292,10 +292,23 @@ class ROIEditorCanvas(QWidget):
         if self._frame is None:
             self._pixmap = None
             return
-        h, w, ch = self._frame.shape
-        rgb = cv2.cvtColor(self._frame, cv2.COLOR_BGR2RGB)
-        img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888)
-        self._pixmap = QPixmap.fromImage(img)
+        try:
+            h, w = self._frame.shape[:2]
+            ch = self._frame.shape[2] if self._frame.ndim == 3 else 1
+            if ch == 3:
+                rgb = cv2.cvtColor(self._frame, cv2.COLOR_BGR2RGB)
+            elif ch == 1:
+                rgb = cv2.cvtColor(self._frame, cv2.COLOR_GRAY2RGB)
+                ch = 3
+            else:
+                rgb = self._frame[:, :, :3].copy()
+                rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
+                ch = 3
+            # rgb.tobytes()로 복사본 전달 → numpy gc 후 dangling pointer 방지
+            img = QImage(rgb.tobytes(), w, h, ch * w, QImage.Format_RGB888)
+            self._pixmap = QPixmap.fromImage(img)
+        except Exception:
+            self._pixmap = None
 
     def paintEvent(self, event):
         painter = QPainter(self)

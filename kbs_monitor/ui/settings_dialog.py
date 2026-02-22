@@ -608,9 +608,9 @@ class SettingsDialog(QDialog):
 
         lbl_btr = QLabel("▪  몇 초 이상시 알림 발생(초):")
         lbl_btr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_black_duration = _NumEdit(20, 1, 300)
+        self._edit_black_duration = _NumEdit(10, 1, 300)
         self._edit_black_duration.editingFinished.connect(self._save_detection_params)
-        desc_btr = QLabel("블랙이 이 시간 이상 지속되면 알림 발생  (기본값: 20초)")
+        desc_btr = QLabel("블랙이 이 시간 이상 지속되면 알림 발생  (기본값: 10초)")
         desc_btr.setObjectName("paramDescLabel")
         grid_b.addWidget(lbl_btr,                  1, 0)
         grid_b.addWidget(self._edit_black_duration, 1, 1)
@@ -639,7 +639,11 @@ class SettingsDialog(QDialog):
         lbl_st.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._edit_still_threshold = _NumEdit(2, 0, 255)
         self._edit_still_threshold.editingFinished.connect(self._save_detection_params)
-        desc_st = QLabel("0~255 / 값이 낮을수록 미세한 변화도 정지로 판단  (기본값: 2)")
+        desc_st = QLabel(
+            "• 0~255 / 값이 낮을수록 미세한 변화도 정지로 판단  (기본값: 2)<br>"
+            "• 임계값 2 → \"거의 2픽셀도 달라지면 안 됨\" → 엄격 (정지 감지가 잘 안 됨)<br>"
+            "• 임계값 10 → \"10픽셀 정도 변화해도 정지로 봄\" → 느슨 (오감지 위험)"
+        )
         desc_st.setObjectName("paramDescLabel")
         grid_s.addWidget(lbl_st,                    0, 0)
         grid_s.addWidget(self._edit_still_threshold, 0, 1)
@@ -647,9 +651,9 @@ class SettingsDialog(QDialog):
 
         lbl_str = QLabel("▪  몇 초 이상시 알림 발생(초):")
         lbl_str.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_still_duration = _NumEdit(20, 1, 300)
+        self._edit_still_duration = _NumEdit(30, 1, 300)
         self._edit_still_duration.editingFinished.connect(self._save_detection_params)
-        desc_str = QLabel("스틸이 이 시간 이상 지속되면 알림 발생  (기본값: 20초)")
+        desc_str = QLabel("스틸이 이 시간 이상 지속되면 알림 발생  (기본값: 30초)")
         desc_str.setObjectName("paramDescLabel")
         grid_s.addWidget(lbl_str,                  1, 0)
         grid_s.addWidget(self._edit_still_duration, 1, 1)
@@ -1037,7 +1041,7 @@ class SettingsDialog(QDialog):
         self._edit_tg_cooldown = _NumEdit(60, 0, 3600)
         self._edit_tg_cooldown.editingFinished.connect(self._save_telegram_params)
         cooldown_row.addWidget(self._edit_tg_cooldown)
-        cooldown_row.addWidget(QLabel("(동일 채널 N초 이내 재전송 방지)"))
+        cooldown_row.addWidget(QLabel("(동일 감지영역 N초 이내 재전송 방지)"))
         cooldown_row.addStretch()
         tg_opt_layout.addLayout(cooldown_row)
 
@@ -1107,11 +1111,24 @@ class SettingsDialog(QDialog):
         self._chk_tg_audio.blockSignals(False)
         self._chk_tg_embedded.blockSignals(False)
 
+    @staticmethod
+    def _to_relative_if_possible(path: str) -> str:
+        """프로그램 루트 기준 상대경로로 변환 (내부 경로일 때만)"""
+        try:
+            rel = os.path.relpath(path, os.getcwd())
+            if not rel.startswith(".."):
+                return rel
+        except ValueError:
+            pass
+        return path
+
     def _browse_rec_dir(self):
         """녹화 저장 폴더 선택"""
-        path = QFileDialog.getExistingDirectory(self, "녹화 저장 폴더 선택")
+        init_dir = os.path.abspath("recordings")
+        os.makedirs(init_dir, exist_ok=True)
+        path = QFileDialog.getExistingDirectory(self, "녹화 저장 폴더 선택", init_dir)
         if path:
-            self._edit_rec_dir.setText(path)
+            self._edit_rec_dir.setText(self._to_relative_if_possible(path))
             self._save_recording_params()
 
     def _open_rec_dir(self):
@@ -1201,7 +1218,7 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.01")
+        lbl_version = QLabel("KBS Peacock v1.02")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)
@@ -1272,10 +1289,10 @@ class SettingsDialog(QDialog):
     def _apply_detection_params_to_ui(self, det: dict):
         """감지 파라미터 dict를 UI 위젯에 적용 (신호 없이 조용히 갱신)"""
         self._edit_black_threshold.setText(str(int(det.get("black_threshold", 10))))
-        self._edit_black_duration.setText(str(int(det.get("black_duration", 20))))
+        self._edit_black_duration.setText(str(int(det.get("black_duration", 10))))
         self._edit_black_alarm_duration.setText(str(int(det.get("black_alarm_duration", 10))))
         self._edit_still_threshold.setText(str(int(det.get("still_threshold", 2))))
-        self._edit_still_duration.setText(str(int(det.get("still_duration", 20))))
+        self._edit_still_duration.setText(str(int(det.get("still_duration", 30))))
         self._edit_still_alarm_duration.setText(str(int(det.get("still_alarm_duration", 10))))
 
         # 오디오 레벨미터 HSV 설정
@@ -1656,12 +1673,14 @@ class SettingsDialog(QDialog):
 
     def _browse_sound_file(self, alarm_type: str):
         """WAV 파일 선택 다이얼로그"""
+        init_dir = os.path.abspath(os.path.join("resources", "sounds"))
+        os.makedirs(init_dir, exist_ok=True)
         path, _ = QFileDialog.getOpenFileName(
             self, f"알림음 파일 선택 ({alarm_type})",
-            "", "WAV 파일 (*.wav);;모든 파일 (*)"
+            init_dir, "WAV 파일 (*.wav);;모든 파일 (*)"
         )
         if path:
-            self._alarm_file_edits[alarm_type].setText(path)
+            self._alarm_file_edits[alarm_type].setText(self._to_relative_if_possible(path))
             self._emit_alarm_settings()
 
     def _clear_sound_file(self, alarm_type: str):

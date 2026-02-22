@@ -59,6 +59,7 @@ class AudioMonitorThread(QThread):
             return
 
         self._running = True
+        stream = None
 
         try:
             # 오디오 스트림 열기
@@ -106,11 +107,16 @@ class AudioMonitorThread(QThread):
                 except Exception:
                     self.level_updated.emit(-60.0, -60.0)
 
-            stream.stop()
-            stream.close()
-
         except Exception as e:
             self.status_changed.emit(f"오디오 스트림 오류: {e}")
             while self._running:
                 self.level_updated.emit(-60.0, -60.0)
                 self.msleep(500)
+        finally:
+            # 예외 발생 여부와 무관하게 스트림 반드시 정리
+            if stream is not None:
+                try:
+                    stream.stop()
+                    stream.close()
+                except Exception:
+                    pass

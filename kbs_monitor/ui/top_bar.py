@@ -455,14 +455,20 @@ class TopBar(QWidget):
 
     def _on_embed_mute_clicked(self, checked: bool):
         """임베디드 오디오 음소거 토글
-        checked=True: 음소거 ON → 볼륨 0 발송, 음소거 아이콘
+        checked=True: 음소거 ON → 볼륨 0 발송, 음소거 아이콘, slider 0 표시
         checked=False: 음소거 OFF → 이전 볼륨 복원, 볼륨 아이콘
         """
         if checked:
             self._premute_volume = self._slider_volume.value()
+            self._slider_volume.blockSignals(True)
+            self._slider_volume.setValue(0)
+            self._slider_volume.blockSignals(False)
             self.volume_changed.emit(0)
             self._btn_embed_mute.setIcon(self._make_volume_icon(True))
         else:
+            self._slider_volume.blockSignals(True)
+            self._slider_volume.setValue(self._premute_volume)
+            self._slider_volume.blockSignals(False)
             self.volume_changed.emit(self._premute_volume)
             self._btn_embed_mute.setIcon(self._make_volume_icon(False))
 
@@ -508,3 +514,9 @@ class TopBar(QWidget):
         self._slider_volume.blockSignals(True)
         self._slider_volume.setValue(max(0, min(100, value)))
         self._slider_volume.blockSignals(False)
+
+    def set_mute_state(self, enabled: bool):
+        """음소거 버튼 상태를 외부에서 설정 (시그널 발송 없이). enabled=True → 알림음 ON (버튼 미체크)"""
+        self._btn_mute.blockSignals(True)
+        self._btn_mute.setChecked(not enabled)
+        self._btn_mute.blockSignals(False)

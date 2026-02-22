@@ -181,7 +181,7 @@ class TelegramNotifier:
                 url,
                 json={
                     "chat_id": chat_id,
-                    "text": "[KBS Argos] 텔레그램 연결 테스트 성공",
+                    "text": "[KBS Peacock] 텔레그램 연결 테스트 성공",
                 },
                 timeout=10.0,
             )
@@ -223,14 +223,14 @@ class TelegramNotifier:
 
         if is_recovery:
             text = (
-                f"[KBS Argos \U00002705 복구]\n"
+                f"[KBS Peacock \U00002705 복구]\n"
                 f"\U000023F0 시각: {now_str}\n"
                 f"\U0001F4E1 채널: {channel_str}\n"
                 f"\U00002714 복구: {alarm_type} 정상"
             )
         else:
             text = (
-                f"[KBS Argos \U0001F6A8 알림]\n"
+                f"[KBS Peacock \U0001F6A8 알림]\n"
                 f"\U000023F0 시각: {now_str}\n"
                 f"\U0001F4E1 채널: {channel_str}\n"
                 f"\U000026A0 감지: {alarm_type}"

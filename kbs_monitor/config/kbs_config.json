@@ -5,7 +5,7 @@
     "black_duration": 10,
     "black_alarm_duration": 10,
     "still_threshold": 2,
-    "still_duration": 10,
+    "still_duration": 30,
     "still_alarm_duration": 10,
     "audio_hsv_h_min": 40,
     "audio_hsv_h_max": 80,
@@ -14,11 +14,11 @@
     "audio_hsv_v_min": 30,
     "audio_hsv_v_max": 255,
     "audio_pixel_ratio": 5,
-    "audio_level_duration": 5,
+    "audio_level_duration": 20,
     "audio_level_alarm_duration": 10,
     "audio_level_recovery_seconds": 2,
     "embedded_silence_threshold": -50,
-    "embedded_silence_duration": 10,
+    "embedded_silence_duration": 20,
     "embedded_alarm_duration": 10
   },
   "alarm": {
@@ -26,7 +26,7 @@
     "volume": 0,
     "sounds_dir": "resources/sounds",
     "sound_files": {
-      "default": "C:/Users/7make/Desktop/liecio-alert-109578.wav"
+      "default": "resources\\sounds\\Alert.wav"
     }
   },
   "rois": {
@@ -315,7 +315,7 @@
     ]
   },
   "performance": {
-    "detection_interval": 100,
+    "detection_interval": 200,
     "scale_factor": 1.0,
     "video_detection_enabled": true,
     "audio_detection_enabled": true,
@@ -324,7 +324,7 @@
   "telegram": {
     "enabled": true,
     "bot_token": "8519442630:AAG-8fwREBBeKGm9eoZfK80JW-hzlDfUv1w",
-    "chat_id": "6814671341",
+    "chat_id": "-1003745250153",
     "send_image": true,
     "cooldown": 60,
     "notify_black": true,

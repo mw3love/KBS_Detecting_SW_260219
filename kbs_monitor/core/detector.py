@@ -145,6 +145,15 @@ class Detector:
                               interpolation=cv2.INTER_AREA)
         return frame
 
+    def _get_scaled_bounds(self, roi: ROI, frame_h: int, frame_w: int) -> tuple:
+        """scale_factor 보정된 ROI 경계 좌표 반환 (x1, y1, x2, y2)"""
+        sf = self.scale_factor
+        x1 = max(0, int(roi.x * sf))
+        y1 = max(0, int(roi.y * sf))
+        x2 = min(frame_w, int((roi.x + roi.w) * sf))
+        y2 = min(frame_h, int((roi.y + roi.h) * sf))
+        return x1, y1, x2, y2
+
     def update_roi_list(self, rois: List[ROI]):
         """감지영역 목록 변경 시 상태 초기화 및 오래된 버퍼 정리"""
         labels = {roi.label for roi in rois}
@@ -186,17 +195,13 @@ class Detector:
 
         # 해상도 스케일 적용 (감지 연산 픽셀 수 감소)
         frame = self._apply_scale_factor(frame)
-        sf = self.scale_factor
 
+        h, w = frame.shape[:2]
         for roi in rois:
             label = roi.label
 
-            # scale_factor 보정된 ROI 좌표
-            h, w = frame.shape[:2]
-            x1 = max(0, int(roi.x * sf))
-            y1 = max(0, int(roi.y * sf))
-            x2 = min(w, int((roi.x + roi.w) * sf))
-            y2 = min(h, int((roi.y + roi.h) * sf))
+            # scale_factor 보정된 ROI 좌표 (공통 메서드)
+            x1, y1, x2, y2 = self._get_scaled_bounds(roi, h, w)
 
             if x2 <= x1 or y2 <= y1:
                 continue
@@ -265,15 +270,12 @@ class Detector:
 
         # 해상도 스케일 적용 (공통 메서드 사용)
         frame = self._apply_scale_factor(frame)
-        sf = self.scale_factor
+        fh, fw = frame.shape[:2]
 
         for roi in audio_rois:
             label = roi.label
-            fh, fw = frame.shape[:2]
-            x1 = max(0, int(roi.x * sf))
-            y1 = max(0, int(roi.y * sf))
-            x2 = min(fw, int((roi.x + roi.w) * sf))
-            y2 = min(fh, int((roi.y + roi.h) * sf))
+            # scale_factor 보정된 ROI 좌표 (공통 메서드)
+            x1, y1, x2, y2 = self._get_scaled_bounds(roi, fh, fw)
 
             if x2 <= x1 or y2 <= y1:
                 continue

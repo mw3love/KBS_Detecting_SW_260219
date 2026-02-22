@@ -5,6 +5,7 @@ NO SIGNAL 상태에서도 1920×1080 프레임 유지, ROI 항상 렌더링
 """
 import numpy as np
 import cv2
+from itertools import chain
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QImage
@@ -101,7 +102,7 @@ class VideoWidget(QWidget):
         # show_rois=False여도 알림 중인 ROI가 있으면 표시 (알림 종료 시 자동으로 사라짐)
         has_alerts = any(
             self._alert_labels.get(r.label, False)
-            for r in self._video_rois + self._audio_rois
+            for r in chain(self._video_rois, self._audio_rois)
         )
         if self._show_rois or has_alerts:
             self._draw_rois(frame, w, h)
@@ -163,7 +164,8 @@ class VideoWidget(QWidget):
         """numpy BGR 배열을 QLabel에 표시"""
         h, w, ch = frame.shape
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        image = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888)
+        # rgb.tobytes()로 복사본을 전달 → numpy 배열 gc 후 dangling pointer 방지
+        image = QImage(rgb.tobytes(), w, h, ch * w, QImage.Format_RGB888)
 
         lw = self._label.width()
         lh = self._label.height()
@@ -171,7 +173,7 @@ class VideoWidget(QWidget):
             pixmap = QPixmap.fromImage(image).scaled(
                 lw, lh,
                 Qt.KeepAspectRatio,
-                Qt.SmoothTransformation,
+                Qt.FastTransformation,
             )
         else:
             pixmap = QPixmap.fromImage(image)

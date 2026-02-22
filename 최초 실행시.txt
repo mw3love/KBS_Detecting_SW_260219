@@ -1,0 +1,6 @@
+1. Python 3.10+ 설치 → [python.org](https://www.python.org/downloads/)
+    (설치 시 **"Add Python to PATH" 반드시 체크**)
+
+2. install.bat 실행 → 라이브러리 자동 설치 (인터넷 필요, 최초 1회만)
+
+3. run.pyw 실행

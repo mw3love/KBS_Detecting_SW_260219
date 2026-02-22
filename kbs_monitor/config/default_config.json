@@ -1,0 +1,46 @@
+{
+  "port": 0,
+  "detection": {
+    "black_threshold": 10,
+    "black_duration": 20,
+    "black_alarm_duration": 10,
+    "still_threshold": 2,
+    "still_duration": 20,
+    "still_alarm_duration": 10,
+    "audio_hsv_h_min": 40,
+    "audio_hsv_h_max": 80,
+    "audio_hsv_s_min": 30,
+    "audio_hsv_s_max": 255,
+    "audio_hsv_v_min": 30,
+    "audio_hsv_v_max": 255,
+    "audio_pixel_ratio": 5,
+    "audio_level_duration": 20,
+    "audio_level_alarm_duration": 10,
+    "audio_level_recovery_seconds": 2,
+    "embedded_silence_threshold": -50,
+    "embedded_silence_duration": 20,
+    "embedded_alarm_duration": 10
+  },
+  "alarm": {
+    "sound_enabled": true,
+    "volume": 80,
+    "sounds_dir": "resources/sounds",
+    "sound_files": {
+      "black": "",
+      "still": "",
+      "audio": "",
+      "default": ""
+    }
+  },
+  "rois": {
+    "video": [],
+    "audio": []
+  },
+  "performance": {
+    "detection_interval": 200,
+    "scale_factor": 1.0,
+    "video_detection_enabled": true,
+    "audio_detection_enabled": true,
+    "still_detection_enabled": true
+  }
+}

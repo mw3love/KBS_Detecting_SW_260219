@@ -1,0 +1,553 @@
+/* KBS 16채널 모니터링 - 라이트 테마 */
+/* 배경: 밝은 회색/흰색, 텍스트: 어두운색, 이상: 빨간색만 */
+
+/* ── 전체 기본 ─────────────────────────────────── */
+QWidget {
+    background-color: #f0f2f8;
+    color: #1a1a2e;
+    font-family: "Segoe UI", "맑은 고딕", sans-serif;
+    font-size: 13px;
+}
+
+QMainWindow {
+    background-color: #e4e8f0;
+}
+
+/* ── 상단 바 ────────────────────────────────────── */
+#topBar {
+    background-color: #dce0ec;
+    border-bottom: 1px solid #b0b8cc;
+}
+
+#topBarSeparator {
+    color: #a8b0c0;
+    background-color: #a8b0c0;
+    max-width: 1px;
+}
+
+/* 시계 레이블 */
+#lblTime {
+    color: #1a1a3a;
+    font-size: 16px;
+    font-weight: bold;
+    font-family: "Courier New", monospace;
+}
+
+/* 감지갯수 컨테이너 */
+#summaryContainer {
+    background-color: transparent;
+}
+
+/* 감지갯수 제목 */
+#lblSummaryTitle {
+    color: #303048;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    font-family: "Segoe UI", "맑은 고딕", sans-serif;
+}
+
+/* 감지갯수 항목 (V / A / EA) */
+#lblSummaryItem {
+    color: #303050;
+    font-size: 17px;
+    font-family: "Courier New", monospace;
+    min-width: 36px;
+}
+
+/* 모니터링 ON 버튼 */
+#btnMonitoring {
+    background-color: #e4e8f8;
+    color: #1a1a2e;
+    border: 1px solid #8090b8;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-weight: bold;
+}
+#btnMonitoring:hover {
+    background-color: #d4d8f0;
+}
+#btnMonitoring:checked {
+    background-color: #e4e8f8;
+    border-color: #6070a8;
+}
+
+/* 모니터링 OFF 상태 */
+#btnMonitoringOff {
+    background-color: #f8dede;
+    color: #8b0000;
+    border: 1px solid #c09090;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-weight: bold;
+}
+
+/* 임베디드 오디오 음소거 버튼 */
+QPushButton#btnEmbedMute {
+    font-size: 10px;
+    font-weight: bold;
+    padding: 0 2px;
+    min-height: 0;
+}
+QPushButton#btnEmbedMute:checked {
+    background-color: #ffd8d8;
+    border-color: #cc2222;
+    color: #8b0000;
+}
+
+/* 상단 텍스트 버튼 공통 (감지ON/OFF / 감지영역 / Mute / 야간모드 / 설정) */
+QPushButton#btnDetection,
+QPushButton#btnRoi,
+QPushButton#btnMuteText,
+QPushButton#btnDark,
+QPushButton#btnSettings {
+    font-size: 13px;
+    font-weight: bold;
+}
+QPushButton#btnDetection:checked,
+QPushButton#btnRoi:checked,
+QPushButton#btnMuteText:checked {
+    background-color: #ffd8d8;
+    border-color: #cc2222;
+    color: #8b0000;
+}
+
+/* 기본 버튼 */
+QPushButton {
+    background-color: #e4e8f0;
+    border: 1px solid #9098b0;
+    border-radius: 4px;
+    padding: 5px 12px;
+    color: #1a1a2e;
+    min-height: 26px;
+}
+QPushButton:hover {
+    background-color: #d4d8e8;
+    border-color: #7080a8;
+}
+QPushButton:pressed {
+    background-color: #c4c8d8;
+}
+QPushButton:checked {
+    background-color: #c8d0e8;
+    border-color: #5060a8;
+}
+QPushButton:disabled {
+    color: #909090;
+    border-color: #c0c8d0;
+    background-color: #e8ecf0;
+}
+
+/* 볼륨 슬라이더 */
+#sliderVolume::groove:horizontal {
+    height: 4px;
+    background: #b8c0d0;
+    border-radius: 2px;
+}
+#sliderVolume::handle:horizontal {
+    background: #5060a0;
+    width: 12px;
+    height: 12px;
+    margin: -4px 0;
+    border-radius: 6px;
+}
+#sliderVolume::sub-page:horizontal {
+    background: #7080c0;
+    border-radius: 2px;
+}
+
+/* ── 비디오 영역 ─────────────────────────────────── */
+#videoArea {
+    background-color: #d8dce8;
+}
+#videoLabel {
+    background-color: #c8ccd8;
+}
+
+/* ── 로그 영역 ──────────────────────────────────── */
+#logArea {
+    background-color: #eceef8;
+    border-left: 1px solid #b0b8cc;
+}
+
+#logHeaderArea {
+    background-color: #dce0ec;
+    border-bottom: 1px solid #b0b8cc;
+}
+
+#logHeader {
+    background-color: transparent;
+    color: #1a1a3a;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 4px;
+    letter-spacing: 2px;
+}
+
+#logList {
+    background-color: #eceef8;
+    border: none;
+    color: #1a1a2e;
+    font-size: 12px;
+    font-family: "Courier New", monospace;
+}
+#logList::item {
+    padding: 3px 6px;
+    border-bottom: 1px solid #d0d4e4;
+}
+#logList::item:hover {
+    background-color: #dde0f0;
+}
+
+#btnLogClear {
+    background-color: #d8dcec;
+    border: 1px solid #8898b0;
+    font-size: 11px;
+    padding: 2px 6px;
+    min-height: 22px;
+}
+#btnLogClear:hover {
+    background-color: #c8cce0;
+}
+
+#btnLogFolder {
+    background-color: #d8dcec;
+    border: 1px solid #8898b0;
+    padding: 2px;
+    min-height: 22px;
+}
+#btnLogFolder:hover {
+    background-color: #c8cce0;
+}
+
+/* ── 스플리터 ────────────────────────────────────── */
+QSplitter::handle:horizontal {
+    background-color: #b0b8cc;
+    width: 3px;
+}
+QSplitter::handle:horizontal:hover {
+    background-color: #8090b0;
+}
+
+/* ── 설정 다이얼로그 ────────────────────────────── */
+QDialog {
+    background-color: #f0f2f8;
+}
+
+QTabWidget::pane {
+    border: 1px solid #b0b8cc;
+    background-color: #f0f2f8;
+}
+QTabWidget::tab-bar {
+    left: 4px;
+}
+QTabBar::tab {
+    background-color: #dce0ec;
+    color: #404060;
+    padding: 6px 16px;
+    border: 1px solid #b0b8cc;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    margin-right: 2px;
+}
+QTabBar::tab:selected {
+    background-color: #f0f2f8;
+    color: #1a1a2e;
+    border-color: #8090b0;
+}
+QTabBar::tab:hover {
+    background-color: #ccd0e0;
+    color: #1a1a2e;
+}
+
+QGroupBox {
+    border: 1px solid #b0b8cc;
+    border-radius: 4px;
+    margin-top: 12px;
+    padding: 8px;
+    color: #303050;
+    font-size: 12px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 8px;
+    padding: 0 4px;
+}
+
+QLabel {
+    color: #1a1a2e;
+}
+
+QComboBox {
+    background-color: #ffffff;
+    border: 1px solid #b0b8cc;
+    border-radius: 3px;
+    padding: 4px 8px;
+    color: #1a1a2e;
+    min-height: 24px;
+}
+QComboBox:hover {
+    border-color: #6070a8;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+QComboBox QAbstractItemView {
+    background-color: #ffffff;
+    border: 1px solid #b0b8cc;
+    color: #1a1a2e;
+    selection-background-color: #dde0f0;
+}
+
+QLineEdit {
+    background-color: #ffffff;
+    border: 1px solid #b0b8cc;
+    border-radius: 3px;
+    padding: 4px 8px;
+    color: #1a1a2e;
+    min-height: 24px;
+}
+QLineEdit:focus {
+    border-color: #5060a8;
+}
+
+QDialogButtonBox QPushButton {
+    min-width: 70px;
+}
+
+QScrollBar:vertical {
+    background-color: #e4e8f0;
+    width: 10px;
+    border: none;
+}
+QScrollBar::handle:vertical {
+    background-color: #a8b0c8;
+    border-radius: 5px;
+    min-height: 20px;
+}
+QScrollBar::handle:vertical:hover {
+    background-color: #7888a8;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QCheckBox {
+    color: #1a1a2e;
+    spacing: 8px;
+}
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #8090b0;
+    border-radius: 3px;
+    background-color: #ffffff;
+}
+QCheckBox::indicator:unchecked {
+    background-color: #f0f2f8;
+    border: 2px solid #9098b8;
+}
+QCheckBox::indicator:checked {
+    background-color: #2a60cc;
+    border: 2px solid #1a50bb;
+}
+
+QSlider::groove:horizontal {
+    height: 4px;
+    background: #b8c0d0;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    background: #5060a0;
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+}
+QSlider::handle:horizontal:hover {
+    background: #3050c0;
+}
+QSlider::sub-page:horizontal {
+    background: #8090c0;
+    border-radius: 2px;
+}
+
+QToolTip {
+    background-color: #ffffff;
+    color: #1a1a2e;
+    border: 1px solid #b0b8cc;
+    padding: 4px;
+    border-radius: 3px;
+}
+
+/* ── ROI 편집기 ──────────────────────────────────── */
+#btnEditDoneOverlay {
+    background-color: #ffd0d0;
+    border: 2px solid #cc4444;
+    border-radius: 5px;
+    color: #8b0000;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 4px 10px;
+    min-height: 28px;
+}
+#btnEditDoneOverlay:hover {
+    background-color: #ffb0b0;
+    border-color: #aa2222;
+}
+
+#roiSidePanel {
+    background-color: #e4e8f0;
+    border-left: 2px solid #b0b8cc;
+}
+#roiPanelTitle {
+    font-size: 13px;
+    font-weight: bold;
+    color: #1a1a3a;
+    padding: 4px 0;
+}
+#roiHelpLabel {
+    color: #404868;
+    font-size: 11px;
+    line-height: 1.6;
+}
+#roiPanelSeparator {
+    color: #b0b8cc;
+    background-color: #b0b8cc;
+}
+
+#btnEditDone {
+    background-color: #ffd0d0;
+    border: 2px solid #cc4444;
+    border-radius: 5px;
+    color: #8b0000;
+    font-weight: bold;
+    font-size: 13px;
+    min-height: 36px;
+}
+#btnEditDone:hover {
+    background-color: #ffb0b0;
+    border-color: #aa2222;
+}
+
+/* ── 설정 다이얼로그 요소 ──────────────────────── */
+#roiTableLabel {
+    font-size: 12px;
+    font-weight: bold;
+    color: #303050;
+    padding: 2px 0;
+}
+
+#detectionSectionTitle {
+    font-size: 12px;
+    font-weight: bold;
+    color: #303050;
+    padding: 2px 0;
+}
+
+#btnSaveSettings {
+    background-color: #dce0f0;
+    border: 1px solid #8090b8;
+    color: #1a1a3a;
+    font-weight: bold;
+}
+#btnSaveSettings:hover {
+    background-color: #ccd0e8;
+    border-color: #6070a8;
+}
+
+/* 행 순서 이동 버튼 */
+#btnMoveRow {
+    background-color: #e8ecf4;
+    border: 1px solid #9098b0;
+    color: #303050;
+    min-height: 24px;
+    padding: 2px 8px;
+}
+#btnMoveRow:hover {
+    background-color: #d8dce8;
+    border-color: #7080a8;
+}
+
+/* 감지 파라미터 설명 레이블 */
+#paramDescLabel {
+    color: #606070;
+    font-size: 11px;
+}
+
+#btnHalfscreenEdit {
+    background-color: #d0e8d0;
+    border: 1px solid #80b080;
+    color: #1a3a1a;
+}
+#btnHalfscreenEdit:hover {
+    background-color: #b8d8b8;
+    border-color: #60a060;
+}
+
+#btnResetRoi {
+    background-color: #f8d8d8;
+    border: 1px solid #c09090;
+    color: #4a1a1a;
+}
+#btnResetRoi:hover {
+    background-color: #f0b8b8;
+    border-color: #a06060;
+}
+
+/* ROI 테이블 */
+QTableWidget {
+    background-color: #ffffff;
+    gridline-color: #c8d0dc;
+    border: 1px solid #b0b8cc;
+    color: #1a1a2e;
+    font-size: 12px;
+}
+QTableWidget::item {
+    padding: 3px 4px;
+    border: none;
+}
+QTableWidget::item:selected {
+    background-color: #dde0f0;
+    color: #1a1a2e;
+}
+QHeaderView::section {
+    background-color: #dce0ec;
+    color: #303050;
+    border: 1px solid #b0b8cc;
+    padding: 4px;
+    font-size: 11px;
+}
+
+/* 구분선 */
+#settingsSeparator {
+    color: #b0b8cc;
+    background-color: #b0b8cc;
+    max-height: 1px;
+}
+
+/* 스크롤 영역 */
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
+QScrollArea > QWidget > QWidget {
+    background-color: #f0f2f8;
+}
+
+QScrollBar:horizontal {
+    background-color: #e4e8f0;
+    height: 10px;
+    border: none;
+}
+QScrollBar::handle:horizontal {
+    background-color: #a8b0c8;
+    border-radius: 5px;
+    min-width: 20px;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0;
+}

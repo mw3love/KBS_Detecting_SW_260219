@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd /c:*)",
+      "Bash(dir)",
+      "Bash(git -C \"G:/내 드라이브/A1. 개인 자료/A1. Python/260218 2차 개발\" status)",
+      "Bash(git -C \"G:/내 드라이브/A1. 개인 자료/A1. Python/260218 2차 개발\" init)",
+      "Bash(git -C \"G:/내 드라이브/A1. 개인 자료/A1. Python/260218 2차 개발\" add .)",
+      "Bash(git -C \"G:/내 드라이브/A1. 개인 자료/A1. Python/260218 2차 개발\" status --short)",
+      "Bash(git -C \"G:/내 드라이브/A1. 개인 자료/A1. Python/260218 2차 개발\" commit -m \"260219 Phase3완료 및 코드 최적화\")"
+    ]
+  }
+}

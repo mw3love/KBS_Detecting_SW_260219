@@ -1,0 +1,342 @@
+{
+  "port": 0,
+  "detection": {
+    "black_threshold": 10,
+    "black_duration": 10,
+    "black_alarm_duration": 10,
+    "still_threshold": 2,
+    "still_duration": 10,
+    "still_alarm_duration": 10,
+    "audio_hsv_h_min": 40,
+    "audio_hsv_h_max": 80,
+    "audio_hsv_s_min": 30,
+    "audio_hsv_s_max": 255,
+    "audio_hsv_v_min": 30,
+    "audio_hsv_v_max": 255,
+    "audio_pixel_ratio": 5,
+    "audio_level_duration": 5,
+    "audio_level_alarm_duration": 10,
+    "audio_level_recovery_seconds": 2,
+    "embedded_silence_threshold": -50,
+    "embedded_silence_duration": 10,
+    "embedded_alarm_duration": 10
+  },
+  "alarm": {
+    "sound_enabled": true,
+    "volume": 0,
+    "sounds_dir": "resources/sounds",
+    "sound_files": {
+      "default": "C:/Users/7make/Desktop/liecio-alert-109578.wav"
+    }
+  },
+  "rois": {
+    "video": [
+      {
+        "label": "V1",
+        "media_name": "",
+        "x": 1046,
+        "y": 36,
+        "w": 182,
+        "h": 97,
+        "roi_type": "video"
+      },
+      {
+        "label": "V2",
+        "media_name": "",
+        "x": 100,
+        "y": 212,
+        "w": 190,
+        "h": 101,
+        "roi_type": "video"
+      },
+      {
+        "label": "V3",
+        "media_name": "",
+        "x": 408,
+        "y": 210,
+        "w": 193,
+        "h": 94,
+        "roi_type": "video"
+      },
+      {
+        "label": "V4",
+        "media_name": "",
+        "x": 723,
+        "y": 213,
+        "w": 193,
+        "h": 94,
+        "roi_type": "video"
+      },
+      {
+        "label": "V5",
+        "media_name": "",
+        "x": 1028,
+        "y": 218,
+        "w": 193,
+        "h": 91,
+        "roi_type": "video"
+      },
+      {
+        "label": "V6",
+        "media_name": "",
+        "x": 94,
+        "y": 386,
+        "w": 201,
+        "h": 100,
+        "roi_type": "video"
+      },
+      {
+        "label": "V7",
+        "media_name": "",
+        "x": 389,
+        "y": 385,
+        "w": 224,
+        "h": 93,
+        "roi_type": "video"
+      },
+      {
+        "label": "V8",
+        "media_name": "",
+        "x": 752,
+        "y": 386,
+        "w": 188,
+        "h": 93,
+        "roi_type": "video"
+      },
+      {
+        "label": "V9",
+        "media_name": "",
+        "x": 1049,
+        "y": 384,
+        "w": 175,
+        "h": 109,
+        "roi_type": "video"
+      },
+      {
+        "label": "V10",
+        "media_name": "",
+        "x": 120,
+        "y": 578,
+        "w": 124,
+        "h": 85,
+        "roi_type": "video"
+      },
+      {
+        "label": "V11",
+        "media_name": "",
+        "x": 461,
+        "y": 574,
+        "w": 106,
+        "h": 96,
+        "roi_type": "video"
+      },
+      {
+        "label": "V12",
+        "media_name": "",
+        "x": 736,
+        "y": 563,
+        "w": 167,
+        "h": 93,
+        "roi_type": "video"
+      },
+      {
+        "label": "V13",
+        "media_name": "",
+        "x": 1062,
+        "y": 576,
+        "w": 147,
+        "h": 101,
+        "roi_type": "video"
+      },
+      {
+        "label": "V14",
+        "media_name": "",
+        "x": 241,
+        "y": 34,
+        "w": 54,
+        "h": 38,
+        "roi_type": "video"
+      },
+      {
+        "label": "V15",
+        "media_name": "",
+        "x": 237,
+        "y": 118,
+        "w": 63,
+        "h": 36,
+        "roi_type": "video"
+      },
+      {
+        "label": "V16",
+        "media_name": "",
+        "x": 565,
+        "y": 38,
+        "w": 55,
+        "h": 40,
+        "roi_type": "video"
+      },
+      {
+        "label": "V17",
+        "media_name": "",
+        "x": 560,
+        "y": 118,
+        "w": 61,
+        "h": 31,
+        "roi_type": "video"
+      }
+    ],
+    "audio": [
+      {
+        "label": "A1",
+        "media_name": "",
+        "x": 645,
+        "y": 427,
+        "w": 19,
+        "h": 100,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A2",
+        "media_name": "",
+        "x": 327,
+        "y": 414,
+        "w": 15,
+        "h": 108,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A3",
+        "media_name": "",
+        "x": 8,
+        "y": 76,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A4",
+        "media_name": "",
+        "x": 326,
+        "y": 76,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A5",
+        "media_name": "",
+        "x": 968,
+        "y": 76,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A6",
+        "media_name": "",
+        "x": 8,
+        "y": 257,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A7",
+        "media_name": "",
+        "x": 326,
+        "y": 257,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A8",
+        "media_name": "",
+        "x": 647,
+        "y": 257,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A9",
+        "media_name": "",
+        "x": 968,
+        "y": 257,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A10",
+        "media_name": "",
+        "x": 8,
+        "y": 614,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A11",
+        "media_name": "",
+        "x": 326,
+        "y": 614,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A12",
+        "media_name": "",
+        "x": 647,
+        "y": 614,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A13",
+        "media_name": "",
+        "x": 968,
+        "y": 614,
+        "w": 14,
+        "h": 86,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A14",
+        "media_name": "",
+        "x": 5,
+        "y": 427,
+        "w": 19,
+        "h": 100,
+        "roi_type": "audio"
+      }
+    ]
+  },
+  "performance": {
+    "detection_interval": 100,
+    "scale_factor": 1.0,
+    "video_detection_enabled": true,
+    "audio_detection_enabled": true,
+    "still_detection_enabled": true
+  },
+  "telegram": {
+    "enabled": true,
+    "bot_token": "8519442630:AAG-8fwREBBeKGm9eoZfK80JW-hzlDfUv1w",
+    "chat_id": "6814671341",
+    "send_image": true,
+    "cooldown": 60,
+    "notify_black": true,
+    "notify_still": true,
+    "notify_audio_level": true,
+    "notify_embedded": true
+  },
+  "recording": {
+    "enabled": true,
+    "save_dir": "recordings",
+    "pre_seconds": 5,
+    "post_seconds": 15,
+    "max_keep_days": 7
+  }
+}

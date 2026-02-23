@@ -5,6 +5,7 @@
 모든 감지 타입(블랙/스틸/오디오레벨미터/임베디드)에 동일한 통합 알림음 사용
 """
 import os
+import sys
 import time
 import wave
 import threading
@@ -31,23 +32,33 @@ class AlarmSystem(QObject):
     alarm_triggered = Signal(str)  # 알림 발생 (알림 타입)
 
     # 통합 알림음 — 모든 감지 타입 공통 사용
-    # Windows 내장 경고음: SystemHand (Critical Stop — 가장 강렬한 경고음)
     DEFAULT_WINDOWS_SOUND = "SystemHand"
 
     def __init__(self, sounds_dir: str = "resources/sounds", parent=None):
         super().__init__(parent)
         self._sounds_dir = sounds_dir
-        self._sound_files: dict = {}   # {"default": 절대경로}
+        self._sound_files: dict = {}
         self._sound_enabled = True
         self._volume = 0.8
         self._blink_timer = QTimer(self)
         self._blink_state = False
         self._active_alarms: set = set()
         self._sound_thread: threading.Thread = None
-        self._stop_sound = threading.Event()  # 사운드 정지 신호
+        self._stop_sound = threading.Event()
+        self._logger = None
 
         self._blink_timer.timeout.connect(self._toggle_blink)
-        self._blink_timer.setInterval(500)  # 0.5초 간격 깜박임
+        self._blink_timer.setInterval(500)
+
+    def set_logger(self, logger):
+        """UI 로그 위젯 출력용 로거 주입"""
+        self._logger = logger
+
+    def _log(self, msg: str):
+        if self._logger:
+            self._logger.warning(msg)
+        else:
+            print(f"[AlarmSystem] {msg}", file=sys.stderr)
 
     def trigger(self, alarm_type: str, label: str, alarm_duration: float = 0.0):
         """알림 발생. alarm_duration > 0이면 해당 초 후 소리 자동 중지."""
@@ -66,7 +77,7 @@ class AlarmSystem(QObject):
         self._active_alarms.discard(key)
 
         if not self._active_alarms:
-            self._stop_sound.set()   # 모든 알림 해제 시 사운드 정지
+            self._stop_playback()
             self._blink_timer.stop()
             self._blink_state = False
             self.visual_blink.emit(False)
@@ -74,28 +85,30 @@ class AlarmSystem(QObject):
     def resolve_all(self):
         """모든 알림 해제"""
         self._active_alarms.clear()
-        self._stop_sound.set()       # 재생 중인 사운드 즉시 정지
+        self._stop_playback()
         self._blink_timer.stop()
         self._blink_state = False
         self.visual_blink.emit(False)
 
+    def _stop_playback(self):
+        """사운드 재생 중지 (이벤트 + sounddevice 즉시 정지)"""
+        self._stop_sound.set()
+        if SOUNDDEVICE_AVAILABLE:
+            try:
+                sd.stop()
+            except Exception:
+                pass
+        if WINSOUND_AVAILABLE:
+            try:
+                winsound.PlaySound(None, winsound.SND_ASYNC)
+            except Exception:
+                pass
+
     def set_sound_enabled(self, enabled: bool):
         self._sound_enabled = enabled
         if not enabled:
-            self._stop_sound.set()   # 음소거 신호
-            # 즉시 정지: sounddevice / winsound
-            if SOUNDDEVICE_AVAILABLE:
-                try:
-                    sd.stop()
-                except Exception:
-                    pass
-            elif WINSOUND_AVAILABLE:
-                try:
-                    winsound.PlaySound(None, winsound.SND_ASYNC)
-                except Exception:
-                    pass
+            self._stop_playback()
         else:
-            # 음소거 해제 시: 활성 알람이 있으면 소리 재개
             if self._active_alarms:
                 self._play_sound("default")
 
@@ -106,26 +119,109 @@ class AlarmSystem(QObject):
         self._sounds_dir = path
 
     def set_sound_file(self, alarm_type: str, path: str):
-        """알림음 파일 경로 설정 (키 그대로 저장, _get_sound_path에서 통합 처리)"""
+        """알림음 파일 경로 설정"""
         self._sound_files[alarm_type] = path
 
     def get_sound_files(self) -> dict:
-        """현재 설정된 알림음 파일 경로 반환"""
         return dict(self._sound_files)
 
     def play_test_sound(self, alarm_type: str):
-        """테스트용 알림음 재생 (3초 후 자동 종료)"""
-        # 기존 재생 중지 후 테스트 시작
-        self._stop_sound.set()
+        """테스트용 알림음 1회 재생"""
+        # 파일 경로 확인 및 절대경로 변환
+        raw_path = self._sound_files.get("default", "")
+        if raw_path:
+            abs_path = os.path.abspath(raw_path)
+            exists = os.path.exists(abs_path)
+            self._log(f"알림음 테스트: {os.path.basename(abs_path)}")
+            self._log(f"  경로: {abs_path}")
+            self._log(f"  파일 존재: {exists}")
+            sound_file = abs_path if exists else None
+            if not exists:
+                self._log("  파일 없음 → Windows 내장음으로 대체")
+        else:
+            sound_file = None
+            self._log("알림음 테스트: 파일 미설정 → Windows 내장음 사용")
+            self._log(f"  _sound_files 현재값: {self._sound_files}")
+
+        # 기존 재생 중지 — 새 Event 객체로 이전 스레드와 완전히 분리
+        self._stop_playback()
         if self._sound_thread and self._sound_thread.is_alive():
-            self._sound_thread.join(timeout=0.5)
-        self._stop_sound.clear()
+            self._sound_thread.join(timeout=1.5)
+        self._stop_sound = threading.Event()  # 새 이벤트 (이전 스레드 잔재 방지)
         self._sound_thread = threading.Thread(
-            target=self._play_sound_worker,
-            args=("default", 3.0),
+            target=self._play_test_worker,
+            args=(sound_file,),
             daemon=True,
         )
         self._sound_thread.start()
+
+    def _play_test_worker(self, sound_file: str | None):
+        """테스트 전용 1회 재생 (winsound → sounddevice → 내장음 순)"""
+        self._log(f"  적용 볼륨: {self._volume:.2f}")
+
+        # ── winsound + WAV 파일 (우선 시도 — 장치/볼륨 문제 없음) ──────
+        if sound_file and WINSOUND_AVAILABLE:
+            try:
+                self._log("  winsound 재생 시작...")
+                winsound.PlaySound(sound_file, winsound.SND_FILENAME | winsound.SND_SYNC)
+                self._log("  winsound 재생 완료")
+                return
+            except Exception as e:
+                self._log(f"  winsound 실패: {e}")
+
+        # ── sounddevice (fallback) ───────────────────────────────────────
+        if sound_file and SOUNDDEVICE_AVAILABLE:
+            try:
+                if SOUNDDEVICE_AVAILABLE:
+                    self._log(f"  sounddevice 기본 장치: {sd.default.device}")
+                with wave.open(sound_file, "rb") as wf:
+                    sampwidth = wf.getsampwidth()
+                    samplerate = wf.getframerate()
+                    n_channels = wf.getnchannels()
+                    raw_data = wf.readframes(wf.getnframes())
+
+                # 볼륨 0이면 무음 — 최소 0.5 보장
+                vol = max(self._volume, 0.5)
+                if sampwidth == 1:
+                    audio_raw = np.frombuffer(raw_data, dtype=np.uint8)
+                    audio_f = 128 + (audio_raw.astype(np.float64) - 128) * vol
+                    audio = np.clip(audio_f, 0, 255).astype(np.uint8)
+                else:
+                    dtype = {2: np.int16, 4: np.int32}.get(sampwidth, np.int16)
+                    audio_raw = np.frombuffer(raw_data, dtype=dtype)
+                    audio_f = audio_raw.astype(np.float64) * vol
+                    audio = np.clip(
+                        audio_f, np.iinfo(dtype).min, np.iinfo(dtype).max
+                    ).astype(dtype)
+
+                if n_channels > 1:
+                    audio = audio.reshape(-1, n_channels)
+
+                self._log("  sounddevice 재생 시작...")
+                sd.play(audio, samplerate=samplerate)
+                sd.wait()
+                self._log("  sounddevice 재생 완료")
+                return
+            except Exception as e:
+                self._log(f"  sounddevice 실패: {e}")
+                try:
+                    sd.stop()
+                except Exception:
+                    pass
+
+        # ── 내장음 fallback ─────────────────────────────────────────────
+        self._log("  내장음(SystemHand) 재생")
+        if WINSOUND_AVAILABLE:
+            try:
+                winsound.PlaySound(
+                    self.DEFAULT_WINDOWS_SOUND,
+                    winsound.SND_ALIAS | winsound.SND_SYNC,
+                )
+            except Exception:
+                try:
+                    winsound.MessageBeep(winsound.MB_ICONHAND)
+                except Exception:
+                    pass
 
     def _toggle_blink(self):
         self._blink_state = not self._blink_state
@@ -135,12 +231,10 @@ class AlarmSystem(QObject):
         """사운드 반복 재생 시작 (별도 스레드). 이미 재생 중이면 건너뜀."""
         if not self._sound_enabled:
             return
-
-        # 이미 재생 중이면 새 스레드 불필요 (루프가 알아서 반복)
         if self._sound_thread and self._sound_thread.is_alive():
             return
 
-        self._stop_sound.clear()   # 정지 신호 초기화
+        self._stop_sound.clear()
         self._sound_thread = threading.Thread(
             target=self._play_sound_worker,
             args=("default", alarm_duration),
@@ -149,20 +243,17 @@ class AlarmSystem(QObject):
         self._sound_thread.start()
 
     def _get_sound_path(self) -> str | None:
-        """통합 알림음 파일 경로 반환 (없으면 None → Windows 내장음)
-        "default" 키 우선, 레거시 포맷 호환을 위해 다른 키도 fallback 확인.
-        """
+        """통합 알림음 파일 경로 반환 (없으면 None → Windows 내장음)"""
         path = self._sound_files.get("default", "")
         if path and os.path.exists(path):
             return path
-        # 레거시: 구형 설정(black/still/audio 개별 키)에 유효한 파일이 있으면 사용
         for p in self._sound_files.values():
             if p and os.path.exists(p):
                 return p
         return None
 
     def _play_windows_builtin(self):
-        """Windows 내장 경고음(SystemHand) 비동기 재생 (즉시 중지 가능)"""
+        """Windows 내장 경고음 비동기 재생"""
         if not WINSOUND_AVAILABLE:
             return
         try:
@@ -177,12 +268,39 @@ class AlarmSystem(QObject):
                 pass
 
     def _play_sound_worker(self, alarm_type: str, alarm_duration: float = 0.0):
-        """사운드 반복 재생 (stop_sound 이벤트가 set되거나 alarm_duration 초과 시 종료)"""
-        sound_file = self._get_sound_path()
+        """사운드 반복 재생 (stop_sound 이벤트 또는 alarm_duration 초과 시 종료)"""
+        raw_file = self._get_sound_path()
+        # 절대경로 변환 (상대경로는 cwd 의존적이므로)
+        sound_file = os.path.abspath(raw_file) if raw_file else None
         start_time = time.time()
 
+        # ── winsound + WAV 파일 (우선 시도 — 장치/볼륨 문제 없음) ──────
+        if sound_file and WINSOUND_AVAILABLE:
+            sound_duration = 2.0
+            try:
+                with wave.open(sound_file, "rb") as wf:
+                    sound_duration = wf.getnframes() / wf.getframerate()
+            except Exception:
+                pass
+
+            while not self._stop_sound.is_set():
+                if alarm_duration > 0 and (time.time() - start_time) >= alarm_duration:
+                    break
+                try:
+                    winsound.PlaySound(sound_file, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                except Exception as e:
+                    self._log(f"winsound 파일 재생 실패 → 내장음 대체: {e}")
+                    break
+                if self._stop_sound.wait(timeout=sound_duration + 0.05):
+                    break
+            try:
+                winsound.PlaySound(None, winsound.SND_ASYNC)
+            except Exception:
+                pass
+            return
+
+        # ── sounddevice + WAV 파일 (fallback, 볼륨 조절 가능) ──────────
         if sound_file and SOUNDDEVICE_AVAILABLE:
-            # sounddevice로 WAV 파일 재생 (볼륨 적용)
             try:
                 with wave.open(sound_file, "rb") as wf:
                     sampwidth = wf.getsampwidth()
@@ -205,51 +323,31 @@ class AlarmSystem(QObject):
                 if n_channels > 1:
                     audio = audio.reshape(-1, n_channels)
 
-                sound_duration = len(audio) / samplerate
-
                 while not self._stop_sound.is_set():
                     if alarm_duration > 0 and (time.time() - start_time) >= alarm_duration:
                         break
-                    sd.play(audio, samplerate=samplerate, blocking=False)
-                    if self._stop_sound.wait(timeout=sound_duration + 0.05):
-                        break
+                    sd.play(audio, samplerate=samplerate)
+                    sd.wait()  # 재생 완료 또는 sd.stop() 호출 시까지 블록
 
-                sd.stop()
-            except Exception:
-                pass
-            return
-
-        if sound_file and WINSOUND_AVAILABLE:
-            # winsound로 WAV 파일 비동기 재생 (SND_ASYNC → 즉시 중지 가능)
-            # 파일 길이를 미리 계산해서 wait timeout으로 사용
-            sound_duration = 2.0
-            try:
-                with wave.open(sound_file, "rb") as wf:
-                    sound_duration = wf.getnframes() / wf.getframerate()
-            except Exception:
-                pass
-
-            while not self._stop_sound.is_set():
-                if alarm_duration > 0 and (time.time() - start_time) >= alarm_duration:
-                    break
                 try:
-                    winsound.PlaySound(sound_file, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                    sd.stop()
                 except Exception:
-                    break
-                if self._stop_sound.wait(timeout=sound_duration + 0.05):
-                    break
-            try:
-                winsound.PlaySound(None, winsound.SND_ASYNC)
-            except Exception:
-                pass
-            return
+                    pass
+                return
 
-        # 파일 없음 → Windows 내장음 반복 재생 (SND_ASYNC → 즉시 중지 가능)
+            except Exception as e:
+                self._log(f"sounddevice 재생 실패 → 내장음 대체: {e}")
+                try:
+                    sd.stop()
+                except Exception:
+                    pass
+
+        # ── 파일 없음: Windows 내장음 ──────────────────────────────────
         while not self._stop_sound.is_set():
             if alarm_duration > 0 and (time.time() - start_time) >= alarm_duration:
                 break
-            self._play_windows_builtin()  # 이제 SND_ASYNC라서 즉시 반환
-            if self._stop_sound.wait(timeout=2.0):  # 내장음 길이 약 2초
+            self._play_windows_builtin()
+            if self._stop_sound.wait(timeout=2.0):
                 break
         if WINSOUND_AVAILABLE:
             try:

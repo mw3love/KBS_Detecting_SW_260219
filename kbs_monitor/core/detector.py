@@ -95,7 +95,8 @@ class Detector:
 
     def __init__(self):
         # 성능 설정
-        self.scale_factor = 1.0            # 감지 해상도 스케일 (1.0 / 0.5 / 0.25)
+        self.scale_factor = 1.0              # 감지 해상도 스케일 (1.0 / 0.5 / 0.25)
+        self.black_detection_enabled = True  # 블랙 감지 활성화 여부
         self.still_detection_enabled = True  # 스틸 감지 활성화 여부
 
         # 블랙 감지 설정
@@ -208,10 +209,12 @@ class Detector:
 
             crop = frame[y1:y2, x1:x2]
 
-            # 블랙 감지
-            gray = crop if len(crop.shape) == 2 else crop.mean(axis=2)
-            avg_brightness = float(np.mean(gray))
-            is_black = avg_brightness < self.black_threshold
+            # 블랙 감지 (비활성화 시 밝기 계산 생략)
+            is_black = False
+            if self.black_detection_enabled:
+                gray = crop if len(crop.shape) == 2 else crop.mean(axis=2)
+                avg_brightness = float(np.mean(gray))
+                is_black = avg_brightness < self.black_threshold
 
             # 스틸 감지 (비활성화 시 float32 변환 및 복사 생략)
             is_still = False

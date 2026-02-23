@@ -93,6 +93,44 @@ QTimer(1000ms)                  → MainWindow._update_summary → TopBar.update
 - `SettingsDialog._apply_detection_params_to_ui()`, `_apply_performance_params_to_ui()`: 중복 UI 적용 로직 공통 메서드화
 - `AudioMonitorThread`: `_stereo` 플래그를 초기화 시 한 번만 결정, 루프 내 상수 비교 제거
 
+## alarm.py 핵심 설계 원칙 (수정 시 반드시 준수)
+
+### 알림음 테스트 재생 (`play_test_sound` / `_play_test_worker`)
+
+**절대 바꾸지 말아야 할 사항:**
+
+1. **winsound를 sounddevice보다 먼저 시도한다**
+   - sounddevice는 시스템 기본 오디오 장치가 아닌 장치로 재생되거나 볼륨이 0이면 소리가 전혀 안 날 수 있음
+   - winsound(`SND_FILENAME | SND_SYNC`)는 항상 시스템 기본 장치 + 시스템 볼륨 기준으로 재생 → 안정적
+   - 순서를 바꾸면 파일 선택 후 테스트 버튼이 무음이 되는 버그 재발
+
+2. **`play_test_sound`에서 `threading.Event()`를 새 인스턴스로 생성한다**
+   ```python
+   self._stop_sound = threading.Event()  # ← 반드시 새 객체, clear()만 하면 안 됨
+   ```
+   - `_stop_playback()`이 기존 이벤트에 `set()`을 한 상태에서 `join(timeout)`이 타임아웃되면 기존 스레드가 살아있을 수 있음
+   - `clear()`만 하면 기존 스레드가 되살아나 새 스레드와 충돌함
+
+3. **파일 경로는 반드시 절대경로(`os.path.abspath`)로 변환 후 사용한다**
+   - UI에서 저장되는 경로는 상대경로일 수 있음 (`resources\sounds\Alert.wav`)
+   - winsound/sounddevice 모두 상대경로는 cwd 의존적이므로 절대경로로 변환해야 안전
+
+4. **sounddevice `sd.play()` 호출 후 반드시 `sd.wait()`를 호출한다**
+   - `sd.play()`의 기본값은 `blocking=False` (non-blocking)
+   - `sd.wait()` 없이 while 루프를 돌면 재생이 계속 덮어씌워져 무음이 됨
+   - `sd.stop()`을 다른 스레드에서 호출하면 `sd.wait()`가 즉시 반환되어 루프 종료됨
+
+5. **`_play_test_worker`는 `_play_sound_worker`와 별개로 유지한다**
+   - 테스트 재생(1회) 로직과 알림 재생(반복) 로직을 분리
+   - 공유하면 반복 루프 / 블로킹 / 중지 조건이 복잡해져 버그 유발
+
+### 실제 알림 반복 재생 (`_play_sound_worker`)
+- **winsound → sounddevice → 내장음 순서** (테스트와 동일, sounddevice 무음 버그 방지)
+- winsound: `SND_ASYNC` + `wait(timeout=sound_duration)` 패턴으로 반복 재생
+- sounddevice: `sd.play()` + `sd.wait()` 쌍, winsound가 없을 때만 사용
+- `_stop_playback()`에서 `_stop_sound.set()` + `sd.stop()`으로 즉시 중단 가능
+- 파일 경로는 `os.path.abspath()`로 절대경로 변환 후 사용
+
 ## 탭별 구현 현황
 
 | 탭 | 이름 | 구현 상태 |

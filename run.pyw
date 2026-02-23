@@ -12,7 +12,7 @@ from ui.main_window import MainWindow
 from PySide6.QtWidgets import QApplication
 
 app = QApplication(sys.argv)
-app.setApplicationName("KBS Peacock v1.0")
+app.setApplicationName("KBS Peacock v1.03")
 app.setOrganizationName("KBS")
 
 qss_path = os.path.join("resources", "styles", "dark_theme.qss")

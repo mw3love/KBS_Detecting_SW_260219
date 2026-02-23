@@ -8,7 +8,6 @@ import os
 import time
 import numpy as np
 import cv2
-import psutil
 
 from utils.config_manager import DEFAULT_CONFIG
 
@@ -186,15 +185,30 @@ HSV 변환 호출과 이후 HSV 마스크 생성, 픽셀 비율 계산 전체가
 
 ## 자동 성능 감지 버튼
 
-버튼을 누르면 프로그램이 자동으로 **실제 PC 성능을 벤치마크**한 후
-감지 주기와 해상도를 적절히 설정해줍니다.
+버튼을 누르면 **현재 설정된 감지영역과 감지 옵션 그대로** 처리 부하를 직접 측정한 후
+최적 감지 주기를 자동으로 설정합니다.
 
-| 측정 결과 | PC 등급 | 자동 설정 |
-|-----------|---------|----------|
-| 20ms 미만 | 고성능 | 100ms / 원본 해상도 |
-| 20~50ms | 표준 | 200ms / 원본 해상도 |
-| 50~100ms | 중간 | 300ms / 50% 해상도 |
-| 100ms 이상 | 저사양 | 500ms / 50% 해상도 |
+### 측정 방식
+
+PC 사양이 아닌 **실제 감지 작업 부하**를 기준으로 합니다.
+
+- 현재 설정된 비디오 감지영역 × (블랙 + 스틸 감지) 처리 시간
+- 현재 설정된 오디오 감지영역 × HSV 색상 감지 처리 시간
+- 현재 설정된 감지 해상도 (스케일 팩터) 적용 후 측정
+
+10회 반복 평균으로 1회 처리 시간을 계산하며,
+처리 시간이 감지 주기의 50% 이하가 되는 최소 주기를 자동 적용합니다.
+
+| 1회 처리 시간 | 자동 설정 주기 |
+|-------------|--------------|
+| 50ms 미만 | 100ms |
+| 50~100ms | 200ms |
+| 100~150ms | 300ms |
+| 150~250ms | 500ms |
+| 250ms 이상 | 1000ms |
+
+> **팁:** 감지영역이 많거나 오디오 ROI가 많을수록 처리 시간이 길어집니다.
+> 처리 시간이 500ms를 초과하면 해상도를 낮추거나 감지 항목을 줄이세요.
 
 ---
 
@@ -862,24 +876,16 @@ class SettingsDialog(QDialog):
         grid_p.addWidget(self._combo_scale_factor,  1, 1)
         grid_p.addWidget(desc_sf,                   1, 2)
 
-        lbl_vde = QLabel("▪  비디오 감지:")
-        lbl_vde.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._chk_video_detect = QCheckBox("블랙/스틸 감지 활성화")
-        self._chk_video_detect.setChecked(True)
-        self._chk_video_detect.stateChanged.connect(self._save_performance_params)
-        grid_p.addWidget(lbl_vde,                  2, 0)
-        grid_p.addWidget(self._chk_video_detect,   2, 1, 1, 2)
-
-        lbl_ade = QLabel("▪  오디오 레벨미터 감지:")
-        lbl_ade.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._chk_audio_detect = QCheckBox("HSV 색상 감지 활성화")
-        self._chk_audio_detect.setChecked(True)
-        self._chk_audio_detect.stateChanged.connect(self._save_performance_params)
-        desc_ade = QLabel("비활성화 시 HSV 전체변환 생략 — 가장 효과적인 부하 절감")
-        desc_ade.setObjectName("paramDescLabel")
-        grid_p.addWidget(lbl_ade,                  3, 0)
-        grid_p.addWidget(self._chk_audio_detect,   3, 1)
-        grid_p.addWidget(desc_ade,                 3, 2)
+        lbl_bde = QLabel("▪  블랙 감지:")
+        lbl_bde.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._chk_black_detect = QCheckBox("블랙 감지 활성화")
+        self._chk_black_detect.setChecked(True)
+        self._chk_black_detect.stateChanged.connect(self._save_performance_params)
+        desc_bde = QLabel("비활성화 시 밝기 계산 생략")
+        desc_bde.setObjectName("paramDescLabel")
+        grid_p.addWidget(lbl_bde,                  2, 0)
+        grid_p.addWidget(self._chk_black_detect,   2, 1)
+        grid_p.addWidget(desc_bde,                 2, 2)
 
         lbl_sde = QLabel("▪  스틸 감지:")
         lbl_sde.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -888,9 +894,31 @@ class SettingsDialog(QDialog):
         self._chk_still_detect.stateChanged.connect(self._save_performance_params)
         desc_sde = QLabel("비활성화 시 프레임 간 비교 연산 생략")
         desc_sde.setObjectName("paramDescLabel")
-        grid_p.addWidget(lbl_sde,                  4, 0)
-        grid_p.addWidget(self._chk_still_detect,   4, 1)
-        grid_p.addWidget(desc_sde,                 4, 2)
+        grid_p.addWidget(lbl_sde,                  3, 0)
+        grid_p.addWidget(self._chk_still_detect,   3, 1)
+        grid_p.addWidget(desc_sde,                 3, 2)
+
+        lbl_ade = QLabel("▪  오디오 레벨미터 감지:")
+        lbl_ade.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._chk_audio_detect = QCheckBox("HSV 색상 감지 활성화")
+        self._chk_audio_detect.setChecked(True)
+        self._chk_audio_detect.stateChanged.connect(self._save_performance_params)
+        desc_ade = QLabel("비활성화 시 HSV 전체변환 생략 — 가장 효과적인 부하 절감")
+        desc_ade.setObjectName("paramDescLabel")
+        grid_p.addWidget(lbl_ade,                  4, 0)
+        grid_p.addWidget(self._chk_audio_detect,   4, 1)
+        grid_p.addWidget(desc_ade,                 4, 2)
+
+        lbl_ede = QLabel("▪  임베디드 오디오:")
+        lbl_ede.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._chk_embedded_detect = QCheckBox("임베디드 오디오 감지 활성화")
+        self._chk_embedded_detect.setChecked(True)
+        self._chk_embedded_detect.stateChanged.connect(self._save_performance_params)
+        desc_ede = QLabel("비활성화 시 무음 감지 연산 생략")
+        desc_ede.setObjectName("paramDescLabel")
+        grid_p.addWidget(lbl_ede,                   5, 0)
+        grid_p.addWidget(self._chk_embedded_detect, 5, 1)
+        grid_p.addWidget(desc_ede,                  5, 2)
 
         bench_row = QHBoxLayout()
         self._btn_benchmark = QPushButton("자동 성능 감지")
@@ -1218,11 +1246,11 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.02")
+        lbl_version = QLabel("KBS Peacock v1.03")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)
-        lbl_date = QLabel("2026-02-22")
+        lbl_date = QLabel("2026-02-23")
         about_layout.addWidget(lbl_date, 1, 1)
 
         about_layout.addWidget(QLabel("GitHub:"), 2, 0)
@@ -1341,15 +1369,18 @@ class SettingsDialog(QDialog):
                 self._combo_scale_factor.setCurrentIndex(i)
                 self._combo_scale_factor.blockSignals(False)
                 break
-        self._chk_video_detect.blockSignals(True)
-        self._chk_audio_detect.blockSignals(True)
+        self._chk_black_detect.blockSignals(True)
         self._chk_still_detect.blockSignals(True)
-        self._chk_video_detect.setChecked(bool(perf.get("video_detection_enabled", True)))
-        self._chk_audio_detect.setChecked(bool(perf.get("audio_detection_enabled", True)))
+        self._chk_audio_detect.blockSignals(True)
+        self._chk_embedded_detect.blockSignals(True)
+        self._chk_black_detect.setChecked(bool(perf.get("black_detection_enabled", True)))
         self._chk_still_detect.setChecked(bool(perf.get("still_detection_enabled", True)))
-        self._chk_video_detect.blockSignals(False)
-        self._chk_audio_detect.blockSignals(False)
+        self._chk_audio_detect.setChecked(bool(perf.get("audio_detection_enabled", True)))
+        self._chk_embedded_detect.setChecked(bool(perf.get("embedded_detection_enabled", True)))
+        self._chk_black_detect.blockSignals(False)
         self._chk_still_detect.blockSignals(False)
+        self._chk_audio_detect.blockSignals(False)
+        self._chk_embedded_detect.blockSignals(False)
 
     def _load_config(self, config: dict):
         port = config.get("port", 0)
@@ -1573,11 +1604,12 @@ class SettingsDialog(QDialog):
     def _get_current_performance_params(self) -> dict:
         """현재 성능 설정 UI 값을 dict로 반환"""
         return {
-            "detection_interval":      self._combo_detect_interval.currentData(),
-            "scale_factor":            self._combo_scale_factor.currentData(),
-            "video_detection_enabled": self._chk_video_detect.isChecked(),
-            "audio_detection_enabled": self._chk_audio_detect.isChecked(),
-            "still_detection_enabled": self._chk_still_detect.isChecked(),
+            "detection_interval":        self._combo_detect_interval.currentData(),
+            "scale_factor":              self._combo_scale_factor.currentData(),
+            "black_detection_enabled":   self._chk_black_detect.isChecked(),
+            "still_detection_enabled":   self._chk_still_detect.isChecked(),
+            "audio_detection_enabled":   self._chk_audio_detect.isChecked(),
+            "embedded_detection_enabled": self._chk_embedded_detect.isChecked(),
         }
 
     def _save_performance_params(self):
@@ -1587,46 +1619,126 @@ class SettingsDialog(QDialog):
         self.performance_params_changed.emit(params)
 
     def _run_benchmark(self):
-        """컴퓨터 성능 측정 후 적정 파라미터 자동 결정"""
+        """현재 감지 설정(ROI + 감지 항목 + 해상도) 기반 실제 처리 성능 측정 후 적정 주기 자동 결정"""
+        video_rois  = self._roi_manager.video_rois
+        audio_rois  = self._roi_manager.audio_rois
+        black_on    = self._chk_black_detect.isChecked()
+        still_on    = self._chk_still_detect.isChecked()
+        audio_on    = self._chk_audio_detect.isChecked()
+        embedded_on = self._chk_embedded_detect.isChecked()
+
+        has_work = (
+            (video_rois and (black_on or still_on)) or
+            (audio_rois and audio_on) or
+            embedded_on
+        )
+        if not has_work:
+            self._lbl_benchmark.setText(
+                "감지영역 또는 활성화된 감지 항목이 없습니다. "
+                "비디오/오디오 감지영역을 먼저 설정하고 감지 항목을 하나 이상 활성화하세요."
+            )
+            return
+
         self._btn_benchmark.setEnabled(False)
-        self._lbl_benchmark.setText("측정 중...")
+        self._lbl_benchmark.setText("현재 감지 설정으로 성능 측정 중...")
         QApplication.processEvents()
 
-        dummy = np.random.randint(0, 255, (1080, 1920, 3), dtype=np.uint8)
-        t0 = time.perf_counter()
-        for _ in range(5):
-            cv2.cvtColor(dummy, cv2.COLOR_BGR2HSV)
-            dummy[100:350, 100:600].astype(np.float32)
-        elapsed_ms = (time.perf_counter() - t0) / 5 * 1000
+        sf = self._combo_scale_factor.currentData()
 
-        cpu_cores = psutil.cpu_count(logical=False) or 1
-        ram_gb = psutil.virtual_memory().total / (1024 ** 3)
-
-        if elapsed_ms < 20:
-            interval, scale_val, grade = 100, 1.0, "고성능"
-        elif elapsed_ms < 50:
-            interval, scale_val, grade = 200, 1.0, "표준"
-        elif elapsed_ms < 100:
-            interval, scale_val, grade = 300, 0.5, "중간"
+        # 1920×1080 더미 프레임 (실제 입력 해상도 기준)
+        frame_orig = np.random.randint(30, 200, (1080, 1920, 3), dtype=np.uint8)
+        if sf < 1.0:
+            frame = cv2.resize(frame_orig, None, fx=sf, fy=sf,
+                               interpolation=cv2.INTER_AREA)
         else:
-            interval, scale_val, grade = 500, 0.5, "저사양"
+            frame = frame_orig
 
+        fh, fw = frame.shape[:2]
+        # HSV 범위 (처리 시간 측정이 목적이므로 범위값은 무관)
+        lower = np.array([0, 30, 30], dtype=np.uint8)
+        upper = np.array([180, 255, 255], dtype=np.uint8)
+
+        N_ITER = 10
+        prev_frames: dict = {}
+
+        t0 = time.perf_counter()
+        for _ in range(N_ITER):
+            # 비디오 ROI — 블랙/스틸 감지 시뮬레이션
+            for roi in video_rois:
+                x1 = max(0, int(roi.x * sf))
+                y1 = max(0, int(roi.y * sf))
+                x2 = min(fw, int((roi.x + roi.w) * sf))
+                y2 = min(fh, int((roi.y + roi.h) * sf))
+                if x2 <= x1 or y2 <= y1:
+                    continue
+                crop = frame[y1:y2, x1:x2]
+                if black_on:
+                    float(np.mean(crop.mean(axis=2)))
+                if still_on:
+                    crop_f = crop.astype(np.float32)
+                    lbl = roi.label
+                    if lbl in prev_frames:
+                        prev = prev_frames[lbl]
+                        if prev.shape == crop_f.shape:
+                            float(np.mean(np.abs(crop_f - prev)))
+                    prev_frames[lbl] = crop_f
+
+            # 오디오 ROI — HSV 감지 시뮬레이션
+            if audio_on:
+                for roi in audio_rois:
+                    x1 = max(0, int(roi.x * sf))
+                    y1 = max(0, int(roi.y * sf))
+                    x2 = min(fw, int((roi.x + roi.w) * sf))
+                    y2 = min(fh, int((roi.y + roi.h) * sf))
+                    if x2 <= x1 or y2 <= y1:
+                        continue
+                    crop_bgr = frame[y1:y2, x1:x2]
+                    crop_hsv = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2HSV)
+                    mask = cv2.inRange(crop_hsv, lower, upper)
+                    int(np.sum(mask > 0))
+
+            # 임베디드 오디오 — 무음 감지 시뮬레이션 (update_embedded_silence와 동일한 연산)
+            if embedded_on:
+                _now = time.perf_counter()
+                _elapsed = _now - t0
+
+        elapsed_ms = (time.perf_counter() - t0) / N_ITER * 1000
+
+        # 최적 주기 결정: 처리 시간이 주기의 50% 이하가 되는 최소 단계
+        candidates = [100, 200, 300, 500, 1000]
+        target_interval = next(
+            (c for c in candidates if elapsed_ms <= c * 0.5),
+            1000
+        )
+
+        # 감지 주기 콤보박스 자동 적용
         for i in range(self._combo_detect_interval.count()):
-            if self._combo_detect_interval.itemData(i) == interval:
+            if self._combo_detect_interval.itemData(i) == target_interval:
                 self._combo_detect_interval.blockSignals(True)
                 self._combo_detect_interval.setCurrentIndex(i)
                 self._combo_detect_interval.blockSignals(False)
                 break
-        for i in range(self._combo_scale_factor.count()):
-            if abs(self._combo_scale_factor.itemData(i) - scale_val) < 0.01:
-                self._combo_scale_factor.blockSignals(True)
-                self._combo_scale_factor.setCurrentIndex(i)
-                self._combo_scale_factor.blockSignals(False)
-                break
 
-        result = (f"{grade} — CPU {cpu_cores}코어, RAM {ram_gb:.0f}GB, "
-                  f"처리 {elapsed_ms:.1f}ms → {interval}ms / "
-                  f"해상도 {int(scale_val*100)}% 자동 적용")
+        # 결과 문자열 조합
+        detect_parts = []
+        if video_rois:
+            modes = [m for m, on in [("블랙", black_on), ("스틸", still_on)] if on]
+            if modes:
+                detect_parts.append(f"영상 {len(video_rois)}개({'+'.join(modes)})")
+        if audio_rois and audio_on:
+            detect_parts.append(f"오디오 {len(audio_rois)}개(HSV)")
+        if embedded_on:
+            detect_parts.append("임베디드")
+
+        detect_str = " + ".join(detect_parts)
+        sf_pct = int(sf * 100)
+        result = (
+            f"[{detect_str} | 해상도 {sf_pct}%]  "
+            f"1회 처리 {elapsed_ms:.1f}ms → {target_interval}ms 주기 자동 적용"
+        )
+        if elapsed_ms > 500:
+            result += "  ※ 처리 부하가 높습니다. 해상도를 낮추거나 감지 항목을 줄이세요."
+
         self._lbl_benchmark.setText(result)
         self._btn_benchmark.setEnabled(True)
         self._save_performance_params()

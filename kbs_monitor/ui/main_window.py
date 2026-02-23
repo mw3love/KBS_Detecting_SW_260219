@@ -34,7 +34,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.02")
+        self.setWindowTitle("KBS Peacock v1.03")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -45,9 +45,10 @@ class MainWindow(QMainWindow):
         self._roi_manager.from_dict(self._config.get("rois", {}))
         self._detector = Detector()
         self._apply_detection_config(self._config.get("detection", {}))
-        # 성능 설정 (비디오/오디오 감지 활성화 플래그 초기값)
-        self._video_detect_enabled = True
+        # 성능 설정 (감지 항목별 활성화 플래그 초기값)
         self._audio_detect_enabled = True
+        self._embedded_detect_enabled = True
+        self._detection_enabled = True   # 감지 On/Off 전체 상태 플래그
         self._apply_performance_config(self._config.get("performance", {}))
         self._alarm = AlarmSystem(parent=self)
         self._apply_alarm_config(self._config.get("alarm", {}))
@@ -58,6 +59,7 @@ class MainWindow(QMainWindow):
         self._apply_recording_config(self._config.get("recording", {}))
         self._recorder.start()
         self._logger = AppLogger()
+        self._alarm.set_logger(self._logger)  # 로그 위젯에 알림음 재생 상태 출력
 
         # 설정 다이얼로그 (비모달 싱글턴)
         self._settings_dialog: Optional[SettingsDialog] = None
@@ -189,8 +191,8 @@ class MainWindow(QMainWindow):
         video_rois = self._roi_manager.video_rois
         audio_rois = self._roi_manager.audio_rois
 
-        # 비디오 ROI 블랙/스틸 감지
-        if video_rois and self._video_detect_enabled:
+        # 비디오 ROI 블랙/스틸 감지 (둘 중 하나라도 활성화된 경우 실행)
+        if video_rois and (self._detector.black_detection_enabled or self._detector.still_detection_enabled):
             results = self._detector.detect_frame(self._latest_frame, video_rois)
             # label → name 매핑 캐시 (O(n) 선형 탐색 제거)
             video_name_map = {r.label: (r.media_name or r.label) for r in video_rois}
@@ -377,9 +379,10 @@ class MainWindow(QMainWindow):
 
     def _apply_performance_config(self, perf: dict):
         """성능 설정을 Detector 및 타이머에 반영"""
-        self._video_detect_enabled = perf.get("video_detection_enabled", True)
         self._audio_detect_enabled = perf.get("audio_detection_enabled", True)
+        self._embedded_detect_enabled = perf.get("embedded_detection_enabled", True)
         self._detector.scale_factor = perf.get("scale_factor", 1.0)
+        self._detector.black_detection_enabled = perf.get("black_detection_enabled", True)
         self._detector.still_detection_enabled = perf.get("still_detection_enabled", True)
         # 타이머가 이미 생성된 경우에만 주기 변경
         if hasattr(self, "_detect_timer"):
@@ -413,6 +416,8 @@ class MainWindow(QMainWindow):
 
     def _on_embedded_silence(self, silence_seconds: float):
         """AudioMonitorThread.silence_detected 수신 — 임베디드 오디오 무음 업데이트"""
+        if not self._detection_enabled or not self._embedded_detect_enabled:
+            return
         self._last_silence_seconds = silence_seconds
         alerting = self._detector.update_embedded_silence(silence_seconds)
         if alerting and not self._embedded_log_sent:
@@ -426,6 +431,8 @@ class MainWindow(QMainWindow):
 
     def _on_audio_level_for_silence(self, l_db: float, r_db: float):
         """level_updated 수신 — 정상 오디오 수신 시 임베디드 감지 리셋"""
+        if not self._detection_enabled or not self._embedded_detect_enabled:
+            return
         avg_db = (l_db + r_db) / 2.0
         if avg_db > self._detector.embedded_silence_threshold:
             if self._detector.embedded_alerting or self._embedded_log_sent:
@@ -657,6 +664,7 @@ class MainWindow(QMainWindow):
 
     def _on_detection_toggled(self, enabled: bool):
         """감지 On/Off 버튼 처리"""
+        self._detection_enabled = enabled
         if enabled:
             self._detect_timer.start()
             self._logger.info("SYSTEM - 감지 시작")
@@ -672,6 +680,10 @@ class MainWindow(QMainWindow):
             self._black_logged.clear()
             self._still_logged.clear()
             self._audio_level_logged.clear()
+            # 임베디드 오디오 알림 상태도 초기화
+            self._embedded_log_sent = False
+            self._last_silence_seconds = 0.0
+            self._detector.reset_embedded_silence()
 
     def _on_sound_toggled(self, enabled: bool):
         self._alarm.set_sound_enabled(enabled)

@@ -333,19 +333,26 @@ class SettingsDialog(QDialog):
     # ── 탭 1: 입력선택 ────────────────────────────────
 
     def _create_tab_input(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
+        # 스크롤 영역으로 감싸기 (내용이 길어 최소 크기 초과 시 창 떨림 방지)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        inner = QWidget()
+        scroll.setWidget(inner)          # Qt 소유권 즉시 이전 → Python GC 삭제 방지
+        layout = QVBoxLayout(inner)
         layout.setAlignment(Qt.AlignTop)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
 
         # ── 캡처 포트 그룹 ──
         group = QGroupBox("캡처 포트")
-        inner = QHBoxLayout(group)
+        port_row = QHBoxLayout(group)
 
         lbl = QLabel("포트 번호:")
         lbl.setAlignment(Qt.AlignVCenter)
-        inner.addWidget(lbl)
+        port_row.addWidget(lbl)
 
         self._combo_port = QComboBox()
         for i in range(6):
@@ -353,8 +360,8 @@ class SettingsDialog(QDialog):
         self._combo_port.setFixedWidth(80)
         self._combo_port.setToolTip("0~5 고정 선택 / 선택 즉시 소스 변경")
         self._combo_port.currentIndexChanged.connect(self._on_port_changed)
-        inner.addWidget(self._combo_port)
-        inner.addStretch()
+        port_row.addWidget(self._combo_port)
+        port_row.addStretch()
 
         layout.addWidget(group)
 
@@ -458,16 +465,56 @@ class SettingsDialog(QDialog):
         mgmt_layout.setColumnStretch(2, 1)
         layout.addWidget(group_mgmt)
 
-        info_lbl = QLabel(
-            "출력 해상도: 960×540  |  FPS: 10  |  버퍼 메모리: 약 2.5 MB\n"
-            "녹화 파일 크기: 약 20~40 MB / 20초  |  코덱: mp4v"
-        )
-        info_lbl.setObjectName("settingsInfoLabel")
-        info_lbl.setStyleSheet("color: #808090; font-size: 11px;")
-        layout.addWidget(info_lbl)
+        # ── 녹화 출력 설정 그룹 ──
+        group_output = QGroupBox("녹화 출력 설정")
+        output_layout = QGridLayout(group_output)
+        output_layout.setSpacing(8)
+
+        output_layout.addWidget(QLabel("출력 해상도:"), 0, 0)
+        self._combo_rec_resolution = QComboBox()
+        for label, (w, h) in [
+            ("1920×1080 (원본)", (1920, 1080)),
+            ("960×540 (기본값)", (960, 540)),
+            ("640×360",          (640, 360)),
+            ("480×270",          (480, 270)),
+        ]:
+            self._combo_rec_resolution.addItem(label, (w, h))
+        self._combo_rec_resolution.setCurrentIndex(1)  # 960×540 기본
+        self._combo_rec_resolution.currentIndexChanged.connect(self._on_rec_output_changed)
+        output_layout.addWidget(self._combo_rec_resolution, 0, 1)
+
+        output_layout.addWidget(QLabel("출력 FPS:"), 1, 0)
+        self._combo_rec_fps = QComboBox()
+        for fps in [5, 10, 15, 20, 25, 30]:
+            self._combo_rec_fps.addItem(f"{fps} fps", fps)
+        self._combo_rec_fps.setCurrentIndex(1)  # 10fps 기본
+        self._combo_rec_fps.currentIndexChanged.connect(self._on_rec_output_changed)
+        output_layout.addWidget(self._combo_rec_fps, 1, 1)
+
+        output_layout.setColumnStretch(2, 1)
+        layout.addWidget(group_output)
+
+        self._rec_info_lbl = QLabel()
+        self._rec_info_lbl.setObjectName("settingsInfoLabel")
+        self._rec_info_lbl.setStyleSheet("color: #808090; font-size: 11px;")
+        layout.addWidget(self._rec_info_lbl)
+        self._update_rec_info_label()
 
         layout.addStretch()
-        return widget
+
+        # ── 영상설정 탭 전체 초기화 버튼 ──
+        separator = self._make_separator()
+        layout.addWidget(separator)
+
+        btn_reset_input_tab = QPushButton("영상설정 전체 초기화")
+        btn_reset_input_tab.setFixedHeight(_BTN_H)
+        btn_reset_input_tab.setToolTip(
+            "포트, 파일 입력, 자동 녹화 설정을 모두 기본값으로 초기화합니다."
+        )
+        btn_reset_input_tab.clicked.connect(self._reset_input_tab)
+        layout.addWidget(btn_reset_input_tab)
+
+        return scroll
 
     def _browse_video_file(self):
         """영상 파일 선택 다이얼로그"""
@@ -943,15 +990,14 @@ class SettingsDialog(QDialog):
 
         layout.addStretch()
 
-        # ── 전체 초기화 버튼 (우하단) ──
-        reset_row = QHBoxLayout()
-        reset_row.addStretch()
+        # ── 전체 초기화 버튼 ──
+        separator = self._make_separator()
+        layout.addWidget(separator)
+
         btn_reset_all = QPushButton("전체 초기화")
         btn_reset_all.setFixedHeight(_BTN_H)
-        btn_reset_all.setMinimumWidth(100)
         btn_reset_all.clicked.connect(self._reset_detection_params_to_default)
-        reset_row.addWidget(btn_reset_all)
-        layout.addLayout(reset_row)
+        layout.addWidget(btn_reset_all)
 
         scroll.setWidget(inner)
         return scroll
@@ -1171,12 +1217,16 @@ class SettingsDialog(QDialog):
 
     def _get_recording_params(self) -> dict:
         """현재 녹화 설정 UI 값을 dict로 반환"""
+        w, h = self._combo_rec_resolution.currentData()
         return {
             "enabled": self._chk_recording_enabled.isChecked(),
             "save_dir": self._edit_rec_dir.text() or "recordings",
             "pre_seconds": self._edit_pre_seconds.get_value(),
             "post_seconds": self._edit_post_seconds.get_value(),
             "max_keep_days": self._edit_max_days.get_value(),
+            "output_width": w,
+            "output_height": h,
+            "output_fps": self._combo_rec_fps.currentData(),
         }
 
     def _save_recording_params(self):
@@ -1184,6 +1234,88 @@ class SettingsDialog(QDialog):
         params = self._get_recording_params()
         self._config["recording"] = params
         self.recording_settings_changed.emit(params)
+
+    def _on_rec_output_changed(self):
+        """해상도/FPS 콤보박스 변경 시 정보 라벨 갱신 후 저장"""
+        self._update_rec_info_label()
+        self._save_recording_params()
+
+    def _update_rec_info_label(self):
+        """현재 해상도/FPS/버퍼 메모리를 계산해 정보 라벨 갱신"""
+        if not hasattr(self, "_combo_rec_resolution"):
+            return
+        w, h = self._combo_rec_resolution.currentData() or (960, 540)
+        fps = self._combo_rec_fps.currentData() or 10
+        try:
+            pre = self._edit_pre_seconds.get_value()
+        except Exception:
+            pre = 5
+        # JPEG 85% 기준 약 8:1 압축비로 버퍼 메모리 추정
+        buf_mb = (w * h * 3 / 8) * (pre * fps) / 1024 / 1024
+        post = 15
+        try:
+            post = self._edit_post_seconds.get_value()
+        except Exception:
+            pass
+        duration = pre + post
+        # 파일 크기 추정: 비압축 대비 mp4v 약 1/15 압축
+        size_mb_low  = int(w * h * 3 * fps * duration / 15 / 1024 / 1024 * 0.7)
+        size_mb_high = int(w * h * 3 * fps * duration / 15 / 1024 / 1024 * 1.3)
+        self._rec_info_lbl.setText(
+            f"출력 해상도: {w}×{h}  |  FPS: {fps}  |  버퍼 메모리: 약 {buf_mb:.1f} MB\n"
+            f"녹화 파일 크기: 약 {size_mb_low}~{size_mb_high} MB / {duration}초  |  코덱: mp4v"
+        )
+
+    def _reset_input_tab(self):
+        """영상설정 탭 전체를 기본값으로 초기화"""
+        from utils.config_manager import DEFAULT_CONFIG
+        default_rec = DEFAULT_CONFIG.get("recording", {})
+
+        # 포트 초기화
+        self._combo_port.blockSignals(True)
+        self._combo_port.setCurrentIndex(0)
+        self._combo_port.blockSignals(False)
+        self.port_changed.emit(0)
+
+        # 파일 입력 초기화
+        self._clear_video_file()
+
+        # 녹화 설정 초기화
+        self._chk_recording_enabled.blockSignals(True)
+        self._chk_recording_enabled.setChecked(bool(default_rec.get("enabled", False)))
+        self._chk_recording_enabled.blockSignals(False)
+
+        self._edit_rec_dir.setText(default_rec.get("save_dir", "recordings"))
+        self._edit_pre_seconds.setText(str(int(default_rec.get("pre_seconds", 5))))
+        self._edit_post_seconds.setText(str(int(default_rec.get("post_seconds", 15))))
+        self._edit_max_days.setText(str(int(default_rec.get("max_keep_days", 7))))
+
+        # 해상도/FPS 초기화 (960×540, 10fps)
+        default_w = default_rec.get("output_width", 960)
+        default_h = default_rec.get("output_height", 540)
+        default_fps = default_rec.get("output_fps", 10)
+        self._set_rec_resolution_combo(default_w, default_h)
+        self._set_rec_fps_combo(default_fps)
+
+        self._update_rec_info_label()
+        self._save_recording_params()
+
+    def _set_rec_resolution_combo(self, w: int, h: int):
+        """해상도 콤보박스에서 (w, h)와 일치하는 항목 선택"""
+        for i in range(self._combo_rec_resolution.count()):
+            if self._combo_rec_resolution.itemData(i) == (w, h):
+                self._combo_rec_resolution.setCurrentIndex(i)
+                return
+        # 일치하는 항목 없으면 첫 번째(원본) 선택
+        self._combo_rec_resolution.setCurrentIndex(0)
+
+    def _set_rec_fps_combo(self, fps: int):
+        """FPS 콤보박스에서 fps 값과 일치하는 항목 선택"""
+        for i in range(self._combo_rec_fps.count()):
+            if self._combo_rec_fps.itemData(i) == fps:
+                self._combo_rec_fps.setCurrentIndex(i)
+                return
+        self._combo_rec_fps.setCurrentIndex(1)  # 10fps 기본
 
     def _load_recording_config(self, config: dict):
         """녹화 설정 UI 로드"""
@@ -1195,6 +1327,17 @@ class SettingsDialog(QDialog):
         self._edit_pre_seconds.setText(str(int(rec.get("pre_seconds", 5))))
         self._edit_post_seconds.setText(str(int(rec.get("post_seconds", 15))))
         self._edit_max_days.setText(str(int(rec.get("max_keep_days", 7))))
+        # 해상도/FPS 콤보 복원
+        self._combo_rec_resolution.blockSignals(True)
+        self._combo_rec_fps.blockSignals(True)
+        self._set_rec_resolution_combo(
+            int(rec.get("output_width", 960)),
+            int(rec.get("output_height", 540)),
+        )
+        self._set_rec_fps_combo(int(rec.get("output_fps", 10)))
+        self._combo_rec_resolution.blockSignals(False)
+        self._combo_rec_fps.blockSignals(False)
+        self._update_rec_info_label()
 
     # ── 탭 8: 저장/불러오기 ──────────────────────────
 
@@ -1246,7 +1389,7 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.03")
+        lbl_version = QLabel("KBS Peacock v1.04")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)

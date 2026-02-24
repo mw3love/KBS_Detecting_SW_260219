@@ -34,7 +34,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.03")
+        self.setWindowTitle("KBS Peacock v1.04")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -159,6 +159,9 @@ class MainWindow(QMainWindow):
         self._audio_thread.status_changed.connect(
             lambda msg: self._logger.info(f"AUDIO - {msg}")
         )
+        # 초기 볼륨을 패스스루 출력에도 적용
+        init_vol = self._config.get("alarm", {}).get("volume", 80) / 100.0
+        self._audio_thread.set_volume(init_vol)
         self._audio_thread.start()
 
         self._detect_timer = QTimer(self)
@@ -314,39 +317,45 @@ class MainWindow(QMainWindow):
     # ── 설정 다이얼로그 ────────────────────────────────
 
     def _open_settings(self):
-        if self._settings_dialog is None:
-            self._settings_dialog = SettingsDialog(
-                self._config, self._roi_manager, parent=self
-            )
-            self._settings_dialog.port_changed.connect(self._on_port_changed)
-            self._settings_dialog.video_file_changed.connect(self._on_video_file_changed)
-            self._settings_dialog.halfscreen_edit_requested.connect(self._start_halfscreen_edit)
-            self._settings_dialog.halfscreen_edit_finished.connect(self._finish_halfscreen_edit)
-            self._settings_dialog.detection_params_changed.connect(self._apply_detection_params)
-            self._settings_dialog.performance_params_changed.connect(self._apply_performance_params)
+        try:
+            if self._settings_dialog is None:
+                self._settings_dialog = SettingsDialog(
+                    self._config, self._roi_manager, parent=self
+                )
+                self._settings_dialog.port_changed.connect(self._on_port_changed)
+                self._settings_dialog.video_file_changed.connect(self._on_video_file_changed)
+                self._settings_dialog.halfscreen_edit_requested.connect(self._start_halfscreen_edit)
+                self._settings_dialog.halfscreen_edit_finished.connect(self._finish_halfscreen_edit)
+                self._settings_dialog.detection_params_changed.connect(self._apply_detection_params)
+                self._settings_dialog.performance_params_changed.connect(self._apply_performance_params)
 
-            self._settings_dialog.roi_selection_changed.connect(self._on_settings_roi_selected)
-            self._settings_dialog.roi_list_changed.connect(self._on_settings_roi_list_changed)
-            self._settings_dialog.alarm_settings_changed.connect(self._on_alarm_settings_changed)
-            self._settings_dialog.test_sound_requested.connect(self._alarm.play_test_sound)
-            self._settings_dialog.telegram_settings_changed.connect(self._on_telegram_settings_changed)
-            self._settings_dialog.telegram_test_requested.connect(self._on_telegram_test)
-            self._settings_dialog.recording_settings_changed.connect(self._on_recording_settings_changed)
-            self._settings_dialog.save_config_requested.connect(self._on_save_config)
-            self._settings_dialog.load_config_requested.connect(self._on_load_config)
-            self._settings_dialog.reset_config_requested.connect(self._on_reset_config)
-            self._settings_dialog.finished.connect(self._on_settings_closed)
-        else:
-            self._settings_dialog.refresh_roi_tables()
+                self._settings_dialog.roi_selection_changed.connect(self._on_settings_roi_selected)
+                self._settings_dialog.roi_list_changed.connect(self._on_settings_roi_list_changed)
+                self._settings_dialog.alarm_settings_changed.connect(self._on_alarm_settings_changed)
+                self._settings_dialog.test_sound_requested.connect(self._alarm.play_test_sound)
+                self._settings_dialog.telegram_settings_changed.connect(self._on_telegram_settings_changed)
+                self._settings_dialog.telegram_test_requested.connect(self._on_telegram_test)
+                self._settings_dialog.recording_settings_changed.connect(self._on_recording_settings_changed)
+                self._settings_dialog.save_config_requested.connect(self._on_save_config)
+                self._settings_dialog.load_config_requested.connect(self._on_load_config)
+                self._settings_dialog.reset_config_requested.connect(self._on_reset_config)
+                self._settings_dialog.finished.connect(self._on_settings_closed)
+            else:
+                self._settings_dialog.refresh_roi_tables()
 
-        self._settings_dialog.showNormal()
-        self._settings_dialog.resize(780, 660)
-        self._settings_dialog.raise_()
-        self._settings_dialog.activateWindow()
+            self._settings_dialog.showNormal()
+            self._settings_dialog.resize(780, 660)
+            self._settings_dialog.raise_()
+            self._settings_dialog.activateWindow()
+        except Exception as e:
+            import traceback
+            self._logger.error(f"[설정] 창 열기 실패: {e}\n{traceback.format_exc()}")
+            self._settings_dialog = None
 
     def _on_settings_closed(self):
         if self._settings_dialog:
             self._config = self._settings_dialog.get_config()
+        self._settings_dialog = None
 
     def _on_port_changed(self, port: int):
         self._config["port"] = port
@@ -438,7 +447,6 @@ class MainWindow(QMainWindow):
             if self._detector.embedded_alerting or self._embedded_log_sent:
                 was_sent = self._embedded_log_sent
                 last_seconds = self._last_silence_seconds
-                self._detector.reset_embedded_silence()
                 self._alarm.resolve("무음", "Embedded Audio")
                 if was_sent:
                     self._embedded_log_sent = False
@@ -447,6 +455,9 @@ class MainWindow(QMainWindow):
                     tg = self._config.get("telegram", {})
                     if tg.get("notify_embedded", True):
                         self._telegram.notify("무음", "Embedded", "Embedded Audio", self._latest_frame, is_recovery=True)
+            # 알람 발생 여부와 무관하게 항상 무음 상태 리셋
+            # (이전 무음 구간 시작 기록이 남아 다음 무음에서 오산되는 버그 방지)
+            self._detector.reset_embedded_silence()
             self._last_silence_seconds = 0.0
 
     # ── ROI 편집 모드: 반화면 ─────────────────────────
@@ -577,6 +588,9 @@ class MainWindow(QMainWindow):
             pre_seconds=float(rec.get("pre_seconds", 5)),
             post_seconds=float(rec.get("post_seconds", 15)),
             max_keep_days=int(rec.get("max_keep_days", 7)),
+            output_width=int(rec.get("output_width", 960)),
+            output_height=int(rec.get("output_height", 540)),
+            output_fps=int(rec.get("output_fps", 10)),
         )
 
     def _on_recording_settings_changed(self, params: dict):
@@ -691,6 +705,7 @@ class MainWindow(QMainWindow):
 
     def _on_volume_changed(self, volume: int):
         self._alarm.set_volume(volume / 100.0)
+        self._audio_thread.set_volume(volume / 100.0)  # 패스스루 출력 볼륨 동기화
         self._config.setdefault("alarm", {})["volume"] = volume
         if self._settings_dialog:
             self._settings_dialog.set_alarm_volume(volume)

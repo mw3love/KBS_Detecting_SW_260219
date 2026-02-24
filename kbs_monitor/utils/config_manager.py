@@ -70,6 +70,9 @@ DEFAULT_CONFIG = {
         "pre_seconds": 5,          # 사고 전 버퍼 시간(초)
         "post_seconds": 15,        # 사고 후 녹화 시간(초)
         "max_keep_days": 7,        # 최대 보관 일수
+        "output_width": 960,       # 녹화 출력 가로 해상도
+        "output_height": 540,      # 녹화 출력 세로 해상도
+        "output_fps": 10,          # 녹화 출력 FPS
     },
 }
 

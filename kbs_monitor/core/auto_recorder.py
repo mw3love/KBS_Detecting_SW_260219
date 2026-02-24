@@ -1,6 +1,6 @@
 """
 자동 녹화 모듈
-알림 발생 시 사고 전 N초 + 사고 후 M초를 960×540 MP4로 자동 저장.
+알림 발생 시 사고 전 N초 + 사고 후 M초를 지정 해상도/FPS로 MP4 자동 저장.
 순환 버퍼(JPEG 압축)로 "사고 전" 구간 구현, 오래된 파일 자동 삭제.
 감지 루프와 독립적으로 daemon 스레드에서 처리.
 """
@@ -15,11 +15,6 @@ import cv2
 import numpy as np
 
 
-# 녹화 출력 해상도 (960×540 고정)
-_OUT_W = 960
-_OUT_H = 540
-_OUT_FPS = 10               # 버퍼 저장 및 녹화 FPS
-_BUF_INTERVAL = 1.0 / _OUT_FPS  # 버퍼 저장 간격(초)
 _JPEG_QUALITY = 85
 
 
@@ -38,8 +33,14 @@ class AutoRecorder:
         self._post_seconds: float = 15.0
         self._max_keep_days: int = 7
 
+        # 녹화 출력 해상도/FPS (configure()로 변경 가능)
+        self._out_w: int = 960
+        self._out_h: int = 540
+        self._out_fps: int = 10
+        self._buf_interval: float = 1.0 / self._out_fps
+
         # 순환 버퍼: deque[(timestamp, jpeg_bytes)]
-        maxlen = int(self._pre_seconds * _OUT_FPS) + 5
+        maxlen = int(self._pre_seconds * self._out_fps) + 5
         self._buffer: deque = deque(maxlen=maxlen)
         self._buffer_lock = threading.Lock()
         self._last_buf_time: float = 0.0
@@ -47,7 +48,7 @@ class AutoRecorder:
         # 녹화 상태
         self._recording: bool = False
         self._record_end: float = 0.0
-        self._record_queue: deque = deque()     # (timestamp, frame_960x540)
+        self._record_queue: deque = deque()
         self._record_thread: Optional[threading.Thread] = None
 
         # 자동 삭제 스레드
@@ -76,6 +77,9 @@ class AutoRecorder:
         pre_seconds: float,
         post_seconds: float,
         max_keep_days: int,
+        output_width: int = 960,
+        output_height: int = 540,
+        output_fps: int = 10,
     ):
         """설정 반영 및 버퍼 크기 재계산"""
         self._enabled = enabled
@@ -83,8 +87,12 @@ class AutoRecorder:
         self._pre_seconds = max(1.0, float(pre_seconds))
         self._post_seconds = max(1.0, float(post_seconds))
         self._max_keep_days = max(1, int(max_keep_days))
+        self._out_w = max(160, int(output_width))
+        self._out_h = max(90, int(output_height))
+        self._out_fps = max(1, int(output_fps))
+        self._buf_interval = 1.0 / self._out_fps
 
-        new_maxlen = int(self._pre_seconds * _OUT_FPS) + 5
+        new_maxlen = int(self._pre_seconds * self._out_fps) + 5
         with self._buffer_lock:
             old = list(self._buffer)[-new_maxlen:]
             self._buffer = deque(old, maxlen=new_maxlen)
@@ -94,8 +102,8 @@ class AutoRecorder:
     def push_frame(self, frame: np.ndarray):
         """
         frame_ready 신호마다 호출.
-        _OUT_FPS(10fps) 간격으로 JPEG 인코딩 후 순환 버퍼에 저장.
-        녹화 중이면 960×540 리사이즈 프레임을 녹화 큐에도 추가.
+        _out_fps 간격으로 JPEG 인코딩 후 순환 버퍼에 저장.
+        녹화 중이면 출력 해상도로 리사이즈한 프레임을 녹화 큐에도 추가.
         성능: JPEG 인코딩 약 1~2ms / 호출마다 if 비교 1회
         """
         if not self._enabled:
@@ -103,11 +111,11 @@ class AutoRecorder:
 
         now = time.time()
 
-        # 버퍼: _OUT_FPS 간격으로만 저장 (다운샘플)
-        if now - self._last_buf_time >= _BUF_INTERVAL:
+        # 버퍼: _buf_interval 간격으로만 저장 (다운샘플)
+        if now - self._last_buf_time >= self._buf_interval:
             self._last_buf_time = now
             try:
-                small = cv2.resize(frame, (_OUT_W, _OUT_H))
+                small = cv2.resize(frame, (self._out_w, self._out_h))
                 ok, buf = cv2.imencode(
                     ".jpg", small,
                     [cv2.IMWRITE_JPEG_QUALITY, _JPEG_QUALITY],
@@ -118,11 +126,11 @@ class AutoRecorder:
             except Exception:
                 pass
 
-        # 녹화 중: 녹화 큐에 원본 리사이즈 프레임 추가
+        # 녹화 중: 녹화 큐에 출력 해상도 리사이즈 프레임 추가
         if self._recording:
             if now < self._record_end:
                 try:
-                    small = cv2.resize(frame, (_OUT_W, _OUT_H))
+                    small = cv2.resize(frame, (self._out_w, self._out_h))
                     self._record_queue.append((now, small))
                 except Exception:
                     pass
@@ -181,7 +189,7 @@ class AutoRecorder:
         pre_frames(JPEG bytes 리스트) → 실시간 record_queue → VideoWriter 저장.
         """
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer = cv2.VideoWriter(filepath, fourcc, _OUT_FPS, (_OUT_W, _OUT_H))
+        writer = cv2.VideoWriter(filepath, fourcc, self._out_fps, (self._out_w, self._out_h))
         if not writer.isOpened():
             return
 

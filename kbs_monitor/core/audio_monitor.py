@@ -31,11 +31,16 @@ class AudioMonitorThread(QThread):
         self._device_index = device_index
         self._silence_duration = 0.0
         self._muted = False
+        self._volume = 1.0              # 패스스루 출력 볼륨 (0.0 ~ 1.0)
         self._stereo = (self.CHANNELS == 2)  # 초기화 시 한 번만 결정
 
     def set_muted(self, muted: bool):
-        """음소거 설정 (레벨 모니터링은 계속, 표시만 변경)"""
+        """음소거 설정 (패스스루 출력 차단)"""
         self._muted = muted
+
+    def set_volume(self, volume: float):
+        """패스스루 출력 볼륨 설정 (0.0 ~ 1.0)"""
+        self._volume = max(0.0, min(1.0, volume))
 
     def stop(self):
         self._running = False
@@ -60,9 +65,10 @@ class AudioMonitorThread(QThread):
 
         self._running = True
         stream = None
+        output_stream = None
 
         try:
-            # 오디오 스트림 열기
+            # 입력 스트림 열기
             stream = sd.RawInputStream(
                 samplerate=self.SAMPLE_RATE,
                 blocksize=self.CHUNK,
@@ -71,7 +77,20 @@ class AudioMonitorThread(QThread):
                 dtype='int16',
             )
             stream.start()
-            self.status_changed.emit("오디오 스트림 시작")
+
+            # 출력 스트림 열기 (패스스루용, 기본 출력 장치)
+            try:
+                output_stream = sd.RawOutputStream(
+                    samplerate=self.SAMPLE_RATE,
+                    blocksize=self.CHUNK,
+                    channels=self.CHANNELS,
+                    dtype='int16',
+                )
+                output_stream.start()
+                self.status_changed.emit("오디오 스트림 시작 (패스스루 활성)")
+            except Exception as e:
+                output_stream = None
+                self.status_changed.emit(f"오디오 스트림 시작 (출력 오류: {e})")
 
             chunk_duration = self.CHUNK / self.SAMPLE_RATE  # 초 단위
 
@@ -79,6 +98,18 @@ class AudioMonitorThread(QThread):
                 try:
                     data, overflowed = stream.read(self.CHUNK)
                     samples = np.frombuffer(data, dtype=np.int16)
+
+                    # 패스스루: 캡처 오디오를 출력 장치로 전송
+                    if output_stream is not None and not self._muted and self._volume > 0:
+                        if self._volume < 1.0:
+                            out_f = samples.astype(np.float32) * self._volume
+                            out_samples = np.clip(out_f, -32768, 32767).astype(np.int16)
+                        else:
+                            out_samples = samples
+                        try:
+                            output_stream.write(out_samples.tobytes())
+                        except Exception:
+                            pass
 
                     # 스테레오 분리 (초기화 시 결정된 플래그 사용)
                     if self._stereo:
@@ -114,6 +145,12 @@ class AudioMonitorThread(QThread):
                 self.msleep(500)
         finally:
             # 예외 발생 여부와 무관하게 스트림 반드시 정리
+            if output_stream is not None:
+                try:
+                    output_stream.stop()
+                    output_stream.close()
+                except Exception:
+                    pass
             if stream is not None:
                 try:
                     stream.stop()

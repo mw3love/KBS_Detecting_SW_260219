@@ -30,62 +30,16 @@
     }
   },
   "rois": {
-    "video": [
-      {
-        "label": "V1",
-        "media_name": "",
-        "x": 1035,
-        "y": 56,
-        "w": 200,
-        "h": 86,
-        "roi_type": "video"
-      },
-      {
-        "label": "V2",
-        "media_name": "",
-        "x": 1052,
-        "y": 587,
-        "w": 168,
-        "h": 76,
-        "roi_type": "video"
-      }
-    ],
-    "audio": [
-      {
-        "label": "A1",
-        "media_name": "",
-        "x": 115,
-        "y": 136,
-        "w": 87,
-        "h": 250,
-        "roi_type": "audio"
-      },
-      {
-        "label": "A2",
-        "media_name": "",
-        "x": 132,
-        "y": 514,
-        "w": 94,
-        "h": 127,
-        "roi_type": "audio"
-      },
-      {
-        "label": "A3",
-        "media_name": "",
-        "x": 254,
-        "y": 424,
-        "w": 61,
-        "h": 141,
-        "roi_type": "audio"
-      }
-    ]
+    "video": [],
+    "audio": []
   },
   "performance": {
     "detection_interval": 100,
     "scale_factor": 1.0,
-    "black_detection_enabled": true,
-    "still_detection_enabled": true,
+    "video_detection_enabled": true,
     "audio_detection_enabled": true,
+    "still_detection_enabled": true,
+    "black_detection_enabled": true,
     "embedded_detection_enabled": false
   },
   "telegram": {
@@ -104,6 +58,9 @@
     "save_dir": "recordings",
     "pre_seconds": 5,
     "post_seconds": 15,
-    "max_keep_days": 7
+    "max_keep_days": 7,
+    "output_width": 960,
+    "output_height": 540,
+    "output_fps": 15
   }
 }

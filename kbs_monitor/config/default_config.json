@@ -5,7 +5,7 @@
     "black_duration": 10,
     "black_alarm_duration": 10,
     "still_threshold": 2,
-    "still_duration": 20,
+    "still_duration": 60,
     "still_alarm_duration": 10,
     "audio_hsv_h_min": 40,
     "audio_hsv_h_max": 80,

@@ -231,6 +231,7 @@ class TopBar(QWidget):
     volume_changed = Signal(int)
     clear_alarm_requested = Signal()
     dark_mode_toggled = Signal(bool)
+    fullscreen_toggled = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -379,6 +380,16 @@ class TopBar(QWidget):
         self._btn_settings.clicked.connect(self.settings_requested)
         layout.addWidget(self._btn_settings)
 
+        # 8. 전체화면 토글
+        self._btn_fullscreen = QPushButton("전체화면")
+        self._btn_fullscreen.setObjectName("btnFullscreen")
+        self._btn_fullscreen.setCheckable(True)
+        self._btn_fullscreen.setFixedSize(90, 36)
+        self._btn_fullscreen.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self._btn_fullscreen.setToolTip("F11 — 전체화면 전환")
+        self._btn_fullscreen.clicked.connect(self.fullscreen_toggled)
+        layout.addWidget(self._btn_fullscreen)
+
         layout.addStretch()
 
     def _create_summary_widget(self) -> QWidget:
@@ -502,12 +513,19 @@ class TopBar(QWidget):
         self._meter_l.set_level(l_db)
         self._meter_r.set_level(r_db)
 
-    def update_summary(self, video_count: int, audio_count: int, embedded_active: bool):
+    def update_summary(self, video_count: int, audio_count: int,
+                       embedded_enabled: bool, embedded_alerting: bool = False):
         """감지현황 업데이트"""
         self._lbl_v.setText(f"V\n{video_count}")
         self._lbl_a.setText(f"A\n{audio_count}")
-        ea_val = "1" if embedded_active else "-"
+        ea_val = "1" if embedded_enabled else "-"
         self._lbl_ea.setText(f"EA\n{ea_val}")
+        if embedded_alerting:
+            self._lbl_ea.setStyleSheet("color: #cc0000; font-weight: bold;")
+        elif embedded_enabled:
+            self._lbl_ea.setStyleSheet("")
+        else:
+            self._lbl_ea.setStyleSheet("color: gray;")
 
     def set_volume_display(self, value: int):
         """볼륨 슬라이더 값을 외부에서 설정 (시그널 발송 없이)"""
@@ -520,3 +538,10 @@ class TopBar(QWidget):
         self._btn_mute.blockSignals(True)
         self._btn_mute.setChecked(not enabled)
         self._btn_mute.blockSignals(False)
+
+    def set_fullscreen_button_state(self, is_fullscreen: bool):
+        """전체화면 버튼 체크 상태를 외부에서 설정 (시그널 발송 없이)"""
+        self._btn_fullscreen.blockSignals(True)
+        self._btn_fullscreen.setChecked(is_fullscreen)
+        self._btn_fullscreen.setText("창 모드" if is_fullscreen else "전체화면")
+        self._btn_fullscreen.blockSignals(False)

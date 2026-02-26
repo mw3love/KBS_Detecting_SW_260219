@@ -129,6 +129,7 @@ class MainWindow(QMainWindow):
         self._top_bar.volume_changed.connect(self._on_volume_changed)
         self._top_bar.clear_alarm_requested.connect(self._on_clear_alarm)
         self._top_bar.dark_mode_toggled.connect(self._on_dark_mode_toggled)
+        self._top_bar.fullscreen_toggled.connect(self._toggle_fullscreen)
 
         self._alarm.visual_blink.connect(self._video_widget.set_blink_state)
 
@@ -197,31 +198,33 @@ class MainWindow(QMainWindow):
         # 비디오 ROI 블랙/스틸 감지 (둘 중 하나라도 활성화된 경우 실행)
         if video_rois and (self._detector.black_detection_enabled or self._detector.still_detection_enabled):
             results = self._detector.detect_frame(self._latest_frame, video_rois)
-            # label → name 매핑 캐시 (O(n) 선형 탐색 제거)
-            video_name_map = {r.label: (r.media_name or r.label) for r in video_rois}
+            # label → (media_name, display_name) 매핑 캐시
+            video_name_map = {r.label: r.media_name for r in video_rois}
 
             for label, state in results.items():
                 black_alert    = state.get("black_alerting", False)
                 still_alert    = state.get("still_alerting", False)
                 black_resolved = state.get("black_resolved", False)
                 still_resolved = state.get("still_resolved", False)
-                name = video_name_map.get(label, label)
+                media = video_name_map.get(label, "")
+                name = media or label                          # 텔레그램/알람용
+                log_prefix = f"{label}. {media}" if media else label  # 로그용
 
                 # ── 블랙 ──
                 if black_alert:
                     if label not in self._black_logged:
-                        self._logger.error(f"{name} - 블랙 감지")
+                        self._logger.error(f"{log_prefix} - 블랙 감지")
                         tg = self._config.get("telegram", {})
                         if tg.get("notify_black", True):
                             self._telegram.notify("블랙", label, name, self._latest_frame)
-                        self._recorder.trigger("블랙", label, name)
+                        self._recorder.trigger("블랙", label, media)
                     self._alarm.trigger("블랙", label, self._detector.black_alarm_duration)
                     self._black_logged.add(label)
                 else:
                     if black_resolved and label in self._black_logged:
                         last_dur = state.get("black_last_duration", 0)
-                        self._logger.error(f"{name} - 블랙 {last_dur:.0f}초")
-                        self._logger.info(f"{name} - 블랙 정상 복구")
+                        self._logger.error(f"{log_prefix} - 블랙 {last_dur:.0f}초")
+                        self._logger.info(f"{log_prefix} - 블랙 정상 복구")
                         tg = self._config.get("telegram", {})
                         if tg.get("notify_black", True):
                             self._telegram.notify("블랙", label, name, self._latest_frame, is_recovery=True)
@@ -231,18 +234,18 @@ class MainWindow(QMainWindow):
                 # ── 스틸 ──
                 if still_alert:
                     if label not in self._still_logged:
-                        self._logger.still_error(f"{name} - 스틸 감지")
+                        self._logger.still_error(f"{log_prefix} - 스틸 감지")
                         tg = self._config.get("telegram", {})
                         if tg.get("notify_still", True):
                             self._telegram.notify("스틸", label, name, self._latest_frame)
-                        self._recorder.trigger("스틸", label, name)
+                        self._recorder.trigger("스틸", label, media)
                     self._alarm.trigger("스틸", label, self._detector.still_alarm_duration)
                     self._still_logged.add(label)
                 else:
                     if still_resolved and label in self._still_logged:
                         last_dur = state.get("still_last_duration", 0)
-                        self._logger.still_error(f"{name} - 스틸 {last_dur:.0f}초")
-                        self._logger.info(f"{name} - 스틸 정상 복구")
+                        self._logger.still_error(f"{log_prefix} - 스틸 {last_dur:.0f}초")
+                        self._logger.info(f"{log_prefix} - 스틸 정상 복구")
                         tg = self._config.get("telegram", {})
                         if tg.get("notify_still", True):
                             self._telegram.notify("스틸", label, name, self._latest_frame, is_recovery=True)
@@ -256,21 +259,23 @@ class MainWindow(QMainWindow):
             audio_results = self._detector.detect_audio_roi(
                 self._latest_frame, audio_rois
             )
-            # label → name 매핑 캐시 (O(n) 선형 탐색 제거)
-            audio_name_map = {r.label: (r.media_name or r.label) for r in audio_rois}
+            # label → media_name 매핑 캐시
+            audio_name_map = {r.label: r.media_name for r in audio_rois}
 
             for label, state in audio_results.items():
                 alerting = state.get("alerting", False)
                 resolved = state.get("resolved", False)
-                name = audio_name_map.get(label, label)
+                media = audio_name_map.get(label, "")
+                name = media or label                              # 텔레그램/알람용
+                log_prefix = f"{label}. {media}" if media else label  # 로그용
 
                 if alerting:
                     if label not in self._audio_level_logged:
-                        self._logger.audio_error(f"{name} - 무음 감지")
+                        self._logger.audio_error(f"{log_prefix} - 무음 감지")
                         tg = self._config.get("telegram", {})
                         if tg.get("notify_audio_level", True):
                             self._telegram.notify("오디오", label, name, self._latest_frame)
-                        self._recorder.trigger("오디오", label, name)
+                        self._recorder.trigger("오디오", label, media)
                     self._alarm.trigger(
                         "오디오", label, self._detector.audio_level_alarm_duration
                     )
@@ -279,9 +284,9 @@ class MainWindow(QMainWindow):
                     if resolved and label in self._audio_level_logged:
                         last_dur = state.get("last_duration", 0)
                         self._logger.audio_error(
-                            f"{name} - 무음 {last_dur:.0f}초"
+                            f"{log_prefix} - 무음 {last_dur:.0f}초"
                         )
-                        self._logger.info(f"{name} - 무음 정상 복구")
+                        self._logger.info(f"{log_prefix} - 무음 정상 복구")
                         tg = self._config.get("telegram", {})
                         if tg.get("notify_audio_level", True):
                             self._telegram.notify("오디오", label, name, self._latest_frame, is_recovery=True)
@@ -293,7 +298,11 @@ class MainWindow(QMainWindow):
     def _update_summary(self):
         v_count = len(self._roi_manager.video_rois)
         a_count = len(self._roi_manager.audio_rois)
-        self._top_bar.update_summary(v_count, a_count, self._detector.embedded_alerting)
+        self._top_bar.update_summary(
+            v_count, a_count,
+            self._embedded_detect_enabled,
+            self._detector.embedded_alerting,
+        )
         # 감지영역 정보를 비디오 위젯에도 동기화
         self._video_widget.set_rois(
             self._roi_manager.video_rois,
@@ -403,7 +412,7 @@ class MainWindow(QMainWindow):
         self._detector.black_duration = det.get("black_duration", 10.0)
         self._detector.black_alarm_duration = det.get("black_alarm_duration", 10.0)
         self._detector.still_threshold = det.get("still_threshold", 2)
-        self._detector.still_duration = det.get("still_duration", 20.0)
+        self._detector.still_duration = det.get("still_duration", 60.0)
         self._detector.still_alarm_duration = det.get("still_alarm_duration", 10.0)
         # 오디오 레벨미터 HSV
         self._detector.audio_hsv_h_min = det.get("audio_hsv_h_min", 40)
@@ -721,6 +730,23 @@ class MainWindow(QMainWindow):
 
     def _on_log_message(self, message: str, log_type: str):
         self._log_widget.add_log(message, log_type)
+
+    # ── 전체화면 ───────────────────────────────────────
+
+    def _toggle_fullscreen(self):
+        """전체화면 / 일반 창 전환"""
+        if self.isFullScreen():
+            self.showNormal()
+            self._top_bar.set_fullscreen_button_state(False)
+        else:
+            self.showFullScreen()
+            self._top_bar.set_fullscreen_button_state(True)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_F11:
+            self._toggle_fullscreen()
+        else:
+            super().keyPressEvent(event)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

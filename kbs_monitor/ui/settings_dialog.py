@@ -712,9 +712,9 @@ class SettingsDialog(QDialog):
 
         lbl_str = QLabel("▪  몇 초 이상시 알림 발생(초):")
         lbl_str.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_still_duration = _NumEdit(30, 1, 300)
+        self._edit_still_duration = _NumEdit(60, 1, 300)
         self._edit_still_duration.editingFinished.connect(self._save_detection_params)
-        desc_str = QLabel("스틸이 이 시간 이상 지속되면 알림 발생  (기본값: 30초)")
+        desc_str = QLabel("스틸이 이 시간 이상 지속되면 알림 발생  (기본값: 60초)")
         desc_str.setObjectName("paramDescLabel")
         grid_s.addWidget(lbl_str,                  1, 0)
         grid_s.addWidget(self._edit_still_duration, 1, 1)
@@ -1463,7 +1463,7 @@ class SettingsDialog(QDialog):
         self._edit_black_duration.setText(str(int(det.get("black_duration", 10))))
         self._edit_black_alarm_duration.setText(str(int(det.get("black_alarm_duration", 10))))
         self._edit_still_threshold.setText(str(int(det.get("still_threshold", 2))))
-        self._edit_still_duration.setText(str(int(det.get("still_duration", 30))))
+        self._edit_still_duration.setText(str(int(det.get("still_duration", 60))))
         self._edit_still_alarm_duration.setText(str(int(det.get("still_alarm_duration", 10))))
 
         # 오디오 레벨미터 HSV 설정

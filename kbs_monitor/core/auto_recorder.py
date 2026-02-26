@@ -169,8 +169,12 @@ class AutoRecorder:
         os.makedirs(self._save_dir, exist_ok=True)
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_label = label.replace("/", "_").replace("\\", "_")
+        safe_media = media_name.replace("/", "_").replace("\\", "_") if media_name else ""
         safe_type = alarm_type.replace("/", "_")
-        filename = f"{ts}_{safe_label}_{safe_type}.mp4"
+        if safe_media:
+            filename = f"{ts}_{safe_label}_{safe_media}_{safe_type}.mp4"
+        else:
+            filename = f"{ts}_{safe_label}_{safe_type}.mp4"
         filepath = os.path.join(self._save_dir, filename)
 
         self._record_thread = threading.Thread(

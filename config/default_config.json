@@ -1,0 +1,123 @@
+{
+  "port": 0,
+  "detection": {
+    "black_threshold": 10,
+    "black_duration": 10,
+    "black_alarm_duration": 10,
+    "still_threshold": 2,
+    "still_duration": 30,
+    "still_alarm_duration": 10,
+    "audio_hsv_h_min": 40,
+    "audio_hsv_h_max": 80,
+    "audio_hsv_s_min": 30,
+    "audio_hsv_s_max": 255,
+    "audio_hsv_v_min": 30,
+    "audio_hsv_v_max": 255,
+    "audio_pixel_ratio": 5,
+    "audio_level_duration": 20,
+    "audio_level_alarm_duration": 10,
+    "audio_level_recovery_seconds": 2,
+    "embedded_silence_threshold": -50,
+    "embedded_silence_duration": 20,
+    "embedded_alarm_duration": 10,
+    "audio_tone_std_threshold": 3.0,
+    "audio_tone_duration": 5.0,
+    "audio_tone_min_level": 5.0
+  },
+  "alarm": {
+    "sound_enabled": true,
+    "volume": 80,
+    "sounds_dir": "resources/sounds",
+    "sound_files": {
+      "black": "",
+      "still": "",
+      "audio": "",
+      "default": ""
+    }
+  },
+  "rois": {
+    "video": [],
+    "audio": []
+  },
+  "performance": {
+    "detection_interval": 200,
+    "scale_factor": 1.0,
+    "video_detection_enabled": true,
+    "audio_detection_enabled": true,
+    "still_detection_enabled": true
+  },
+  "telegram": {
+    "enabled": false,
+    "bot_token": "",
+    "chat_id": "",
+    "send_image": true,
+    "cooldown": 60,
+    "notify_black": true,
+    "notify_still": true,
+    "notify_audio_level": true,
+    "notify_embedded": true
+  },
+  "recording": {
+    "enabled": false,
+    "save_dir": "recordings",
+    "pre_seconds": 5,
+    "post_seconds": 15,
+    "max_keep_days": 7,
+    "output_width": 960,
+    "output_height": 540,
+    "output_fps": 10
+  },
+  "signoff": {
+    "signoff_duration": 120.0,
+    "recovery_duration": 30.0,
+    "prep_alarm_sound": "",
+    "enter_alarm_sound": "",
+    "release_alarm_sound": "",
+    "group1": {
+      "name": "Group1",
+      "enter_roi": {
+        "video_label": "",
+        "audio_label": ""
+      },
+      "exit_roi": {
+        "video_label": "",
+        "audio_label": ""
+      },
+      "start_time": "00:30",
+      "end_time": "06:00",
+      "every_day": true,
+      "weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "group2": {
+      "name": "Group2",
+      "enter_roi": {
+        "video_label": "",
+        "audio_label": ""
+      },
+      "exit_roi": {
+        "video_label": "",
+        "audio_label": ""
+      },
+      "start_time": "00:30",
+      "end_time": "06:00",
+      "every_day": true,
+      "weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  }
+}

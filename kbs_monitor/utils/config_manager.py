@@ -31,7 +31,7 @@ DEFAULT_CONFIG = {
         "embedded_silence_duration": 20,
         "embedded_alarm_duration": 10,
         "audio_tone_std_threshold": 3.0,   # 정파 톤 감지: ratio 표준편차 임계값(%) — 이 값 이하면 일정 톤으로 판단
-        "audio_tone_duration":      5.0,   # 정파 톤 감지: 톤 상태 지속 시간(초) — 정파 진입 트리거 조건
+        "audio_tone_duration":      60.0,  # 정파 톤 감지: 톤 상태 지속 시간(초) — 정파 진입 트리거 조건
         "audio_tone_min_level":     5.0,   # 정파 톤 감지: 최소 레벨(%) — 이 값 미만이면 무음(톤 아님)으로 처리
     },
     "alarm": {
@@ -78,8 +78,6 @@ DEFAULT_CONFIG = {
         "output_fps": 10,          # 녹화 출력 FPS
     },
     "signoff": {
-        "signoff_duration":    120.0,  # 정파 조건 지속 시간(초) → 정파모드 진입
-        "recovery_duration":   30.0,   # 정상 복귀 지속 시간(초) → 정파모드 해제
         "prep_alarm_sound":    "",     # 정파준비 시작 알림음 WAV 경로
         "enter_alarm_sound":   "",     # 정파모드 진입 알림음 WAV 경로
         "release_alarm_sound": "",     # 정파 해제 알림음 WAV 경로

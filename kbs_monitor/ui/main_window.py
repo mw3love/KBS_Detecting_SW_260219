@@ -446,9 +446,13 @@ class MainWindow(QMainWindow):
             self._logger.info(f"SYSTEM - 파일 소스 해제, 포트 {port}로 복귀")
 
     def _apply_detection_params(self, params: dict):
-        """감지 파라미터 Detector에 즉시 반영 후 상태 초기화"""
+        """감지 파라미터 Detector에 즉시 반영 후 상태 초기화.
+        스틸/톤 기준 시간이 변경될 수 있으므로 SignoffManager도 재적용.
+        """
         self._apply_detection_config(params)
         self._detector.reset_all()
+        # 감도설정 변경 시 정파 기준 시간도 갱신
+        self._apply_signoff_config(self._config.get("signoff", {}))
 
     def _apply_performance_params(self, params: dict):
         """성능 파라미터 즉시 반영 (타이머 주기, 스케일, 감지 활성화)"""
@@ -492,7 +496,7 @@ class MainWindow(QMainWindow):
         self._detector.embedded_alarm_duration = det.get("embedded_alarm_duration", 10.0)
         # 정파용 오디오 톤 감지
         self._detector.audio_tone_std_threshold = det.get("audio_tone_std_threshold", 3.0)
-        self._detector.audio_tone_duration      = det.get("audio_tone_duration", 5.0)
+        self._detector.audio_tone_duration      = det.get("audio_tone_duration", 60.0)
         self._detector.audio_tone_min_level     = det.get("audio_tone_min_level", 5.0)
 
     # ── 임베디드 오디오 감지 ───────────────────────────
@@ -761,8 +765,15 @@ class MainWindow(QMainWindow):
     # ── 정파준비모드 ──────────────────────────────────
 
     def _apply_signoff_config(self, signoff_cfg: dict):
-        """signoff 설정을 SignoffManager에 반영"""
-        self._signoff_manager.configure_from_dict(signoff_cfg)
+        """signoff 설정을 SignoffManager에 반영.
+        감도설정의 스틸/톤 기준 시간을 함께 전달한다.
+        """
+        det_cfg = self._config.get("detection", {})
+        still_trigger_sec = float(det_cfg.get("still_duration", 60.0))
+        tone_trigger_sec  = float(det_cfg.get("audio_tone_duration", 60.0))
+        self._signoff_manager.configure_from_dict(
+            signoff_cfg, still_trigger_sec, tone_trigger_sec
+        )
 
     def _on_signoff_settings_changed(self, params: dict):
         """SettingsDialog 정파 설정 변경 → 즉시 적용"""

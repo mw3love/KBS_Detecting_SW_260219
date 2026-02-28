@@ -34,12 +34,12 @@ def _fmt_dhms(secs: float) -> str:
     h, s = divmod(s, 3600)
     m, s = divmod(s, 60)
     if d > 0:
-        return f"{d}D - [{h}H : {m}M : {s}S]"
+        return f"{d}D - [ {h}H : {m}M : {s}S ]"
     elif h > 0:
-        return f"[{h}H : {m}M : {s}S]"
+        return f"[ {h}H : {m}M : {s}S ]"
     elif m > 0:
-        return f"[{m}M : {s}S]"
-    return f"[{s}S]"
+        return f"[ {m}M : {s}S ]"
+    return f"[ {s}S ]"
 
 
 def _fmt_elapsed(secs: float) -> str:

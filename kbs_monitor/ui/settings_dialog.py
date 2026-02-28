@@ -464,8 +464,7 @@ class _SignoffRoiDialog(QDialog):
 
     열 구성:
       1열: 비디오 감지영역 (ComboBox) — "V1 (매체명)" 형식 표시
-      2열: AND / OR (ComboBox)
-      3열: 오디오 감지영역 (ComboBox) — "A1 (매체명)" 형식 표시
+      2열: 오디오 감지영역 (ComboBox) — "A1 (매체명)" 형식 표시
     """
 
     def __init__(self, rules: list,
@@ -494,27 +493,13 @@ class _SignoffRoiDialog(QDialog):
 
         # 테이블
         self._table = QTableWidget()
-        self._table.setColumnCount(3)
-        self._table.setHorizontalHeaderLabels(["비디오 감지영역", "AND/OR", "오디오 감지영역"])
+        self._table.setColumnCount(2)
+        self._table.setHorizontalHeaderLabels(["비디오 감지영역", "오디오 감지영역"])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         layout.addWidget(self._table)
-
-        # 행 추가 / 삭제 버튼
-        btn_row = QHBoxLayout()
-        btn_add = QPushButton("+ 행 추가")
-        btn_add.setFixedHeight(28)
-        btn_add.clicked.connect(self._add_row)
-        btn_del = QPushButton("- 선택 행 삭제")
-        btn_del.setFixedHeight(28)
-        btn_del.clicked.connect(self._del_row)
-        btn_row.addWidget(btn_add)
-        btn_row.addWidget(btn_del)
-        btn_row.addStretch()
-        layout.addLayout(btn_row)
 
         # 확인 / 취소
         ok_row = QHBoxLayout()
@@ -530,7 +515,7 @@ class _SignoffRoiDialog(QDialog):
         ok_row.addWidget(btn_cancel)
         layout.addLayout(ok_row)
 
-    def _make_row_widgets(self, video_label="", operator="", audio_label=""):
+    def _make_row_widgets(self, video_label="", audio_label=""):
         """새 행을 테이블에 추가하고 ComboBox 위젯을 배치한다.
         ComboBox 표시: "V1 (매체명)" 형식, userData에 순수 label 저장.
         """
@@ -548,13 +533,6 @@ class _SignoffRoiDialog(QDialog):
             v_combo.setCurrentIndex(idx)
         self._table.setCellWidget(row, 0, v_combo)
 
-        # AND / OR 콤보박스
-        op_combo = QComboBox()
-        op_combo.addItems(["", "AND", "OR"])
-        if operator in ("AND", "OR"):
-            op_combo.setCurrentText(operator)
-        self._table.setCellWidget(row, 1, op_combo)
-
         # 오디오 감지영역 콤보박스
         a_combo = QComboBox()
         a_combo.addItem("", userData="")
@@ -564,45 +542,30 @@ class _SignoffRoiDialog(QDialog):
         idx = a_combo.findData(audio_label)
         if idx >= 0:
             a_combo.setCurrentIndex(idx)
-        self._table.setCellWidget(row, 2, a_combo)
+        self._table.setCellWidget(row, 1, a_combo)
 
     def _populate_table(self):
         for rule in self._rules:
             self._make_row_widgets(
                 rule.get("video_label", ""),
-                rule.get("operator", ""),
                 rule.get("audio_label", ""),
             )
         if self._table.rowCount() == 0:
             self._make_row_widgets()  # 빈 행 하나
 
-    def _add_row(self):
-        self._make_row_widgets()
-
-    def _del_row(self):
-        rows = sorted(
-            {idx.row() for idx in self._table.selectedIndexes()},
-            reverse=True
-        )
-        for row in rows:
-            self._table.removeRow(row)
-
     def get_rules(self) -> list:
         """현재 테이블의 유효한 규칙 목록 반환. userData(순수 label)를 저장한다."""
         rules = []
         for row in range(self._table.rowCount()):
-            v_w  = self._table.cellWidget(row, 0)
-            op_w = self._table.cellWidget(row, 1)
-            a_w  = self._table.cellWidget(row, 2)
-            if v_w is None or op_w is None or a_w is None:
+            v_w = self._table.cellWidget(row, 0)
+            a_w = self._table.cellWidget(row, 1)
+            if v_w is None or a_w is None:
                 continue
-            v_label  = v_w.currentData() or ""
-            op_text  = op_w.currentText()
-            a_label  = a_w.currentData() or ""
+            v_label = v_w.currentData() or ""
+            a_label = a_w.currentData() or ""
             if v_label or a_label:  # 하나라도 선택되어야 의미 있음
                 rules.append({
                     "video_label": v_label,
-                    "operator":    op_text,
                     "audio_label": a_label,
                 })
         return rules
@@ -717,19 +680,20 @@ class SettingsDialog(QDialog):
         self._edit_video_file = QLineEdit()
         self._edit_video_file.setReadOnly(True)
         self._edit_video_file.setPlaceholderText("(파일 선택 안 함 — 포트 사용)")
-        file_row.addWidget(self._edit_video_file)
+        self._edit_video_file.setFixedHeight(_BTN_H)
+        file_row.addWidget(self._edit_video_file, 1, Qt.AlignVCenter)
 
         btn_browse_file = QPushButton("찾아보기")
         btn_browse_file.setMinimumWidth(80)
         btn_browse_file.setFixedHeight(_BTN_H)
         btn_browse_file.clicked.connect(self._browse_video_file)
-        file_row.addWidget(btn_browse_file)
+        file_row.addWidget(btn_browse_file, 0, Qt.AlignVCenter)
 
         btn_clear_file = QPushButton("초기화")
         btn_clear_file.setMinimumWidth(72)
         btn_clear_file.setFixedHeight(_BTN_H)
         btn_clear_file.clicked.connect(self._clear_video_file)
-        file_row.addWidget(btn_clear_file)
+        file_row.addWidget(btn_clear_file, 0, Qt.AlignVCenter)
 
         file_layout.addLayout(file_row)
         layout.addWidget(group_file)
@@ -746,23 +710,27 @@ class SettingsDialog(QDialog):
         rec_basic_layout.addWidget(self._chk_recording_enabled)
 
         dir_row = QHBoxLayout()
-        dir_row.addWidget(QLabel("저장 폴더:"))
+        lbl_dir = QLabel("저장 폴더:")
+        lbl_dir.setFixedHeight(_BTN_H)
+        lbl_dir.setAlignment(Qt.AlignVCenter)
+        dir_row.addWidget(lbl_dir, 0, Qt.AlignVCenter)
         self._edit_rec_dir = QLineEdit()
         self._edit_rec_dir.setPlaceholderText("recordings")
+        self._edit_rec_dir.setFixedHeight(_BTN_H)
         self._edit_rec_dir.editingFinished.connect(self._save_recording_params)
-        dir_row.addWidget(self._edit_rec_dir, 1)
+        dir_row.addWidget(self._edit_rec_dir, 1, Qt.AlignVCenter)
 
         btn_browse_dir = QPushButton("찾아보기")
         btn_browse_dir.setFixedHeight(_BTN_H)
         btn_browse_dir.setMinimumWidth(80)
         btn_browse_dir.clicked.connect(self._browse_rec_dir)
-        dir_row.addWidget(btn_browse_dir)
+        dir_row.addWidget(btn_browse_dir, 0, Qt.AlignVCenter)
 
         btn_open_dir = QPushButton("폴더 열기")
         btn_open_dir.setFixedHeight(_BTN_H)
         btn_open_dir.setMinimumWidth(80)
         btn_open_dir.clicked.connect(self._open_rec_dir)
-        dir_row.addWidget(btn_open_dir)
+        dir_row.addWidget(btn_open_dir, 0, Qt.AlignVCenter)
 
         rec_basic_layout.addLayout(dir_row)
         layout.addWidget(group_rec_basic)
@@ -1179,6 +1147,45 @@ class SettingsDialog(QDialog):
         audio_layout.addLayout(grid_a2)
         layout.addWidget(group_audio)
 
+        # ── 정파용 오디오 톤 감지 그룹 ──
+        group_tone = QGroupBox("정파용 오디오 톤 감지 설정 (1kHz 일정 톤 감지)")
+        grid_tone = QGridLayout(group_tone)
+        grid_tone.setHorizontalSpacing(12)
+        grid_tone.setVerticalSpacing(8)
+        grid_tone.setColumnStretch(2, 1)
+
+        lbl_tone_std = QLabel("▪  표준편차 임계값(%):")
+        lbl_tone_std.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._edit_audio_tone_std = _NumEdit(3.0, 0.1, 50.0, is_float=True)
+        self._edit_audio_tone_std.editingFinished.connect(self._save_detection_params)
+        desc_tone_std = QLabel("ratio 표준편차가 이 값 이하면 일정 톤으로 판단  (기본값: 3.0%)")
+        desc_tone_std.setObjectName("paramDescLabel")
+        grid_tone.addWidget(lbl_tone_std,             0, 0)
+        grid_tone.addWidget(self._edit_audio_tone_std, 0, 1)
+        grid_tone.addWidget(desc_tone_std,             0, 2)
+
+        lbl_tone_dur = QLabel("▪  몇 초 이상시 트리거 발생(초):")
+        lbl_tone_dur.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._edit_audio_tone_duration = _NumEdit(60.0, 1.0, 120.0, is_float=True)
+        self._edit_audio_tone_duration.editingFinished.connect(self._save_detection_params)
+        desc_tone_dur = QLabel("톤 상태가 이 시간 이상 지속 시 정파 진입 트리거  (기본값: 60초)")
+        desc_tone_dur.setObjectName("paramDescLabel")
+        grid_tone.addWidget(lbl_tone_dur,                  1, 0)
+        grid_tone.addWidget(self._edit_audio_tone_duration, 1, 1)
+        grid_tone.addWidget(desc_tone_dur,                  1, 2)
+
+        lbl_tone_min = QLabel("▪  최소 레벨(%):")
+        lbl_tone_min.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._edit_audio_tone_min_level = _NumEdit(5.0, 0.0, 50.0, is_float=True)
+        self._edit_audio_tone_min_level.editingFinished.connect(self._save_detection_params)
+        desc_tone_min = QLabel("ratio가 이 값 미만이면 무음으로 판단하여 톤 제외  (기본값: 5.0%)")
+        desc_tone_min.setObjectName("paramDescLabel")
+        grid_tone.addWidget(lbl_tone_min,                   2, 0)
+        grid_tone.addWidget(self._edit_audio_tone_min_level, 2, 1)
+        grid_tone.addWidget(desc_tone_min,                   2, 2)
+
+        layout.addWidget(group_tone)
+
         # ── 임베디드 오디오 감지 그룹 ──
         group_emb = QGroupBox("임베디드 오디오 감지 (무음 감지)")
         grid_e = QGridLayout(group_emb)
@@ -1360,32 +1367,34 @@ class SettingsDialog(QDialog):
         lbl = QLabel("알림음 파일:")
         lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         lbl.setFixedWidth(90)
-        file_row.addWidget(lbl)
+        lbl.setFixedHeight(_BTN_H)
+        file_row.addWidget(lbl, 0, Qt.AlignVCenter)
 
         self._alarm_file_edits: dict = {}
         path_edit = QLineEdit()
         path_edit.setReadOnly(True)
         path_edit.setPlaceholderText("(Windows 내장 경고음 사용 — SystemHand)")
+        path_edit.setFixedHeight(_BTN_H)
         self._alarm_file_edits["default"] = path_edit
-        file_row.addWidget(path_edit)
+        file_row.addWidget(path_edit, 1, Qt.AlignVCenter)
 
         btn_browse = QPushButton("찾아보기")
         btn_browse.setMinimumWidth(80)
         btn_browse.setFixedHeight(_BTN_H)
         btn_browse.clicked.connect(lambda: self._browse_sound_file("default"))
-        file_row.addWidget(btn_browse)
+        file_row.addWidget(btn_browse, 0, Qt.AlignVCenter)
 
         btn_clear = QPushButton("초기화")
         btn_clear.setMinimumWidth(72)
         btn_clear.setFixedHeight(_BTN_H)
         btn_clear.clicked.connect(lambda: self._clear_sound_file("default"))
-        file_row.addWidget(btn_clear)
+        file_row.addWidget(btn_clear, 0, Qt.AlignVCenter)
 
         btn_test = QPushButton("테스트")
         btn_test.setMinimumWidth(72)
         btn_test.setFixedHeight(_BTN_H)
         btn_test.clicked.connect(lambda: self.test_sound_requested.emit("default"))
-        file_row.addWidget(btn_test)
+        file_row.addWidget(btn_test, 0, Qt.AlignVCenter)
 
         sound_layout.addLayout(file_row)
         layout.addWidget(group_sound)
@@ -1826,6 +1835,11 @@ class SettingsDialog(QDialog):
         self._edit_audio_level_alarm_duration.setText(str(int(det.get("audio_level_alarm_duration", 10))))
         self._edit_audio_level_recovery_seconds.setText(str(int(det.get("audio_level_recovery_seconds", 2))))
 
+        # 정파용 오디오 톤 감지 설정
+        self._edit_audio_tone_std.setText(str(det.get("audio_tone_std_threshold", 3.0)))
+        self._edit_audio_tone_duration.setText(str(det.get("audio_tone_duration", 60.0)))
+        self._edit_audio_tone_min_level.setText(str(det.get("audio_tone_min_level", 5.0)))
+
         # 임베디드 오디오 설정
         self._edit_embedded_silence_threshold.setText(str(int(det.get("embedded_silence_threshold", -50))))
         self._edit_embedded_silence_duration.setText(str(int(det.get("embedded_silence_duration", 20))))
@@ -1899,6 +1913,10 @@ class SettingsDialog(QDialog):
             "audio_level_duration":             self._edit_audio_level_duration.get_value(),
             "audio_level_alarm_duration":       self._edit_audio_level_alarm_duration.get_value(),
             "audio_level_recovery_seconds":     self._edit_audio_level_recovery_seconds.get_value(),
+            # 정파용 오디오 톤 감지
+            "audio_tone_std_threshold": self._edit_audio_tone_std.get_value(),
+            "audio_tone_duration":      self._edit_audio_tone_duration.get_value(),
+            "audio_tone_min_level":     self._edit_audio_tone_min_level.get_value(),
             # 임베디드 오디오
             "embedded_silence_threshold":  self._edit_embedded_silence_threshold.get_value(),
             "embedded_silence_duration":   self._edit_embedded_silence_duration.get_value(),
@@ -2279,40 +2297,34 @@ class SettingsDialog(QDialog):
         tab_layout.setSpacing(10)
 
         # ── 정파준비모드 → 정파모드 ──
-        entry_group = QGroupBox("정파준비모드 → 정파모드")
+        entry_group = QGroupBox("정파준비모드 → 정파모드  [OR 방식]")
         entry_grid = QGridLayout(entry_group)
         entry_grid.setSpacing(8)
 
-        entry_grid.addWidget(QLabel("몇 초 이상시 정파로 판단:"), 0, 0)
-        self._dspin_signoff_duration = QDoubleSpinBox()
-        self._dspin_signoff_duration.setRange(1.0, 600.0)
-        self._dspin_signoff_duration.setValue(120.0)
-        self._dspin_signoff_duration.setDecimals(0)
-        self._dspin_signoff_duration.setButtonSymbols(QAbstractSpinBox.NoButtons)
-        self._dspin_signoff_duration.setFixedWidth(70)
-        self._dspin_signoff_duration.setToolTip("감지 조건 지속 시간이 이 값 이상이면 정파모드 진입")
-        entry_grid.addWidget(self._dspin_signoff_duration, 0, 1)
-        entry_grid.addWidget(QLabel("초  (기본 120초)"), 0, 2)
-        entry_grid.setColumnStretch(3, 1)
+        entry_lbl = QLabel(
+            "스틸 감지 또는 톤 감지 중 먼저 기준 시간을 충족하는 쪽으로 정파모드 전환\n"
+            "기준 시간: 감지 설정 탭의 「스틸감지 — 몇 초 이상시 알림 발생」 및\n"
+            "           「정파용 오디오 톤 감지 — 몇 초 이상시 트리거 발생」 값 사용"
+        )
+        entry_lbl.setObjectName("paramDescLabel")
+        entry_lbl.setWordWrap(True)
+        entry_grid.addWidget(entry_lbl, 0, 0)
 
         tab_layout.addWidget(entry_group)
 
         # ── 정파모드 → 정파모드 해제 ──
-        exit_group = QGroupBox("정파모드 → 정파모드 해제")
+        exit_group = QGroupBox("정파모드 → 정파모드 해제  [AND 방식]")
         exit_grid = QGridLayout(exit_group)
         exit_grid.setSpacing(8)
 
-        exit_grid.addWidget(QLabel("몇 초 이상시 정파해제로 판단:"), 0, 0)
-        self._dspin_recovery_duration = QDoubleSpinBox()
-        self._dspin_recovery_duration.setRange(1.0, 300.0)
-        self._dspin_recovery_duration.setValue(30.0)
-        self._dspin_recovery_duration.setDecimals(0)
-        self._dspin_recovery_duration.setButtonSymbols(QAbstractSpinBox.NoButtons)
-        self._dspin_recovery_duration.setFixedWidth(70)
-        self._dspin_recovery_duration.setToolTip("정상 방송 지속 시간이 이 값 이상이면 정파모드 해제")
-        exit_grid.addWidget(self._dspin_recovery_duration, 0, 1)
-        exit_grid.addWidget(QLabel("초  (기본 30초)"), 0, 2)
-        exit_grid.setColumnStretch(3, 1)
+        exit_lbl = QLabel(
+            "스틸 감지 AND 톤 감지 모두 각자의 기준 시간 이상 동시에 지속될 때 정파해제\n"
+            "예) 스틸 기준 20초 · 톤 기준 30초 → 스틸 20초 이상 지속 중이면서 톤도 30초 이상 지속 시 해제\n"
+            "기준 시간: 감지 설정 탭의 「스틸감지」 및 「정파용 오디오 톤 감지」 값 사용"
+        )
+        exit_lbl.setObjectName("paramDescLabel")
+        exit_lbl.setWordWrap(True)
+        exit_grid.addWidget(exit_lbl, 0, 0)
 
         tab_layout.addWidget(exit_group)
 
@@ -2382,10 +2394,6 @@ class SettingsDialog(QDialog):
 
         tab_layout.addStretch()
 
-        # 시그널 연결
-        self._dspin_signoff_duration.valueChanged.connect(self._save_signoff_params)
-        self._dspin_recovery_duration.valueChanged.connect(self._save_signoff_params)
-
         return scroll
 
     def _on_auto_prep_toggled(self, checked: bool):
@@ -2395,8 +2403,6 @@ class SettingsDialog(QDialog):
     def _reset_signoff_params(self):
         """정파 설정 전체 초기화."""
         defaults = {
-            "signoff_duration":    120.0,
-            "recovery_duration":    30.0,
             "auto_preparation":    True,
             "prep_alarm_sound":    "",
             "enter_alarm_sound":   "",
@@ -2546,11 +2552,10 @@ class SettingsDialog(QDialog):
             return
         parts = []
         for rule in rules:
-            v  = rule.get("video_label", "")
-            op = rule.get("operator", "")
-            a  = rule.get("audio_label", "")
+            v = rule.get("video_label", "")
+            a = rule.get("audio_label", "")
             if v and a:
-                parts.append(f"{v} {op} {a}")
+                parts.append(f"{v} / {a}")
             elif v:
                 parts.append(v)
             elif a:
@@ -2567,8 +2572,6 @@ class SettingsDialog(QDialog):
     def _get_signoff_params(self) -> dict:
         """현재 정파 설정 UI 값을 dict로 반환."""
         params = {
-            "signoff_duration":    self._dspin_signoff_duration.value(),
-            "recovery_duration":   self._dspin_recovery_duration.value(),
             "auto_preparation":    (self._signoff_auto_prep_btn is not None
                                     and self._signoff_auto_prep_btn.isChecked()),
             "prep_alarm_sound":    self._signoff_sound_edits["prep"].text(),
@@ -2606,14 +2609,6 @@ class SettingsDialog(QDialog):
             w.blockSignals(True)
             setter(v)
             w.blockSignals(False)
-
-        _block(self._dspin_signoff_duration,
-               float(cfg.get("signoff_duration", 120.0)),
-               self._dspin_signoff_duration.setValue)
-
-        _block(self._dspin_recovery_duration,
-               float(cfg.get("recovery_duration", 30.0)),
-               self._dspin_recovery_duration.setValue)
 
         auto_prep = bool(cfg.get("auto_preparation", True))
         if self._signoff_auto_prep_btn is not None:

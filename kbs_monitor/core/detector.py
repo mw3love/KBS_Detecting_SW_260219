@@ -140,7 +140,7 @@ class Detector:
 
         # 정파용 오디오 톤 감지 설정 (1kHz 일정 톤 = ratio 변화 없음)
         self.audio_tone_std_threshold = 3.0   # ratio 표준편차 임계값(%) — 이 값 이하면 톤으로 판단
-        self.audio_tone_duration = 5.0        # 톤 상태 지속 시간(초) — 이 시간 이상 지속 시 tone_alerting=True
+        self.audio_tone_duration = 60.0       # 톤 상태 지속 시간(초) — 이 시간 이상 지속 시 tone_alerting=True
         self.audio_tone_min_level = 5.0       # 최소 레벨(%) — 이 값 미만이면 무음으로 판단하여 톤 제외
 
         # 정파용 오디오 톤 감지 상태

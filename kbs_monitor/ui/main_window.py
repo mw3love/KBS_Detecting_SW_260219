@@ -25,6 +25,7 @@ from core.detector import Detector
 from core.alarm import AlarmSystem
 from core.telegram_notifier import TelegramNotifier
 from core.auto_recorder import AutoRecorder
+from core.signoff_manager import SignoffManager, SignoffState
 from utils.config_manager import ConfigManager, DEFAULT_CONFIG
 from utils.logger import AppLogger
 
@@ -60,6 +61,10 @@ class MainWindow(QMainWindow):
         self._recorder.start()
         self._logger = AppLogger()
         self._alarm.set_logger(self._logger)  # 로그 위젯에 알림음 재생 상태 출력
+
+        # 정파준비모드 관리자
+        self._signoff_manager = SignoffManager(parent=self)
+        self._apply_signoff_config(self._config.get("signoff", {}))
 
         # 설정 다이얼로그 (비모달 싱글턴)
         self._settings_dialog: Optional[SettingsDialog] = None
@@ -130,6 +135,10 @@ class MainWindow(QMainWindow):
         self._top_bar.clear_alarm_requested.connect(self._on_clear_alarm)
         self._top_bar.dark_mode_toggled.connect(self._on_dark_mode_toggled)
         self._top_bar.fullscreen_toggled.connect(self._toggle_fullscreen)
+        self._top_bar.signoff_manual_release.connect(self._signoff_manager.force_manual_release)
+
+        self._signoff_manager.state_changed.connect(self._on_signoff_state_changed)
+        self._signoff_manager.event_occurred.connect(self._on_signoff_event)
 
         self._alarm.visual_blink.connect(self._video_widget.set_blink_state)
 
@@ -195,13 +204,49 @@ class MainWindow(QMainWindow):
         video_rois = self._roi_manager.video_rois
         audio_rois = self._roi_manager.audio_rois
 
-        # 비디오 ROI 블랙/스틸 감지 (둘 중 하나라도 활성화된 경우 실행)
-        if video_rois and (self._detector.black_detection_enabled or self._detector.still_detection_enabled):
-            results = self._detector.detect_frame(self._latest_frame, video_rois)
-            # label → (media_name, display_name) 매핑 캐시
+        # ── 오디오 ROI 사전 계산 (SignoffManager + 알림 처리 공유) ──
+        audio_results = {}
+        if audio_rois and self._audio_detect_enabled:
+            audio_results = self._detector.detect_audio_roi(self._latest_frame, audio_rois)
+
+        # ── 비디오 ROI 블랙/스틸 감지 ──
+        # (정파 still 결과도 여기서 추출하므로 SignoffManager 업데이트보다 먼저 실행)
+        need_still_for_signoff = bool(video_rois and any(
+            any(r.get("video_label") for r in group.roi_rules)
+            for group in self._signoff_manager.get_groups().values()
+        ))
+        video_results = {}
+        if video_rois and (self._detector.black_detection_enabled
+                           or self._detector.still_detection_enabled
+                           or need_still_for_signoff):
+            video_results = self._detector.detect_frame(self._latest_frame, video_rois)
+
+        # ── SignoffManager 업데이트 (스틸 감지 결과 전달) ──
+        still_results = {
+            label: state.get("still", False)
+            for label, state in video_results.items()
+        }
+        self._signoff_manager.update_detection(
+            audio_results=audio_results,
+            still_results=still_results,
+        )
+
+        # ── 비디오 ROI 알림 처리 ──
+        if video_results:
+            # label → media_name 매핑 캐시
             video_name_map = {r.label: r.media_name for r in video_rois}
+            results = video_results
 
             for label, state in results.items():
+                # SIGNOFF 중인 그룹 소속 → 알림/로그 억제
+                if self._signoff_manager.is_signoff_label(label):
+                    self._alarm.resolve("블랙", label)
+                    self._alarm.resolve("스틸", label)
+                    self._black_logged.discard(label)
+                    self._still_logged.discard(label)
+                    self._video_widget.set_alert_state(label, False)
+                    continue
+
                 black_alert    = state.get("black_alerting", False)
                 still_alert    = state.get("still_alerting", False)
                 black_resolved = state.get("black_resolved", False)
@@ -254,15 +299,19 @@ class MainWindow(QMainWindow):
 
                 self._video_widget.set_alert_state(label, black_alert or still_alert)
 
-        # 오디오 ROI 레벨미터 감지 (HSV)
-        if audio_rois and self._audio_detect_enabled:
-            audio_results = self._detector.detect_audio_roi(
-                self._latest_frame, audio_rois
-            )
+        # ── 오디오 ROI 레벨미터 처리 (사전 계산된 audio_results 재사용) ──
+        if audio_rois and self._audio_detect_enabled and audio_results:
             # label → media_name 매핑 캐시
             audio_name_map = {r.label: r.media_name for r in audio_rois}
 
             for label, state in audio_results.items():
+                # SIGNOFF 중인 그룹 소속 → 알림/로그 억제
+                if self._signoff_manager.is_signoff_label(label):
+                    self._alarm.resolve("오디오", label)
+                    self._audio_level_logged.discard(label)
+                    self._video_widget.set_alert_state(label, False)
+                    continue
+
                 alerting = state.get("alerting", False)
                 resolved = state.get("resolved", False)
                 media = audio_name_map.get(label, "")
@@ -308,6 +357,17 @@ class MainWindow(QMainWindow):
             self._roi_manager.video_rois,
             self._roi_manager.audio_rois,
         )
+        # 정파 상태 패널 갱신 (1초마다)
+        for gid, group in self._signoff_manager.get_groups().items():
+            state = self._signoff_manager.get_state(gid)
+            if state == SignoffState.PREPARATION:
+                secs = self._signoff_manager.get_preparation_elapsed(gid)
+            else:
+                secs = self._signoff_manager.get_elapsed_seconds(gid)
+            self._top_bar.update_signoff_state(
+                gid, state.value, group.name, secs,
+                clock_enabled=self._signoff_manager.is_group_enabled(gid),
+            )
 
     # ── 모니터링 제어 ──────────────────────────────────
 
@@ -348,6 +408,7 @@ class MainWindow(QMainWindow):
                 self._settings_dialog.save_config_requested.connect(self._on_save_config)
                 self._settings_dialog.load_config_requested.connect(self._on_load_config)
                 self._settings_dialog.reset_config_requested.connect(self._on_reset_config)
+                self._settings_dialog.signoff_settings_changed.connect(self._on_signoff_settings_changed)
                 self._settings_dialog.finished.connect(self._on_settings_closed)
             else:
                 self._settings_dialog.refresh_roi_tables()
@@ -429,12 +490,18 @@ class MainWindow(QMainWindow):
         self._detector.embedded_silence_threshold = det.get("embedded_silence_threshold", -50)
         self._detector.embedded_silence_duration = det.get("embedded_silence_duration", 20.0)
         self._detector.embedded_alarm_duration = det.get("embedded_alarm_duration", 10.0)
+        # 정파용 오디오 톤 감지
+        self._detector.audio_tone_std_threshold = det.get("audio_tone_std_threshold", 3.0)
+        self._detector.audio_tone_duration      = det.get("audio_tone_duration", 5.0)
+        self._detector.audio_tone_min_level     = det.get("audio_tone_min_level", 5.0)
 
     # ── 임베디드 오디오 감지 ───────────────────────────
 
     def _on_embedded_silence(self, silence_seconds: float):
         """AudioMonitorThread.silence_detected 수신 — 임베디드 오디오 무음 업데이트"""
         if not self._detection_enabled or not self._embedded_detect_enabled:
+            return
+        if self._signoff_manager.is_any_signoff():
             return
         self._last_silence_seconds = silence_seconds
         alerting = self._detector.update_embedded_silence(silence_seconds)
@@ -450,6 +517,8 @@ class MainWindow(QMainWindow):
     def _on_audio_level_for_silence(self, l_db: float, r_db: float):
         """level_updated 수신 — 정상 오디오 수신 시 임베디드 감지 리셋"""
         if not self._detection_enabled or not self._embedded_detect_enabled:
+            return
+        if self._signoff_manager.is_any_signoff():
             return
         avg_db = (l_db + r_db) / 2.0
         if avg_db > self._detector.embedded_silence_threshold:
@@ -644,6 +713,9 @@ class MainWindow(QMainWindow):
         self._apply_telegram_config(config.get("telegram", {}))
         self._apply_recording_config(config.get("recording", {}))
 
+        # 정파 설정 적용
+        self._apply_signoff_config(config.get("signoff", {}))
+
         # 설정창 UI 갱신
         if self._settings_dialog:
             self._settings_dialog.reload_config(config)
@@ -676,12 +748,54 @@ class MainWindow(QMainWindow):
         self._apply_telegram_config(config.get("telegram", {}))
         self._apply_recording_config(config.get("recording", {}))
 
+        # 정파 설정 초기화
+        self._apply_signoff_config(config.get("signoff", {}))
+
         # 설정창 UI 갱신
         if self._settings_dialog:
             self._settings_dialog.reload_config(config)
 
         self._update_summary()
         self._logger.info("SYSTEM - 설정 초기화 완료")
+
+    # ── 정파준비모드 ──────────────────────────────────
+
+    def _apply_signoff_config(self, signoff_cfg: dict):
+        """signoff 설정을 SignoffManager에 반영"""
+        self._signoff_manager.configure_from_dict(signoff_cfg)
+
+    def _on_signoff_settings_changed(self, params: dict):
+        """SettingsDialog 정파 설정 변경 → 즉시 적용"""
+        self._config["signoff"] = params
+        self._apply_signoff_config(params)
+
+    def _on_signoff_state_changed(self, group_id: int, state_str: str):
+        """정파 상태 변경 시 TopBar 패널 즉시 갱신"""
+        group = self._signoff_manager.get_groups().get(group_id)
+        if state_str == "PREPARATION":
+            secs = self._signoff_manager.get_preparation_elapsed(group_id)
+        else:
+            secs = self._signoff_manager.get_elapsed_seconds(group_id)
+        self._top_bar.update_signoff_state(
+            group_id, state_str,
+            group.name if group else "",
+            secs,
+            clock_enabled=self._signoff_manager.is_group_enabled(group_id),
+        )
+
+    def _on_signoff_event(self, group_id: int, message: str):
+        """정파 이벤트 발생 시 로그 기록 + 알림음 재생"""
+        self._logger.info(f"SIGNOFF - {message}")
+        signoff_cfg = self._config.get("signoff", {})
+        state = self._signoff_manager.get_state(group_id)
+        if state == SignoffState.PREPARATION:
+            sound = signoff_cfg.get("prep_alarm_sound", "")
+        elif state == SignoffState.SIGNOFF:
+            sound = signoff_cfg.get("enter_alarm_sound", "")
+        else:
+            sound = signoff_cfg.get("release_alarm_sound", "")
+        if sound:
+            self._alarm.play_test_sound(sound)
 
     # ── 기타 ───────────────────────────────────────────
 

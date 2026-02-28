@@ -19,7 +19,10 @@
     "audio_level_recovery_seconds": 2,
     "embedded_silence_threshold": -50,
     "embedded_silence_duration": 20,
-    "embedded_alarm_duration": 10
+    "embedded_alarm_duration": 10,
+    "audio_tone_std_threshold": 3.0,
+    "audio_tone_duration": 5.0,
+    "audio_tone_min_level": 5.0
   },
   "alarm": {
     "sound_enabled": true,
@@ -30,8 +33,28 @@
     }
   },
   "rois": {
-    "video": [],
-    "audio": []
+    "video": [
+      {
+        "label": "V1",
+        "media_name": "",
+        "x": 999,
+        "y": 6,
+        "w": 273,
+        "h": 165,
+        "roi_type": "video"
+      }
+    ],
+    "audio": [
+      {
+        "label": "A1",
+        "media_name": "",
+        "x": 966,
+        "y": 99,
+        "w": 20,
+        "h": 70,
+        "roi_type": "audio"
+      }
+    ]
   },
   "performance": {
     "detection_interval": 100,
@@ -40,7 +63,7 @@
     "audio_detection_enabled": true,
     "still_detection_enabled": true,
     "black_detection_enabled": true,
-    "embedded_detection_enabled": false
+    "embedded_detection_enabled": true
   },
   "telegram": {
     "enabled": false,
@@ -62,5 +85,39 @@
     "output_width": 960,
     "output_height": 540,
     "output_fps": 15
+  },
+  "signoff": {
+    "signoff_duration": 120.0,
+    "recovery_duration": 30.0,
+    "auto_preparation": true,
+    "prep_alarm_sound": "",
+    "enter_alarm_sound": "",
+    "release_alarm_sound": "",
+    "group1": {
+      "name": "1TV",
+      "roi_rules": [],
+      "start_time": "22:25",
+      "end_time": "00:40",
+      "end_next_day": false,
+      "weekdays": [
+        0
+      ]
+    },
+    "group2": {
+      "name": "2TV",
+      "roi_rules": [],
+      "start_time": "15:35",
+      "end_time": "16:00",
+      "end_next_day": false,
+      "weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
   }
 }

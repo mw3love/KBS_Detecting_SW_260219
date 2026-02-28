@@ -126,14 +126,26 @@ class Detector:
         self.embedded_silence_duration = 10.0  # 무음 지속 시간(초) → 알림
         self.embedded_alarm_duration = 10.0    # 알림 지속 시간(초)
 
+        # 정파준비모드 화이트 감지 설정
+        self.white_threshold = 200             # 화이트 판단 밝기 임계값 (0~255)
+
         # 비디오 감지 상태
         self._black_states: Dict[str, DetectionState] = {}
         self._still_states: Dict[str, DetectionState] = {}
         self._prev_frames: Dict[str, np.ndarray] = {}
 
-        # 오디오 레벨미터 상태
+        # 오디오 레벨미터 감지 상태
         self._audio_level_states: Dict[str, DetectionState] = {}
         self._audio_ratio_buffer: Dict[str, deque] = {}  # 이동 평균 버퍼 (최근 5프레임)
+
+        # 정파용 오디오 톤 감지 설정 (1kHz 일정 톤 = ratio 변화 없음)
+        self.audio_tone_std_threshold = 3.0   # ratio 표준편차 임계값(%) — 이 값 이하면 톤으로 판단
+        self.audio_tone_duration = 5.0        # 톤 상태 지속 시간(초) — 이 시간 이상 지속 시 tone_alerting=True
+        self.audio_tone_min_level = 5.0       # 최소 레벨(%) — 이 값 미만이면 무음으로 판단하여 톤 제외
+
+        # 정파용 오디오 톤 감지 상태
+        self._tone_ratio_buffer: Dict[str, deque] = {}   # 표준편차 계산용 버퍼 (약 6초분, maxlen=30)
+        self._tone_states: Dict[str, DetectionState] = {}
 
         # 임베디드 오디오 상태
         self.embedded_alerting = False
@@ -175,6 +187,13 @@ class Detector:
         for label in list(self._audio_level_states.keys()):
             if label not in labels:
                 del self._audio_level_states[label]
+        # 정파 톤 감지 버퍼/상태 정리
+        for label in list(self._tone_ratio_buffer.keys()):
+            if label not in labels:
+                del self._tone_ratio_buffer[label]
+        for label in list(self._tone_states.keys()):
+            if label not in labels:
+                del self._tone_states[label]
 
         for roi in rois:
             if roi.label not in self._black_states:
@@ -311,6 +330,26 @@ class Detector:
 
             alerting = state.update(is_abnormal, self.audio_level_duration, self.audio_level_recovery_seconds)
 
+            # 정파용 톤 감지: ratio 변화량(표준편차) 기반 — 1kHz 일정 톤은 ratio가 거의 변하지 않음
+            if label not in self._tone_ratio_buffer:
+                self._tone_ratio_buffer[label] = deque(maxlen=30)
+            self._tone_ratio_buffer[label].append(avg_ratio)
+
+            buf = list(self._tone_ratio_buffer[label])
+            std_val = 0.0
+            if len(buf) < 10 or avg_ratio < self.audio_tone_min_level:
+                # 버퍼 미충족 또는 무음 → 톤 아님
+                is_tone = False
+            else:
+                std_val = float(np.std(buf))
+                is_tone = std_val <= self.audio_tone_std_threshold
+
+            if label not in self._tone_states:
+                self._tone_states[label] = DetectionState(roi)
+            tone_state = self._tone_states[label]
+            tone_state.roi = roi
+            tone_alerting = tone_state.update(is_tone, self.audio_tone_duration, 0.0)
+
             results[label] = {
                 "active": is_active,
                 "ratio": avg_ratio,
@@ -318,8 +357,31 @@ class Detector:
                 "duration": state.alert_duration,
                 "resolved": state.just_resolved,
                 "last_duration": state.last_alert_duration,
+                # 정파용 톤 감지 결과
+                "tone_active": is_tone,        # 현재 프레임 톤 상태 (bool)
+                "tone_alerting": tone_alerting, # 지속 시간 충족 후 확정 톤 (bool)
+                "tone_std": std_val,            # 디버그용 표준편차 값
             }
 
+        return results
+
+    def detect_white_roi(self, frame: np.ndarray, rois: List[ROI]) -> Dict[str, bool]:
+        """
+        비디오 ROI에서 화이트(밝기 > white_threshold) 여부 감지.
+        정파준비모드 조건 판단용. DetectionState 누적 없이 즉시 결과 반환.
+        반환: {label: bool}  True=화이트 감지됨
+        """
+        results = {}
+        frame_s = self._apply_scale_factor(frame)
+        h, w = frame_s.shape[:2]
+        for roi in rois:
+            label = roi.label
+            x1, y1, x2, y2 = self._get_scaled_bounds(roi, h, w)
+            if x2 <= x1 or y2 <= y1:
+                continue
+            crop = frame_s[y1:y2, x1:x2]
+            gray = crop if len(crop.shape) == 2 else crop.mean(axis=2)
+            results[label] = float(np.mean(gray)) > self.white_threshold
         return results
 
     def update_embedded_silence(self, silence_seconds: float) -> bool:
@@ -351,5 +413,7 @@ class Detector:
         for state in self._still_states.values():
             state.reset()
         for state in self._audio_level_states.values():
+            state.reset()
+        for state in self._tone_states.values():
             state.reset()
         self.reset_embedded_silence()

@@ -102,11 +102,10 @@ QPushButton#btnEmbedMute:checked {
     color: #ff9090;
 }
 
-/* 상단 텍스트 버튼 공통 (감지ON/OFF / 감지영역 / Mute / 야간모드 / 설정) */
+/* 상단 텍스트 버튼 공통 (감지ON/OFF / 감지영역 / Mute / 설정) */
 QPushButton#btnDetection,
 QPushButton#btnRoi,
 QPushButton#btnMuteText,
-QPushButton#btnDark,
 QPushButton#btnSettings {
     background-color: #1e1e3a;
     border: 1px solid #3a3a5a;
@@ -118,15 +117,28 @@ QPushButton#btnSettings {
 QPushButton#btnDetection:hover,
 QPushButton#btnRoi:hover,
 QPushButton#btnMuteText:hover,
-QPushButton#btnDark:hover,
 QPushButton#btnSettings:hover {
     background-color: #252550;
     border-color: #5a5a8a;
 }
-QPushButton#btnDark:checked {
+
+/* 상단 아이콘 버튼 (주간/야간 모드 / 전체화면) */
+QPushButton#btnDark,
+QPushButton#btnFullscreen {
+    background-color: #1e1e3a;
+    border: 1px solid #3a3a5a;
+    border-radius: 4px;
+    padding: 0;
+}
+QPushButton#btnDark:hover,
+QPushButton#btnFullscreen:hover {
+    background-color: #252550;
+    border-color: #5a5a8a;
+}
+QPushButton#btnDark:checked,
+QPushButton#btnFullscreen:checked {
     background-color: #2a2a50;
     border-color: #6a6a9a;
-    color: #e0e0ff;
 }
 
 /* 감지ON / 감지영역 / Mute 버튼 켜짐 (빨간색) */
@@ -136,6 +148,47 @@ QPushButton#btnMuteText:checked {
     background-color: #3a0e0e;
     border-color: #cc2222;
     color: #ff9090;
+}
+
+/* 정파 버튼 (IDLE/PREPARATION/SIGNOFF 3단계 색상) */
+QPushButton#btnSignoff {
+    background-color: #1e1e3a;
+    border: 1px solid #3a3a5a;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #c0c0e0;
+    min-width: 90px;
+    padding: 4px 8px;
+    min-height: 28px;
+}
+QPushButton#btnSignoff:hover {
+    background-color: #252550;
+    border-color: #5a5a8a;
+}
+/* PREPARATION 상태: 초록색 */
+QPushButton#btnSignoff[signoff_state="PREPARATION"] {
+    background-color: #0a2a14;
+    border: 2px solid #00aa44;
+    color: #44dd77;
+}
+QPushButton#btnSignoff[signoff_state="PREPARATION"]:hover {
+    background-color: #0f3a1e;
+}
+/* SIGNOFF 상태: 빨간색 */
+QPushButton#btnSignoff[signoff_state="SIGNOFF"] {
+    background-color: #3a0e0e;
+    border: 2px solid #cc2222;
+    color: #ff8888;
+}
+QPushButton#btnSignoff[signoff_state="SIGNOFF"]:hover {
+    background-color: #4a1414;
+}
+/* 정파 시간 레이블 */
+QLabel#lblSignoffTime {
+    color: #ffffff;
+    font-size: 11px;
+    background: transparent;
 }
 
 /* 볼륨 슬라이더 */
@@ -315,6 +368,20 @@ QLineEdit:focus {
     border-color: #5a5a9a;
 }
 
+/* ── 시/분 입력 위젯 (_TimePartWidget) ─────────────── */
+_TimePartWidget {
+    background-color: #12122a;
+    border: 1px solid #3a3a5a;
+    border-radius: 3px;
+    color: #e0e0e0;
+    font-size: 15px;
+    font-family: "Courier New", monospace;
+}
+_TimePartWidget:hover {
+    border-color: #5a5a9a;
+    background-color: #1e1e3a;
+}
+
 QPushButton {
     background-color: #252545;
     border: 1px solid #4a4a6a;
@@ -404,6 +471,20 @@ QToolTip {
     border: 1px solid #3a3a5a;
     padding: 4px;
     border-radius: 3px;
+}
+
+/* ── TimeSelectWidget 내부 버튼 (패딩 축소, 28px 고정 높이에 맞춤) ── */
+TimeSelectWidget QPushButton {
+    padding: 1px 6px;
+    min-height: 0;
+}
+
+/* ── 정파설정 그룹명 입력창 / 감지영역 버튼 — padding-top 축소로 텍스트 위치 보정 ── */
+QLineEdit#signoffNameEdit {
+    padding: 1px 8px 4px 8px;
+}
+QPushButton#signoffRoiBtn {
+    padding: 2px 12px 5px 12px;
 }
 
 /* ── ROI 편집기 ──────────────────────────────────── */

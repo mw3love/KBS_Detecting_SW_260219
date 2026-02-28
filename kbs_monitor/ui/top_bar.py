@@ -4,6 +4,7 @@
 이모지 대신 텍스트/QStyle 아이콘 사용 (Windows 렌더링 호환성)
 """
 import datetime
+import math
 import subprocess
 
 try:
@@ -24,6 +25,31 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer, Signal, QSize
 from PySide6.QtGui import QFont, QColor, QPainter, QPixmap, QImage, QIcon
+
+
+def _fmt_dhms(secs: float) -> str:
+    """D H M S 형식으로 시간 반환 (D는 0이면 생략). IDLE 상태 잔여시간 표시용."""
+    s = int(abs(secs))
+    d, s = divmod(s, 86400)
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    if d > 0:
+        return f"{d}D - [{h}H : {m}M : {s}S]"
+    elif h > 0:
+        return f"[{h}H : {m}M : {s}S]"
+    elif m > 0:
+        return f"[{m}M : {s}S]"
+    return f"[{s}S]"
+
+
+def _fmt_elapsed(secs: float) -> str:
+    """경과시간 H M S 형식 반환. PREPARATION Running Time 표시용."""
+    s = int(abs(secs))
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    if h > 0:
+        return f"{h}h {m}m {s:02d}s"
+    return f"{m}m {s:02d}s"
 
 
 class LevelMeterBar(QWidget):
@@ -232,6 +258,7 @@ class TopBar(QWidget):
     clear_alarm_requested = Signal()
     dark_mode_toggled = Signal(bool)
     fullscreen_toggled = Signal()
+    signoff_manual_release = Signal(int)  # group_id: 정파 버튼 수동 해제 클릭
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -362,16 +389,6 @@ class TopBar(QWidget):
 
         layout.addWidget(self._make_separator())
 
-        # 6. 다크/라이트 모드 토글
-        self._btn_dark = QPushButton("☽  야간 모드")
-        self._btn_dark.setObjectName("btnDark")
-        self._btn_dark.setCheckable(True)
-        self._btn_dark.setChecked(True)
-        self._btn_dark.setFixedSize(110, 36)
-        self._btn_dark.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        self._btn_dark.clicked.connect(self._on_dark_mode_clicked)
-        layout.addWidget(self._btn_dark)
-
         # 7. 설정
         self._btn_settings = QPushButton("설정  ⚙")
         self._btn_settings.setObjectName("btnSettings")
@@ -380,17 +397,60 @@ class TopBar(QWidget):
         self._btn_settings.clicked.connect(self.settings_requested)
         layout.addWidget(self._btn_settings)
 
-        # 8. 전체화면 토글
-        self._btn_fullscreen = QPushButton("전체화면")
+        layout.addWidget(self._make_separator())
+
+        # 9. 정파 버튼 (Group1, Group2) — 클릭 가능한 버튼 + 시간 레이블 세트
+        self._btn_signoff: dict[int, QPushButton] = {}
+        self._lbl_signoff_time: dict[int, QLabel] = {}
+        for gid in (1, 2):
+            grp_widget = QWidget()
+            grp_vbox = QVBoxLayout(grp_widget)
+            grp_vbox.setContentsMargins(2, 0, 2, 0)
+            grp_vbox.setSpacing(2)
+
+            btn = QPushButton(f"Group{gid} 정파")
+            btn.setObjectName("btnSignoff")
+            btn.setCheckable(False)
+            btn.setProperty("signoff_state", "IDLE")
+            btn.setFont(QFont("Segoe UI", 10, QFont.Bold))
+            btn.clicked.connect(lambda _, g=gid: self.signoff_manual_release.emit(g))
+            grp_vbox.addWidget(btn)
+
+            lbl = QLabel("")
+            lbl.setObjectName("lblSignoffTime")
+            lbl.setFont(QFont("Segoe UI", 9))
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setFixedHeight(18)
+            grp_vbox.addWidget(lbl)
+
+            layout.addWidget(grp_widget, alignment=Qt.AlignVCenter)
+            self._btn_signoff[gid] = btn
+            self._lbl_signoff_time[gid] = lbl
+
+        layout.addStretch()
+
+        # 6. 주간/야간 모드 토글 (전체화면 버튼 왼쪽, 아이콘 버튼)
+        self._btn_dark = QPushButton()
+        self._btn_dark.setObjectName("btnDark")
+        self._btn_dark.setCheckable(True)
+        self._btn_dark.setChecked(True)
+        self._btn_dark.setFixedSize(36, 36)
+        self._btn_dark.setIcon(self._make_darkmode_icon(True))
+        self._btn_dark.setIconSize(QSize(22, 22))
+        self._btn_dark.setToolTip("주간/야간 모드 전환")
+        self._btn_dark.clicked.connect(self._on_dark_mode_clicked)
+        layout.addWidget(self._btn_dark)
+
+        # 8. 전체화면 토글 (우측 최상단, 아이콘 버튼)
+        self._btn_fullscreen = QPushButton()
         self._btn_fullscreen.setObjectName("btnFullscreen")
         self._btn_fullscreen.setCheckable(True)
-        self._btn_fullscreen.setFixedSize(90, 36)
-        self._btn_fullscreen.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self._btn_fullscreen.setFixedSize(36, 36)
+        self._btn_fullscreen.setIcon(self._make_fullscreen_icon(False))
+        self._btn_fullscreen.setIconSize(QSize(22, 22))
         self._btn_fullscreen.setToolTip("F11 — 전체화면 전환")
         self._btn_fullscreen.clicked.connect(self.fullscreen_toggled)
         layout.addWidget(self._btn_fullscreen)
-
-        layout.addStretch()
 
     def _create_summary_widget(self) -> QWidget:
         """감지현황 표시 위젯 (세로 레이아웃)"""
@@ -454,6 +514,55 @@ class TopBar(QWidget):
         now = datetime.datetime.now().strftime("%H:%M:%S")
         self._lbl_time.setText(now)
 
+    def _make_fullscreen_icon(self, is_fullscreen: bool) -> QIcon:
+        """전체화면 아이콘 반환 (야간모드에서 픽셀 반전으로 밝게 처리)"""
+        icon_type = QStyle.SP_TitleBarNormalButton if is_fullscreen else QStyle.SP_TitleBarMaxButton
+        px = self.style().standardIcon(icon_type).pixmap(QSize(20, 20))
+        if self._dark_mode:
+            img = px.toImage().convertedTo(QImage.Format_ARGB32)
+            img.invertPixels(QImage.InvertRgb)
+            px = QPixmap.fromImage(img)
+        return QIcon(px)
+
+    def _make_darkmode_icon(self, is_dark: bool) -> QIcon:
+        """주간/야간 모드 아이콘 생성 (달=야간, 태양=주간)"""
+        size = 22
+        px = QPixmap(size, size)
+        px.fill(Qt.transparent)
+        painter = QPainter(px)
+        painter.setRenderHint(QPainter.Antialiasing)
+        fg = QColor("#dddddd") if self._dark_mode else QColor("#404040")
+
+        if is_dark:
+            # 달(초승달) 아이콘
+            painter.setBrush(fg)
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(3, 3, 16, 16)
+            # Clear 모드로 오른쪽 원 제거 → 초승달 모양
+            painter.setCompositionMode(QPainter.CompositionMode_Clear)
+            painter.drawEllipse(8, 1, 14, 14)
+        else:
+            # 태양 아이콘
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(fg)
+            painter.drawEllipse(8, 8, 6, 6)  # 중앙 원
+            pen = painter.pen()
+            pen.setColor(fg)
+            pen.setWidth(2)
+            pen.setCapStyle(Qt.RoundCap)
+            painter.setPen(pen)
+            cx, cy, r1, r2 = 11, 11, 6, 9
+            for i in range(8):
+                a = math.radians(i * 45)
+                x1 = cx + r1 * math.cos(a)
+                y1 = cy + r1 * math.sin(a)
+                x2 = cx + r2 * math.cos(a)
+                y2 = cy + r2 * math.sin(a)
+                painter.drawLine(int(x1 + 0.5), int(y1 + 0.5), int(x2 + 0.5), int(y2 + 0.5))
+
+        painter.end()
+        return QIcon(px)
+
     def _make_volume_icon(self, muted: bool) -> QIcon:
         """볼륨/음소거 아이콘 반환 (야간모드에서 픽셀 반전으로 밝게 처리)"""
         icon_type = QStyle.SP_MediaVolumeMuted if muted else QStyle.SP_MediaVolume
@@ -502,8 +611,9 @@ class TopBar(QWidget):
 
     def _on_dark_mode_clicked(self, checked: bool):
         self._dark_mode = checked
-        self._btn_dark.setText("☽  야간 모드" if checked else "☀  주간 모드")
+        self._btn_dark.setIcon(self._make_darkmode_icon(checked))
         self._btn_embed_mute.setIcon(self._make_volume_icon(self._btn_embed_mute.isChecked()))
+        self._btn_fullscreen.setIcon(self._make_fullscreen_icon(self._btn_fullscreen.isChecked()))
         self.dark_mode_toggled.emit(checked)
 
     # --- 외부에서 호출하는 메서드 ---
@@ -543,5 +653,51 @@ class TopBar(QWidget):
         """전체화면 버튼 체크 상태를 외부에서 설정 (시그널 발송 없이)"""
         self._btn_fullscreen.blockSignals(True)
         self._btn_fullscreen.setChecked(is_fullscreen)
-        self._btn_fullscreen.setText("창 모드" if is_fullscreen else "전체화면")
+        self._btn_fullscreen.setIcon(self._make_fullscreen_icon(is_fullscreen))
         self._btn_fullscreen.blockSignals(False)
+
+    def update_signoff_state(self, group_id: int, state: str,
+                              group_name: str, seconds: float = 0.0,
+                              clock_enabled: bool = True):
+        """
+        정파 버튼 + 시간 레이블 갱신. _update_summary (1초 주기) 및 즉각 갱신 시 호출.
+        state: "IDLE" | "PREPARATION" | "SIGNOFF"
+        seconds:
+          IDLE       → 다음 정파준비까지 잔여 초 (D H M S 표시)
+          PREPARATION → Running Time 경과 초 (H M S 표시)
+          SIGNOFF    → 미사용 (레이블 비움)
+        clock_enabled:
+          False → 자동정파준비 비활성 또는 요일 미설정 시 시계 레이블 비움
+        """
+        btn = self._btn_signoff.get(group_id)
+        lbl = self._lbl_signoff_time.get(group_id)
+        if btn is None:
+            return
+
+        # 버튼 텍스트 (그룹명 + " 정파")
+        btn.setText(f"{group_name or f'Group{group_id}'} 정파")
+
+        if not clock_enabled:
+            lbl.setVisible(True)
+            lbl.setText("")
+            btn.setProperty("signoff_state", state if state in ("IDLE", "PREPARATION", "SIGNOFF") else "IDLE")
+        elif state == "IDLE":
+            lbl.setVisible(True)
+            lbl.setText(_fmt_dhms(seconds))
+            btn.setProperty("signoff_state", "IDLE")
+        elif state == "PREPARATION":
+            lbl.setVisible(True)
+            lbl.setText(_fmt_elapsed(seconds))
+            btn.setProperty("signoff_state", "PREPARATION")
+        elif state == "SIGNOFF":
+            lbl.setVisible(True)
+            lbl.setText("")
+            btn.setProperty("signoff_state", "SIGNOFF")
+        else:
+            lbl.setVisible(True)
+            btn.setProperty("signoff_state", "IDLE")
+
+        # QSS property 갱신 (반드시 필요)
+        btn.style().unpolish(btn)
+        btn.style().polish(btn)
+        btn.update()

@@ -95,14 +95,19 @@ QPushButton#btnEmbedMute:checked {
     color: #8b0000;
 }
 
-/* 상단 텍스트 버튼 공통 (감지ON/OFF / 감지영역 / Mute / 야간모드 / 설정) */
+/* 상단 텍스트 버튼 공통 (감지ON/OFF / 감지영역 / Mute / 설정) */
 QPushButton#btnDetection,
 QPushButton#btnRoi,
 QPushButton#btnMuteText,
-QPushButton#btnDark,
 QPushButton#btnSettings {
     font-size: 13px;
     font-weight: bold;
+}
+
+/* 상단 아이콘 버튼 (주간/야간 모드 / 전체화면) */
+QPushButton#btnDark,
+QPushButton#btnFullscreen {
+    padding: 0;
 }
 QPushButton#btnDetection:checked,
 QPushButton#btnRoi:checked,
@@ -110,6 +115,39 @@ QPushButton#btnMuteText:checked {
     background-color: #ffd8d8;
     border-color: #cc2222;
     color: #8b0000;
+}
+
+/* 정파 버튼 (IDLE/PREPARATION/SIGNOFF 3단계 색상) */
+QPushButton#btnSignoff {
+    font-size: 13px;
+    font-weight: bold;
+    min-width: 90px;
+    padding: 4px 8px;
+    min-height: 28px;
+}
+/* PREPARATION 상태: 초록색 */
+QPushButton#btnSignoff[signoff_state="PREPARATION"] {
+    background-color: #c8f0d8;
+    border: 2px solid #00aa44;
+    color: #006622;
+}
+QPushButton#btnSignoff[signoff_state="PREPARATION"]:hover {
+    background-color: #b0e8c8;
+}
+/* SIGNOFF 상태: 빨간색 */
+QPushButton#btnSignoff[signoff_state="SIGNOFF"] {
+    background-color: #ffd8d8;
+    border: 2px solid #cc2222;
+    color: #8b0000;
+}
+QPushButton#btnSignoff[signoff_state="SIGNOFF"]:hover {
+    background-color: #ffb8b8;
+}
+/* 정파 시간 레이블 */
+QLabel#lblSignoffTime {
+    color: #000000;
+    font-size: 11px;
+    background: transparent;
 }
 
 /* 기본 버튼 */

@@ -340,7 +340,7 @@ QComboBox {
     border-radius: 3px;
     padding: 4px 8px;
     color: #e0e0e0;
-    min-height: 24px;
+    min-height: 30px;
 }
 QComboBox:hover {
     border-color: #5a5a8a;
@@ -362,7 +362,7 @@ QLineEdit {
     border-radius: 3px;
     padding: 4px 8px;
     color: #e0e0e0;
-    min-height: 24px;
+    min-height: 30px;
 }
 QLineEdit:focus {
     border-color: #5a5a9a;
@@ -373,6 +373,8 @@ _TimePartWidget {
     background-color: #12122a;
     border: 1px solid #3a3a5a;
     border-radius: 3px;
+    padding: 4px 8px;
+    min-height: 30px;
     color: #e0e0e0;
     font-size: 15px;
     font-family: "Courier New", monospace;
@@ -485,6 +487,12 @@ QLineEdit#signoffNameEdit {
 }
 QPushButton#signoffRoiBtn {
     padding: 2px 12px 5px 12px;
+}
+
+/* ── 정파설정 행 레이블 — QLineEdit/QPushButton과 동일한 높이 규칙 ── */
+QLabel#signoffRowLabel {
+    min-height: 30px;
+    padding: 4px 0;
 }
 
 /* ── ROI 편집기 ──────────────────────────────────── */

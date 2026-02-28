@@ -25,7 +25,7 @@ from PySide6.QtCore import Qt, Signal, QEvent, QTimer
 from core.roi_manager import ROIManager
 from ui.dual_slider import DualSlider
 
-# 버튼 높이 통일 상수
+# 버튼 높이 통일 상수 (QLineEdit/QComboBox min-height와 동일하게 유지)
 _BTN_H = 30
 
 
@@ -41,7 +41,7 @@ class _TimePartWidget(QLabel):
         self._current = self._values[0]
         self._update_display()
         self.setAlignment(Qt.AlignCenter)
-        self.setFixedSize(52, 44)
+        self.setFixedWidth(52)
         self.setCursor(Qt.PointingHandCursor)
 
     def value(self) -> int:
@@ -70,13 +70,13 @@ class _TimePartWidget(QLabel):
 class _TimeWidget(QWidget):
     """시:분 입력 컨테이너.
 
-    - 시/분 단일클릭 : 해당 파트 선택 리스트 (150ms 지연으로 더블클릭과 구분)
-    - 시/분 더블클릭 : 위젯 위에 인라인 QLineEdit 오버레이 → HH:MM 직접 입력
-                       ESC = 취소, Enter / 포커스 이탈 = 커밋
+    - 시/분 라벨 단일 클릭 : 선택 메뉴(숫자 리스트) 팝업
+    - 시/분 라벨 더블 클릭 : 인라인 QLineEdit 오버레이 → HH:MM 수동 입력
+                              ESC = 취소, Enter / 포커스 이탈 = 커밋
+    - 콜론(:) 클릭         : 바로 수동 입력 에디터 표시
     """
 
     valueChanged = Signal()
-    _CLICK_DELAY = 150   # ms — 단일클릭 지연 (더블클릭 판별용)
 
     def __init__(self, default_h: int = 0, default_m: int = 0, parent=None):
         super().__init__(parent)
@@ -96,12 +96,6 @@ class _TimeWidget(QWidget):
         inner_layout.addWidget(self._colon)
         inner_layout.addWidget(self._m)
 
-        # 단일클릭 지연 타이머
-        self._click_timer = QTimer(self)
-        self._click_timer.setSingleShot(True)
-        self._click_timer.timeout.connect(self._fire_menu)
-        self._pending_part: _TimePartWidget = None   # type: ignore
-
         # 인라인 에디터
         self._editor = QLineEdit(self)
         self._editor.setAlignment(Qt.AlignCenter)
@@ -110,11 +104,18 @@ class _TimeWidget(QWidget):
         self._editor.returnPressed.connect(self._commit)
         self._editor.installEventFilter(self)
 
-        # _h / _m 이벤트를 이 컨테이너가 가로챔
+        # _h / _m / _colon 어디를 클릭해도 이 컨테이너가 가로챔
         self._h.installEventFilter(self)
         self._m.installEventFilter(self)
+        self._colon.installEventFilter(self)
         self._h.valueChanged.connect(self.valueChanged)
         self._m.valueChanged.connect(self.valueChanged)
+
+        # 싱글클릭/더블클릭 구분용 타이머
+        self._click_timer = QTimer(self)
+        self._click_timer.setSingleShot(True)
+        self._click_timer.timeout.connect(self._on_single_click_timeout)
+        self._pending_part: '_TimePartWidget | None' = None
 
     # ── 공개 인터페이스 ───────────────────────────────────────────────
 
@@ -136,20 +137,28 @@ class _TimeWidget(QWidget):
     # ── 이벤트 필터 ──────────────────────────────────────────────────
 
     def eventFilter(self, obj, event):
-        # ① _h / _m 클릭/더블클릭 가로채기
-        if obj in (self._h, self._m):
+        # ① 시/분/콜론 영역 마우스 이벤트 처리
+        if obj in (self._h, self._m, self._colon):
             t = event.type()
-            if t == QEvent.Type.MouseButtonDblClick and event.button() == Qt.LeftButton:
-                # 더블클릭: 단일클릭 타이머 취소 → 인라인 에디터 표시
-                self._click_timer.stop()
-                self._pending_part = None
-                self._show_editor()
-                return True   # 이벤트 소비 (메뉴 열리지 않음)
-            if t == QEvent.Type.MouseButtonPress and event.button() == Qt.LeftButton:
-                # 단일클릭: 지연 후 메뉴 표시
-                self._pending_part = obj
-                self._click_timer.start(self._CLICK_DELAY)
-                return True   # 이벤트 소비
+            if t == QEvent.Type.MouseButtonPress:
+                if event.button() == Qt.LeftButton:
+                    if obj is self._colon:
+                        # 콜론 클릭 → 타이머 취소 후 바로 에디터
+                        self._click_timer.stop()
+                        self._pending_part = None
+                        self._show_editor()
+                    else:
+                        # 시 또는 분 싱글클릭 → 더블클릭 대기 후 메뉴 표시
+                        self._pending_part = obj  # _h 또는 _m
+                        self._click_timer.start(QApplication.doubleClickInterval())
+                    return True
+            elif t == QEvent.Type.MouseButtonDblClick:
+                if event.button() == Qt.LeftButton:
+                    # 더블클릭 → 타이머 취소 후 수동 입력 에디터
+                    self._click_timer.stop()
+                    self._pending_part = None
+                    self._show_editor()
+                    return True
 
         # ② 인라인 에디터 키 처리
         if obj is self._editor:
@@ -162,13 +171,14 @@ class _TimeWidget(QWidget):
 
         return super().eventFilter(obj, event)
 
-    # ── 내부 메서드 ──────────────────────────────────────────────────
+    def _on_single_click_timeout(self):
+        """싱글클릭 확정: 해당 파트(시/분) 선택 메뉴 표시."""
+        part = self._pending_part
+        self._pending_part = None
+        if part is not None:
+            part.show_menu()
 
-    def _fire_menu(self):
-        """지연 타이머 완료 → 해당 파트 메뉴 표시."""
-        if self._pending_part is not None:
-            self._pending_part.show_menu()
-            self._pending_part = None
+    # ── 내부 메서드 ──────────────────────────────────────────────────
 
     def _show_editor(self):
         """위젯 전체를 덮는 인라인 에디터 표시."""
@@ -2296,43 +2306,12 @@ class SettingsDialog(QDialog):
         tab_layout.setContentsMargins(10, 10, 10, 10)
         tab_layout.setSpacing(10)
 
-        # ── 정파준비모드 → 정파모드 ──
-        entry_group = QGroupBox("정파준비모드 → 정파모드  [OR 방식]")
-        entry_grid = QGridLayout(entry_group)
-        entry_grid.setSpacing(8)
-
-        entry_lbl = QLabel(
-            "스틸 감지 또는 톤 감지 중 먼저 기준 시간을 충족하는 쪽으로 정파모드 전환\n"
-            "기준 시간: 감지 설정 탭의 「스틸감지 — 몇 초 이상시 알림 발생」 및\n"
-            "           「정파용 오디오 톤 감지 — 몇 초 이상시 트리거 발생」 값 사용"
-        )
-        entry_lbl.setObjectName("paramDescLabel")
-        entry_lbl.setWordWrap(True)
-        entry_grid.addWidget(entry_lbl, 0, 0)
-
-        tab_layout.addWidget(entry_group)
-
-        # ── 정파모드 → 정파모드 해제 ──
-        exit_group = QGroupBox("정파모드 → 정파모드 해제  [AND 방식]")
-        exit_grid = QGridLayout(exit_group)
-        exit_grid.setSpacing(8)
-
-        exit_lbl = QLabel(
-            "스틸 감지 AND 톤 감지 모두 각자의 기준 시간 이상 동시에 지속될 때 정파해제\n"
-            "예) 스틸 기준 20초 · 톤 기준 30초 → 스틸 20초 이상 지속 중이면서 톤도 30초 이상 지속 시 해제\n"
-            "기준 시간: 감지 설정 탭의 「스틸감지」 및 「정파용 오디오 톤 감지」 값 사용"
-        )
-        exit_lbl.setObjectName("paramDescLabel")
-        exit_lbl.setWordWrap(True)
-        exit_grid.addWidget(exit_lbl, 0, 0)
-
-        tab_layout.addWidget(exit_group)
-
         # ── 자동 정파 준비 모드 ON/OFF ──
         auto_prep_group = QGroupBox("자동 정파 준비 모드")
-        auto_prep_layout = QHBoxLayout(auto_prep_group)
-        auto_prep_layout.setSpacing(10)
+        auto_prep_v = QVBoxLayout(auto_prep_group)
+        auto_prep_v.setSpacing(6)
 
+        prep_chk_row = QHBoxLayout()
         self._signoff_auto_prep_btn = QCheckBox("자동 정파 준비 활성화")
         self._signoff_auto_prep_btn.setChecked(True)
         self._signoff_auto_prep_btn.setToolTip(
@@ -2340,8 +2319,17 @@ class SettingsDialog(QDialog):
             "OFF: 시간이 되어도 정파준비모드로 자동 진입하지 않음"
         )
         self._signoff_auto_prep_btn.toggled.connect(self._on_auto_prep_toggled)
-        auto_prep_layout.addWidget(self._signoff_auto_prep_btn)
-        auto_prep_layout.addStretch()
+        prep_chk_row.addWidget(self._signoff_auto_prep_btn)
+        prep_chk_row.addStretch()
+        auto_prep_v.addLayout(prep_chk_row)
+
+        prep_guide_row = QHBoxLayout()
+        btn_guide = QPushButton("자동 정파 준비 안내")
+        btn_guide.setFixedHeight(_BTN_H)
+        btn_guide.clicked.connect(self._show_signoff_guide)
+        prep_guide_row.addWidget(btn_guide)
+        prep_guide_row.addStretch()
+        auto_prep_v.addLayout(prep_guide_row)
 
         tab_layout.addWidget(auto_prep_group)
 
@@ -2365,6 +2353,7 @@ class SettingsDialog(QDialog):
             edit = QLineEdit()
             edit.setPlaceholderText("기본 알림음 사용")
             edit.setMinimumWidth(100)
+            edit.setFixedHeight(_BTN_H)
             edit.editingFinished.connect(self._save_signoff_params)
             self._signoff_sound_edits[key] = edit
             sound_grid.addWidget(edit, row_i, 1)
@@ -2395,6 +2384,47 @@ class SettingsDialog(QDialog):
         tab_layout.addStretch()
 
         return scroll
+
+    def _show_signoff_guide(self):
+        """자동 정파 준비 안내 팝업 표시."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("자동 정파 준비 안내")
+        dlg.setMinimumWidth(780)
+
+        vbox = QVBoxLayout(dlg)
+        vbox.setSpacing(10)
+        vbox.setContentsMargins(16, 14, 16, 14)
+
+        lbl = QLabel()
+        lbl.setTextFormat(Qt.RichText)
+        lbl.setWordWrap(True)
+        lbl.setText(
+            "<div style='line-height: 2.0;'>"
+            "<span style='font-size: 13pt; font-weight: bold;'>"
+            "1. 정파준비모드 → 정파모드 &nbsp;[OR 방식]</span><br>"
+            "• 스틸 감지 또는 톤 감지 중 먼저 기준 시간을 충족하는 쪽으로 정파모드 전환<br>"
+            "• 기준 시간: 「스틸감지 — 몇 초 이상시 알림 발생」 및 "
+            "「정파용 오디오 톤 감지 — 몇 초 이상시 트리거 발생」 값 사용<br>"
+            "<br>"
+            "<span style='font-size: 13pt; font-weight: bold;'>"
+            "2. 정파모드 → 정파모드 해제 &nbsp;[AND 방식]</span><br>"
+            "• 스틸 감지 AND 톤 감지 모두 각자의 기준 시간 이상 동시에 지속될 때 정파해제<br>"
+            "• 예) 스틸 기준 20초 · 톤 기준 30초 → 스틸 20초 이상 지속 중이면서 톤도 30초 이상 지속 시 해제<br>"
+            "• 기준 시간: 감지 설정 탭의 「스틸감지」 및 「정파용 오디오 톤 감지」 값 사용"
+            "</div>"
+        )
+        vbox.addWidget(lbl)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_ok = QPushButton("확인")
+        btn_ok.setFixedHeight(_BTN_H)
+        btn_ok.clicked.connect(dlg.accept)
+        btn_row.addWidget(btn_ok)
+        vbox.addLayout(btn_row)
+
+        dlg.adjustSize()
+        dlg.exec()
 
     def _on_auto_prep_toggled(self, checked: bool):
         """자동 정파 준비 모드 체크박스 토글 처리."""
@@ -2435,10 +2465,11 @@ class SettingsDialog(QDialog):
 
         # 그룹명 행
         name_row = QHBoxLayout()
-        name_row.addWidget(QLabel("① 그룹명:"))
+        lbl_name = QLabel("① 그룹명:")
+        lbl_name.setObjectName("signoffRowLabel")
+        name_row.addWidget(lbl_name)
         name_edit = QLineEdit()
         name_edit.setFixedWidth(120)
-        name_edit.setFixedHeight(44)
         name_edit.setPlaceholderText(f"Group{gid}")
         name_row.addWidget(name_edit)
         name_row.addStretch()
@@ -2450,14 +2481,14 @@ class SettingsDialog(QDialog):
         time_row.addWidget(QLabel("② 시작:"))
 
         start_tw = _TimeWidget(0, 30)
-        start_tw.setToolTip("클릭: 목록 선택 / 더블클릭: HH:MM 직접 입력")
+        start_tw.setToolTip("클릭: 숫자 리스트 선택  |  더블클릭: 직접 입력")
         time_row.addWidget(start_tw)
 
         time_row.addSpacing(16)
         time_row.addWidget(QLabel("종료:"))
 
         end_tw = _TimeWidget(6, 0)
-        end_tw.setToolTip("클릭: 목록 선택 / 더블클릭: HH:MM 직접 입력")
+        end_tw.setToolTip("클릭: 숫자 리스트 선택  |  더블클릭: 직접 입력")
         time_row.addWidget(end_tw)
 
         end_next_day_chk = QCheckBox("익일")
@@ -2503,9 +2534,10 @@ class SettingsDialog(QDialog):
 
         # ── 3) 감지영역 선택 행 ─────────────────────────────────────────
         roi_row = QHBoxLayout()
-        roi_row.addWidget(QLabel("④ 감지영역 선택:"))
+        lbl_roi = QLabel("④ 감지영역 선택:")
+        lbl_roi.setObjectName("signoffRowLabel")
+        roi_row.addWidget(lbl_roi)
         btn_roi = QPushButton("감지영역 선택")
-        btn_roi.setFixedHeight(_BTN_H)
         btn_roi.clicked.connect(lambda _, g=gid: self._open_signoff_roi_dialog(g))
         roi_row.addWidget(btn_roi)
 

@@ -36,7 +36,7 @@
     "video": [
       {
         "label": "V1",
-        "media_name": "",
+        "media_name": "dfg",
         "x": 999,
         "y": 6,
         "w": 273,
@@ -47,7 +47,7 @@
     "audio": [
       {
         "label": "A1",
-        "media_name": "",
+        "media_name": "sdf",
         "x": 966,
         "y": 99,
         "w": 20,
@@ -59,9 +59,10 @@
   "performance": {
     "detection_interval": 200,
     "scale_factor": 1.0,
-    "black_detection_enabled": true,
-    "still_detection_enabled": true,
+    "video_detection_enabled": true,
     "audio_detection_enabled": true,
+    "still_detection_enabled": true,
+    "black_detection_enabled": true,
     "embedded_detection_enabled": true
   },
   "telegram": {
@@ -83,7 +84,7 @@
     "max_keep_days": 7,
     "output_width": 960,
     "output_height": 540,
-    "output_fps": 15
+    "output_fps": 10
   },
   "signoff": {
     "auto_preparation": true,
@@ -91,27 +92,26 @@
     "enter_alarm_sound": "",
     "release_alarm_sound": "",
     "group1": {
-      "name": "1TV",
-      "roi_rules": [
-        {
-          "video_label": "",
-          "operator": "",
-          "audio_label": "A1"
-        }
-      ],
-      "start_time": "22:25",
-      "end_time": "00:40",
+      "name": "Group1",
+      "roi_rules": [],
+      "start_time": "00:30",
+      "end_time": "05:00",
       "end_next_day": false,
       "weekdays": [
         0,
-        1
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
       ]
     },
     "group2": {
-      "name": "2TV",
+      "name": "Group2",
       "roi_rules": [],
-      "start_time": "15:35",
-      "end_time": "16:00",
+      "start_time": "00:30",
+      "end_time": "05:00",
       "end_next_day": false,
       "weekdays": [
         0,

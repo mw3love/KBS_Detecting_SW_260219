@@ -143,6 +143,12 @@ QPushButton#btnSignoff[signoff_state="SIGNOFF"] {
 QPushButton#btnSignoff[signoff_state="SIGNOFF"]:hover {
     background-color: #ffb8b8;
 }
+/* 정파 버튼 비활성화 상태 (자동 정파 준비 OFF) */
+QPushButton#btnSignoff:disabled {
+    background-color: #dcdcdc;
+    border: 1px solid #bbbbbb;
+    color: #aaaaaa;
+}
 /* 정파 시간 레이블 */
 QLabel#lblSignoffTime {
     color: #000000;
@@ -513,6 +519,14 @@ QToolTip {
 #paramDescLabel {
     color: #606070;
     font-size: 11px;
+}
+
+/* 정파 시간 힌트 레이블 (HH:MM에 정파준비 시작) */
+QLabel#signoffTimeHintLabel {
+    color: #6070a0;
+    font-size: 14px;
+    font-style: italic;
+    padding-left: 6px;
 }
 
 #btnHalfscreenEdit {

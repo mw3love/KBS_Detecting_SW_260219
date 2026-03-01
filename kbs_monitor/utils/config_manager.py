@@ -15,7 +15,7 @@ DEFAULT_CONFIG = {
         "black_duration": 10,
         "black_alarm_duration": 10,
         "still_threshold": 2,
-        "still_duration": 30,
+        "still_duration": 60,
         "still_alarm_duration": 10,
         "audio_hsv_h_min": 40,
         "audio_hsv_h_max": 80,
@@ -76,6 +76,10 @@ DEFAULT_CONFIG = {
         "output_width": 960,       # 녹화 출력 가로 해상도
         "output_height": 540,      # 녹화 출력 세로 해상도
         "output_fps": 10,          # 녹화 출력 FPS
+    },
+    "ui_state": {
+        "detection_enabled": True,
+        "roi_visible": True,
     },
     "signoff": {
         "prep_alarm_sound":    "",     # 정파준비 시작 알림음 WAV 경로

@@ -637,6 +637,20 @@ class TopBar(QWidget):
         else:
             self._lbl_ea.setStyleSheet("color: gray;")
 
+    def set_detection_state(self, enabled: bool):
+        """감지 On/Off 버튼 상태를 외부에서 설정 (시그널 발송 없이)"""
+        self._btn_detection.blockSignals(True)
+        self._btn_detection.setChecked(enabled)
+        self._btn_detection.setText("감지 ON" if enabled else "감지 OFF")
+        self._btn_detection.blockSignals(False)
+
+    def set_roi_visible_state(self, visible: bool):
+        """감지영역 버튼 상태를 외부에서 설정 (시그널 발송 없이)"""
+        self._roi_visible = visible
+        self._btn_roi.blockSignals(True)
+        self._btn_roi.setChecked(visible)
+        self._btn_roi.blockSignals(False)
+
     def set_volume_display(self, value: int):
         """볼륨 슬라이더 값을 외부에서 설정 (시그널 발송 없이)"""
         self._slider_volume.blockSignals(True)
@@ -648,6 +662,19 @@ class TopBar(QWidget):
         self._btn_mute.blockSignals(True)
         self._btn_mute.setChecked(not enabled)
         self._btn_mute.blockSignals(False)
+
+    def set_signoff_buttons_enabled(self, enabled: bool):
+        """자동 정파 준비 활성화 여부에 따라 정파 버튼 활성/비활성화.
+        enabled=False → 버튼 회색 + 클릭 불가, 시간 레이블 비움
+        enabled=True  → 버튼 정상 복원
+        """
+        for gid in (1, 2):
+            btn = self._btn_signoff.get(gid)
+            lbl = self._lbl_signoff_time.get(gid)
+            if btn:
+                btn.setEnabled(enabled)
+            if lbl and not enabled:
+                lbl.setText("")
 
     def set_fullscreen_button_state(self, is_fullscreen: bool):
         """전체화면 버튼 체크 상태를 외부에서 설정 (시그널 발송 없이)"""
@@ -683,15 +710,15 @@ class TopBar(QWidget):
             btn.setProperty("signoff_state", state if state in ("IDLE", "PREPARATION", "SIGNOFF") else "IDLE")
         elif state == "IDLE":
             lbl.setVisible(True)
-            lbl.setText(_fmt_dhms(seconds))
+            lbl.setText(f"정파준비까지 {_fmt_dhms(seconds)}")
             btn.setProperty("signoff_state", "IDLE")
         elif state == "PREPARATION":
             lbl.setVisible(True)
-            lbl.setText(_fmt_elapsed(seconds))
+            lbl.setText(f"정파까지 {_fmt_dhms(seconds)}")   # 정파모드까지 남은 시간
             btn.setProperty("signoff_state", "PREPARATION")
         elif state == "SIGNOFF":
             lbl.setVisible(True)
-            lbl.setText("")
+            lbl.setText(f"정파해제까지 {_fmt_dhms(seconds)}")
             btn.setProperty("signoff_state", "SIGNOFF")
         else:
             lbl.setVisible(True)

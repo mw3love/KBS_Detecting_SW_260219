@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         # 임베디드 오디오 알림 로그 중복 방지
         self._embedded_log_sent = False
         self._last_silence_seconds = 0.0  # 마지막 무음 지속 시간 (복구 시 참조)
+        self._embedded_audio_present = False  # 실제 임베디드 오디오 신호 존재 여부 (EA 표시용)
 
         # 비디오/오디오 알림 로그 중복 방지 (label 기반)
         self._black_logged: set = set()
@@ -92,6 +93,22 @@ class MainWindow(QMainWindow):
         init_vol = init_alarm.get("volume", 80)
         self._top_bar.set_volume_display(init_vol)
         self._top_bar.set_mute_state(init_alarm.get("sound_enabled", True))
+
+        # TopBar 버튼 상태 복원 (감지 On/Off, 감지영역)
+        ui_state = self._config.get("ui_state", {})
+        detection_enabled = ui_state.get("detection_enabled", True)
+        roi_visible = ui_state.get("roi_visible", True)
+        self._detection_enabled = detection_enabled
+        self._top_bar.set_detection_state(detection_enabled)
+        self._top_bar.set_roi_visible_state(roi_visible)
+        if not detection_enabled:
+            self._detect_timer.stop()
+        if not roi_visible:
+            self._video_widget.set_show_rois(False)
+
+        # 프로그램 시작 직후 SignoffManager 초기 상태 전환에서는 소리 억제
+        self._startup_complete = False
+        QTimer.singleShot(3000, lambda: setattr(self, '_startup_complete', True))
 
         self._logger.info("SYSTEM - 프로그램 시작")
 
@@ -135,7 +152,7 @@ class MainWindow(QMainWindow):
         self._top_bar.clear_alarm_requested.connect(self._on_clear_alarm)
         self._top_bar.dark_mode_toggled.connect(self._on_dark_mode_toggled)
         self._top_bar.fullscreen_toggled.connect(self._toggle_fullscreen)
-        self._top_bar.signoff_manual_release.connect(self._signoff_manager.force_manual_release)
+        self._top_bar.signoff_manual_release.connect(self._on_signoff_button_clicked)
 
         self._signoff_manager.state_changed.connect(self._on_signoff_state_changed)
         self._signoff_manager.event_occurred.connect(self._on_signoff_event)
@@ -212,7 +229,7 @@ class MainWindow(QMainWindow):
         # ── 비디오 ROI 블랙/스틸 감지 ──
         # (정파 still 결과도 여기서 추출하므로 SignoffManager 업데이트보다 먼저 실행)
         need_still_for_signoff = bool(video_rois and any(
-            any(r.get("video_label") for r in group.roi_rules)
+            bool(group.enter_roi.get("video_label") or group.exit_roi.get("video_label"))
             for group in self._signoff_manager.get_groups().values()
         ))
         video_results = {}
@@ -349,7 +366,7 @@ class MainWindow(QMainWindow):
         a_count = len(self._roi_manager.audio_rois)
         self._top_bar.update_summary(
             v_count, a_count,
-            self._embedded_detect_enabled,
+            self._embedded_detect_enabled and self._embedded_audio_present,
             self._detector.embedded_alerting,
         )
         # 감지영역 정보를 비디오 위젯에도 동기화
@@ -360,8 +377,8 @@ class MainWindow(QMainWindow):
         # 정파 상태 패널 갱신 (1초마다)
         for gid, group in self._signoff_manager.get_groups().items():
             state = self._signoff_manager.get_state(gid)
-            if state == SignoffState.PREPARATION:
-                secs = self._signoff_manager.get_preparation_elapsed(gid)
+            if state == SignoffState.SIGNOFF:
+                secs = self._signoff_manager.get_end_remaining_seconds(gid)
             else:
                 secs = self._signoff_manager.get_elapsed_seconds(gid)
             self._top_bar.update_signoff_state(
@@ -520,11 +537,13 @@ class MainWindow(QMainWindow):
 
     def _on_audio_level_for_silence(self, l_db: float, r_db: float):
         """level_updated 수신 — 정상 오디오 수신 시 임베디드 감지 리셋"""
+        avg_db = (l_db + r_db) / 2.0
+        # EA 감지현황 표시용 — 실제 오디오 신호 존재 여부 항상 추적
+        self._embedded_audio_present = (avg_db > self._detector.embedded_silence_threshold)
         if not self._detection_enabled or not self._embedded_detect_enabled:
             return
         if self._signoff_manager.is_any_signoff():
             return
-        avg_db = (l_db + r_db) / 2.0
         if avg_db > self._detector.embedded_silence_threshold:
             if self._detector.embedded_alerting or self._embedded_log_sent:
                 was_sent = self._embedded_log_sent
@@ -774,6 +793,10 @@ class MainWindow(QMainWindow):
         self._signoff_manager.configure_from_dict(
             signoff_cfg, still_trigger_sec, tone_trigger_sec
         )
+        # 자동 정파 준비 비활성화 시 상단 정파 버튼 비활성화
+        auto_prep = signoff_cfg.get("auto_preparation", True)
+        if hasattr(self, '_top_bar'):
+            self._top_bar.set_signoff_buttons_enabled(auto_prep)
 
     def _on_signoff_settings_changed(self, params: dict):
         """SettingsDialog 정파 설정 변경 → 즉시 적용"""
@@ -783,8 +806,9 @@ class MainWindow(QMainWindow):
     def _on_signoff_state_changed(self, group_id: int, state_str: str):
         """정파 상태 변경 시 TopBar 패널 즉시 갱신"""
         group = self._signoff_manager.get_groups().get(group_id)
-        if state_str == "PREPARATION":
-            secs = self._signoff_manager.get_preparation_elapsed(group_id)
+        state = self._signoff_manager.get_state(group_id)
+        if state == SignoffState.SIGNOFF:
+            secs = self._signoff_manager.get_end_remaining_seconds(group_id)
         else:
             secs = self._signoff_manager.get_elapsed_seconds(group_id)
         self._top_bar.update_signoff_state(
@@ -795,8 +819,12 @@ class MainWindow(QMainWindow):
         )
 
     def _on_signoff_event(self, group_id: int, message: str):
-        """정파 이벤트 발생 시 로그 기록 + 알림음 재생"""
+        """정파 이벤트 발생 시 로그 기록 + 알림음 재생 (수동 클릭 또는 시작 직후엔 소리 없음)"""
         self._logger.info(f"SIGNOFF - {message}")
+        if getattr(self, '_signoff_manual_click', False):
+            return
+        if not self._startup_complete:
+            return
         signoff_cfg = self._config.get("signoff", {})
         state = self._signoff_manager.get_state(group_id)
         if state == SignoffState.PREPARATION:
@@ -807,6 +835,12 @@ class MainWindow(QMainWindow):
             sound = signoff_cfg.get("release_alarm_sound", "")
         if sound:
             self._alarm.play_test_sound(sound)
+
+    def _on_signoff_button_clicked(self, group_id: int):
+        """정파 버튼 클릭: IDLE→PREPARATION→SIGNOFF→IDLE 순서로 상태 로테이션. 소리 없음."""
+        self._signoff_manual_click = True
+        self._signoff_manager.cycle_state(group_id)
+        self._signoff_manual_click = False
 
     # ── 기타 ───────────────────────────────────────────
 
@@ -884,6 +918,10 @@ class MainWindow(QMainWindow):
         if self._settings_dialog:
             self._config = self._settings_dialog.get_config()
         self._config["rois"] = self._roi_manager.to_dict()
+        self._config["ui_state"] = {
+            "detection_enabled": self._detection_enabled,
+            "roi_visible": self._top_bar._btn_roi.isChecked(),
+        }
         self._config_manager.save(self._config)
 
         # 오버레이 정리

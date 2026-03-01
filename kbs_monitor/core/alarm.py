@@ -125,23 +125,18 @@ class AlarmSystem(QObject):
     def get_sound_files(self) -> dict:
         return dict(self._sound_files)
 
-    def play_test_sound(self, alarm_type: str):
-        """테스트용 알림음 1회 재생"""
+    def play_test_sound(self, file_path: str):
+        """테스트용 알림음 1회 재생. file_path가 빈 문자열이면 Windows 내장음 사용."""
         # 파일 경로 확인 및 절대경로 변환
-        raw_path = self._sound_files.get("default", "")
+        raw_path = file_path
         if raw_path:
             abs_path = os.path.abspath(raw_path)
             exists = os.path.exists(abs_path)
-            self._log(f"알림음 테스트: {os.path.basename(abs_path)}")
-            self._log(f"  경로: {abs_path}")
-            self._log(f"  파일 존재: {exists}")
             sound_file = abs_path if exists else None
             if not exists:
                 self._log("  파일 없음 → Windows 내장음으로 대체")
         else:
             sound_file = None
-            self._log("알림음 테스트: 파일 미설정 → Windows 내장음 사용")
-            self._log(f"  _sound_files 현재값: {self._sound_files}")
 
         # 기존 재생 중지 — 새 Event 객체로 이전 스레드와 완전히 분리
         self._stop_playback()
@@ -157,14 +152,10 @@ class AlarmSystem(QObject):
 
     def _play_test_worker(self, sound_file: str | None):
         """테스트 전용 1회 재생 (winsound → sounddevice → 내장음 순)"""
-        self._log(f"  적용 볼륨: {self._volume:.2f}")
-
         # ── winsound + WAV 파일 (우선 시도 — 장치/볼륨 문제 없음) ──────
         if sound_file and WINSOUND_AVAILABLE:
             try:
-                self._log("  winsound 재생 시작...")
                 winsound.PlaySound(sound_file, winsound.SND_FILENAME | winsound.SND_SYNC)
-                self._log("  winsound 재생 완료")
                 return
             except Exception as e:
                 self._log(f"  winsound 실패: {e}")
@@ -172,8 +163,6 @@ class AlarmSystem(QObject):
         # ── sounddevice (fallback) ───────────────────────────────────────
         if sound_file and SOUNDDEVICE_AVAILABLE:
             try:
-                if SOUNDDEVICE_AVAILABLE:
-                    self._log(f"  sounddevice 기본 장치: {sd.default.device}")
                 with wave.open(sound_file, "rb") as wf:
                     sampwidth = wf.getsampwidth()
                     samplerate = wf.getframerate()
@@ -197,10 +186,8 @@ class AlarmSystem(QObject):
                 if n_channels > 1:
                     audio = audio.reshape(-1, n_channels)
 
-                self._log("  sounddevice 재생 시작...")
                 sd.play(audio, samplerate=samplerate)
                 sd.wait()
-                self._log("  sounddevice 재생 완료")
                 return
             except Exception as e:
                 self._log(f"  sounddevice 실패: {e}")
@@ -210,7 +197,6 @@ class AlarmSystem(QObject):
                     pass
 
         # ── 내장음 fallback ─────────────────────────────────────────────
-        self._log("  내장음(SystemHand) 재생")
         if WINSOUND_AVAILABLE:
             try:
                 winsound.PlaySound(

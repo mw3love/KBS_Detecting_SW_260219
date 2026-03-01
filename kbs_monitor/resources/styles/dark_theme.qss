@@ -184,6 +184,12 @@ QPushButton#btnSignoff[signoff_state="SIGNOFF"] {
 QPushButton#btnSignoff[signoff_state="SIGNOFF"]:hover {
     background-color: #4a1414;
 }
+/* 정파 버튼 비활성화 상태 (자동 정파 준비 OFF) */
+QPushButton#btnSignoff:disabled {
+    background-color: #141414;
+    border: 1px solid #2a2a2a;
+    color: #3a3a3a;
+}
 /* 정파 시간 레이블 */
 QLabel#lblSignoffTime {
     color: #ffffff;
@@ -493,6 +499,14 @@ QPushButton#signoffRoiBtn {
 QLabel#signoffRowLabel {
     min-height: 30px;
     padding: 4px 0;
+}
+
+/* 정파 시간 힌트 레이블 (HH:MM에 정파준비 시작) */
+QLabel#signoffTimeHintLabel {
+    color: #8888aa;
+    font-size: 14px;
+    font-style: italic;
+    padding-left: 6px;
 }
 
 /* ── ROI 편집기 ──────────────────────────────────── */

@@ -620,7 +620,9 @@ class SettingsDialog(QDialog):
         self._signoff_day_chks: dict = {}        # {gid: list[QCheckBox]}
         self._signoff_roi_rules: dict = {}       # {gid: list[dict]}  감지영역 규칙
         self._signoff_roi_summary: dict = {}     # {gid: QLabel}  요약 라벨
-        self._signoff_auto_prep_btn = None       # QCheckBox: 자동 정파 준비 활성화
+        self._signoff_prep_min_combo: dict = {}       # {gid: QComboBox} 정파준비 몇 분전 설정
+        self._signoff_exit_prep_min_combo: dict = {}  # {gid: QComboBox} 정파해제준비 몇 분전 설정
+        self._signoff_auto_prep_btn = None            # QCheckBox: 자동 정파 준비 활성화
         self._setup_ui()
         self._load_config(config)
 
@@ -1166,9 +1168,9 @@ class SettingsDialog(QDialog):
 
         lbl_tone_std = QLabel("▪  표준편차 임계값(%):")
         lbl_tone_std.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_audio_tone_std = _NumEdit(3.0, 0.1, 50.0, is_float=True)
+        self._edit_audio_tone_std = _NumEdit(3, 1, 50)
         self._edit_audio_tone_std.editingFinished.connect(self._save_detection_params)
-        desc_tone_std = QLabel("ratio 표준편차가 이 값 이하면 일정 톤으로 판단  (기본값: 3.0%)")
+        desc_tone_std = QLabel("ratio 표준편차가 이 값 이하면 일정 톤으로 판단  (기본값: 3%)")
         desc_tone_std.setObjectName("paramDescLabel")
         grid_tone.addWidget(lbl_tone_std,             0, 0)
         grid_tone.addWidget(self._edit_audio_tone_std, 0, 1)
@@ -1176,7 +1178,7 @@ class SettingsDialog(QDialog):
 
         lbl_tone_dur = QLabel("▪  몇 초 이상시 트리거 발생(초):")
         lbl_tone_dur.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_audio_tone_duration = _NumEdit(60.0, 1.0, 120.0, is_float=True)
+        self._edit_audio_tone_duration = _NumEdit(60, 1, 120)
         self._edit_audio_tone_duration.editingFinished.connect(self._save_detection_params)
         desc_tone_dur = QLabel("톤 상태가 이 시간 이상 지속 시 정파 진입 트리거  (기본값: 60초)")
         desc_tone_dur.setObjectName("paramDescLabel")
@@ -1186,9 +1188,9 @@ class SettingsDialog(QDialog):
 
         lbl_tone_min = QLabel("▪  최소 레벨(%):")
         lbl_tone_min.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_audio_tone_min_level = _NumEdit(5.0, 0.0, 50.0, is_float=True)
+        self._edit_audio_tone_min_level = _NumEdit(5, 0, 50)
         self._edit_audio_tone_min_level.editingFinished.connect(self._save_detection_params)
-        desc_tone_min = QLabel("ratio가 이 값 미만이면 무음으로 판단하여 톤 제외  (기본값: 5.0%)")
+        desc_tone_min = QLabel("ratio가 이 값 미만이면 무음으로 판단하여 톤 제외  (기본값: 5%)")
         desc_tone_min.setObjectName("paramDescLabel")
         grid_tone.addWidget(lbl_tone_min,                   2, 0)
         grid_tone.addWidget(self._edit_audio_tone_min_level, 2, 1)
@@ -1230,7 +1232,6 @@ class SettingsDialog(QDialog):
         desc_ead = QLabel("알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
         desc_ead.setObjectName("paramDescLabel")
         grid_e.addWidget(lbl_ead,                          2, 0)
-        grid_e.addWidget(self._edit_embedded_alarm_duration, 2, 1)
         grid_e.addWidget(desc_ead,                         2, 2)
 
         layout.addWidget(group_emb)
@@ -1403,7 +1404,9 @@ class SettingsDialog(QDialog):
         btn_test = QPushButton("테스트")
         btn_test.setMinimumWidth(72)
         btn_test.setFixedHeight(_BTN_H)
-        btn_test.clicked.connect(lambda: self.test_sound_requested.emit("default"))
+        btn_test.clicked.connect(
+            lambda: self.test_sound_requested.emit(self._alarm_file_edits["default"].text())
+        )
         file_row.addWidget(btn_test, 0, Qt.AlignVCenter)
 
         sound_layout.addLayout(file_row)
@@ -1846,9 +1849,9 @@ class SettingsDialog(QDialog):
         self._edit_audio_level_recovery_seconds.setText(str(int(det.get("audio_level_recovery_seconds", 2))))
 
         # 정파용 오디오 톤 감지 설정
-        self._edit_audio_tone_std.setText(str(det.get("audio_tone_std_threshold", 3.0)))
-        self._edit_audio_tone_duration.setText(str(det.get("audio_tone_duration", 60.0)))
-        self._edit_audio_tone_min_level.setText(str(det.get("audio_tone_min_level", 5.0)))
+        self._edit_audio_tone_std.setText(str(int(det.get("audio_tone_std_threshold", 3))))
+        self._edit_audio_tone_duration.setText(str(int(det.get("audio_tone_duration", 60))))
+        self._edit_audio_tone_min_level.setText(str(int(det.get("audio_tone_min_level", 5))))
 
         # 임베디드 오디오 설정
         self._edit_embedded_silence_threshold.setText(str(int(det.get("embedded_silence_threshold", -50))))
@@ -2306,17 +2309,17 @@ class SettingsDialog(QDialog):
         tab_layout.setContentsMargins(10, 10, 10, 10)
         tab_layout.setSpacing(10)
 
-        # ── 자동 정파 준비 모드 ON/OFF ──
-        auto_prep_group = QGroupBox("자동 정파 준비 모드")
+        # ── 자동 정파 설정 ON/OFF ──
+        auto_prep_group = QGroupBox("자동 정파 설정")
         auto_prep_v = QVBoxLayout(auto_prep_group)
         auto_prep_v.setSpacing(6)
 
         prep_chk_row = QHBoxLayout()
-        self._signoff_auto_prep_btn = QCheckBox("자동 정파 준비 활성화")
+        self._signoff_auto_prep_btn = QCheckBox("자동정파 활성화")
         self._signoff_auto_prep_btn.setChecked(True)
         self._signoff_auto_prep_btn.setToolTip(
-            "ON: 설정된 시간이 되면 자동으로 정파준비모드로 진입\n"
-            "OFF: 시간이 되어도 정파준비모드로 자동 진입하지 않음"
+            "ON: 설정된 시간이 되면 자동으로 정파준비/정파모드로 전환\n"
+            "OFF: 시간이 되어도 자동 전환 없음 — 수동 버튼 조작만 가능"
         )
         self._signoff_auto_prep_btn.toggled.connect(self._on_auto_prep_toggled)
         prep_chk_row.addWidget(self._signoff_auto_prep_btn)
@@ -2324,7 +2327,7 @@ class SettingsDialog(QDialog):
         auto_prep_v.addLayout(prep_chk_row)
 
         prep_guide_row = QHBoxLayout()
-        btn_guide = QPushButton("자동 정파 준비 안내")
+        btn_guide = QPushButton("자동정파 안내")
         btn_guide.setFixedHeight(_BTN_H)
         btn_guide.clicked.connect(self._show_signoff_guide)
         prep_guide_row.addWidget(btn_guide)
@@ -2366,7 +2369,9 @@ class SettingsDialog(QDialog):
             btn_test = QPushButton("테스트")
             btn_test.setMinimumWidth(72)
             btn_test.setFixedHeight(_BTN_H)
-            btn_test.clicked.connect(lambda _, k=key: self.test_sound_requested.emit(k))
+            btn_test.clicked.connect(
+                lambda _, k=key: self.test_sound_requested.emit(self._signoff_sound_edits[k].text())
+            )
             sound_grid.addWidget(btn_test, row_i, 3)
 
         sound_grid.setColumnStretch(1, 1)
@@ -2386,9 +2391,9 @@ class SettingsDialog(QDialog):
         return scroll
 
     def _show_signoff_guide(self):
-        """자동 정파 준비 안내 팝업 표시."""
+        """자동정파 안내 팝업 표시."""
         dlg = QDialog(self)
-        dlg.setWindowTitle("자동 정파 준비 안내")
+        dlg.setWindowTitle("자동정파 안내")
         dlg.setMinimumWidth(780)
 
         vbox = QVBoxLayout(dlg)
@@ -2401,16 +2406,26 @@ class SettingsDialog(QDialog):
         lbl.setText(
             "<div style='line-height: 2.0;'>"
             "<span style='font-size: 13pt; font-weight: bold;'>"
-            "1. 정파준비모드 → 정파모드 &nbsp;[OR 방식]</span><br>"
-            "• 스틸 감지 또는 톤 감지 중 먼저 기준 시간을 충족하는 쪽으로 정파모드 전환<br>"
-            "• 기준 시간: 「스틸감지 — 몇 초 이상시 알림 발생」 및 "
-            "「정파용 오디오 톤 감지 — 몇 초 이상시 트리거 발생」 값 사용<br>"
+            "1. 정파준비 구간 (초록색)</span><br>"
+            "• 「정파준비 몇 분전」에 설정한 분 전부터 정파준비(초록색)로 자동 전환<br>"
+            "• 예) 정파모드 시작 00:30, 30분 전 설정 → 00:00에 정파준비 시작<br>"
+            "• 「정파진입 감지영역」에 설정된 ROI에서 스틸 또는 1kHz 톤 감지 기준 충족 시 정파모드로 조기 전환 [OR 방식]<br>"
+            "• 「몇 분전」을 0으로 설정하면 정파준비 단계 없이 시작 시각에 바로 정파모드로 전환<br>"
             "<br>"
             "<span style='font-size: 13pt; font-weight: bold;'>"
-            "2. 정파모드 → 정파모드 해제 &nbsp;[AND 방식]</span><br>"
-            "• 스틸 감지 AND 톤 감지 모두 각자의 기준 시간 이상 동시에 지속될 때 정파해제<br>"
-            "• 예) 스틸 기준 20초 · 톤 기준 30초 → 스틸 20초 이상 지속 중이면서 톤도 30초 이상 지속 시 해제<br>"
-            "• 기준 시간: 감지 설정 탭의 「스틸감지」 및 「정파용 오디오 톤 감지」 값 사용"
+            "2. 정파모드 (빨간색)</span><br>"
+            "• 「정파모드 시작」 시각이 되면 자동으로 정파모드(빨간색)로 전환<br>"
+            "• 「종료」 시각이 되면 자동으로 정파 해제<br>"
+            "• 「정파해제준비 몇 분전」 설정 시: 종료 N분 전부터 감지 조건이 사라지면 조기 해제 가능 [OR 방식]<br>"
+            "<br>"
+            "<span style='font-size: 13pt; font-weight: bold;'>"
+            "3. 상단 정파 버튼 수동 조작</span><br>"
+            "• 클릭마다 비활성(회색) → 정파준비(초록) → 정파모드(빨강) → 비활성 순으로 전환<br>"
+            "• 단, 정파 시간대 밖에서는 정파준비 → 비활성으로 직접 복귀 (정파모드 전환 불가)<br>"
+            "<br>"
+            "<span style='font-size: 13pt; font-weight: bold;'>"
+            "4. Group1 / Group2</span><br>"
+            "• 두 그룹이 독립적으로 운영되어 서로 다른 채널·시간대를 동시에 관리 가능"
             "</div>"
         )
         vbox.addWidget(lbl)
@@ -2438,18 +2453,22 @@ class SettingsDialog(QDialog):
             "enter_alarm_sound":   "",
             "release_alarm_sound": "",
             "group1": {
-                "name":       "Group1",
-                "roi_rules":  [],
-                "start_time": "00:30",
-                "end_time":   "06:00",
-                "weekdays":   [0, 1, 2, 3, 4, 5, 6],
+                "name":              "Group1",
+                "roi_rules":         [],
+                "start_time":        "00:30",
+                "end_time":          "06:00",
+                "prep_minutes":      30,
+                "exit_prep_minutes": 0,
+                "weekdays":          [0, 1, 2, 3, 4, 5, 6],
             },
             "group2": {
-                "name":       "Group2",
-                "roi_rules":  [],
-                "start_time": "00:30",
-                "end_time":   "06:00",
-                "weekdays":   [0, 1, 2, 3, 4, 5, 6],
+                "name":              "Group2",
+                "roi_rules":         [],
+                "start_time":        "00:30",
+                "end_time":          "06:00",
+                "prep_minutes":      30,
+                "exit_prep_minutes": 0,
+                "weekdays":          [0, 1, 2, 3, 4, 5, 6],
             },
         }
         self._apply_signoff_params_to_ui(defaults)
@@ -2457,7 +2476,7 @@ class SettingsDialog(QDialog):
 
     def _create_signoff_group_widget(self, gid: int) -> QGroupBox:
         """단일 정파 그룹(Group1/Group2) 설정 위젯 반환.
-        배치 순서: 시간 → 요일 → 감지영역 선택
+        배치 순서: 시간 → 정파준비 시간 → 요일 → 감지영역 선택
         """
         box = QGroupBox(f"Group {gid}")
         box_layout = QVBoxLayout(box)
@@ -2476,19 +2495,21 @@ class SettingsDialog(QDialog):
         box_layout.addLayout(name_row)
         self._signoff_name_edit[gid] = name_edit
 
-        # ── 1) 시간 행 (시작/종료) ──────────────────────────────────────
+        # ── 1) 시간 행 (정파모드 시작/종료) ──────────────────────────────
         time_row = QHBoxLayout()
-        time_row.addWidget(QLabel("② 시작:"))
+        time_row.addWidget(QLabel("② 정파모드 시작:"))
 
         start_tw = _TimeWidget(0, 30)
-        start_tw.setToolTip("클릭: 숫자 리스트 선택  |  더블클릭: 직접 입력")
+        start_tw.setToolTip("클릭: 숫자 리스트 선택  |  더블클릭: 직접 입력\n"
+                            "이 시각에 정파모드(빨간색)로 전환됩니다")
         time_row.addWidget(start_tw)
 
         time_row.addSpacing(16)
         time_row.addWidget(QLabel("종료:"))
 
         end_tw = _TimeWidget(6, 0)
-        end_tw.setToolTip("클릭: 숫자 리스트 선택  |  더블클릭: 직접 입력")
+        end_tw.setToolTip("클릭: 숫자 리스트 선택  |  더블클릭: 직접 입력\n"
+                          "이 시각에 정파가 해제됩니다")
         time_row.addWidget(end_tw)
 
         end_next_day_chk = QCheckBox("익일")
@@ -2502,9 +2523,69 @@ class SettingsDialog(QDialog):
         self._signoff_end_edit[gid] = end_tw
         self._signoff_end_next_day_chk[gid] = end_next_day_chk
 
-        # ── 2) 요일 행 ──────────────────────────────────────────────────
+        # ── 2) 정파준비 시간 행 ──────────────────────────────────────────
+        prep_row = QHBoxLayout()
+        prep_row.addWidget(QLabel("③ 몇 분전 정파준비 활성화:"))
+
+        from PySide6.QtWidgets import QComboBox
+        prep_combo = QComboBox()
+        prep_combo.setFixedWidth(120)
+        prep_options = [
+            ("사용안함", 0),
+            ("30분 전", 30),
+            ("1시간 전", 60),
+            ("1시간 30분 전", 90),
+            ("2시간 전", 120),
+            ("2시간 30분 전", 150),
+            ("3시간 전", 180),
+        ]
+        for label_text, val in prep_options:
+            prep_combo.addItem(label_text, userData=val)
+        prep_combo.setCurrentIndex(1)  # 기본값: 30분 전
+        prep_combo.setToolTip("정파모드 시작 전 몇 분 전에 정파준비(초록색)로 전환할지 설정\n"
+                              "정파준비 구간에서 스틸/톤 감지로 정파모드 조기 전환 가능")
+        prep_row.addWidget(prep_combo)
+        prep_time_lbl = QLabel("")
+        prep_time_lbl.setObjectName("signoffTimeHintLabel")
+        prep_row.addWidget(prep_time_lbl)
+        prep_row.addStretch()
+        box_layout.addLayout(prep_row)
+        self._signoff_prep_min_combo[gid] = prep_combo
+
+        # ── 3) 정파해제준비 시간 행 ─────────────────────────────────────
+        exit_prep_row = QHBoxLayout()
+        exit_prep_row.addWidget(QLabel("④ 몇 분전 정파해제준비 활성화:"))
+
+        from PySide6.QtWidgets import QComboBox as _QComboBox2
+        exit_prep_combo = _QComboBox2()
+        exit_prep_combo.setFixedWidth(120)
+        exit_prep_options = [
+            ("사용 안 함", 0),
+            ("30분 전", 30),
+            ("1시간 전", 60),
+            ("1시간 30분 전", 90),
+            ("2시간 전", 120),
+            ("2시간 30분 전", 150),
+            ("3시간 전", 180),
+        ]
+        for label_text, val in exit_prep_options:
+            exit_prep_combo.addItem(label_text, userData=val)
+        exit_prep_combo.setCurrentIndex(0)  # 기본값: 사용 안 함
+        exit_prep_combo.setToolTip(
+            "정파 종료 전 몇 분 전부터 정파해제준비 구간을 활성화할지 설정\n"
+            "이 구간에서 스틸/톤 신호가 해제되면 종료 시각 전이라도 정파가 자동 해제됩니다"
+        )
+        exit_prep_row.addWidget(exit_prep_combo)
+        exit_prep_time_lbl = QLabel("")
+        exit_prep_time_lbl.setObjectName("signoffTimeHintLabel")
+        exit_prep_row.addWidget(exit_prep_time_lbl)
+        exit_prep_row.addStretch()
+        box_layout.addLayout(exit_prep_row)
+        self._signoff_exit_prep_min_combo[gid] = exit_prep_combo
+
+        # ── 4) 요일 행 ──────────────────────────────────────────────────
         day_row = QHBoxLayout()
-        day_row.addWidget(QLabel("③ 요일:"))
+        day_row.addWidget(QLabel("⑤ 요일:"))
         day_row.addSpacing(4)
         every_btn = QPushButton("매일")
         every_btn.setCheckable(True)
@@ -2518,6 +2599,10 @@ class SettingsDialog(QDialog):
             chk.setChecked(True)
             day_row.addWidget(chk)
             day_chks.append(chk)
+        hint_lbl = QLabel("(시작 시간 기준 요일)")
+        hint_lbl.setStyleSheet("color: gray; font-size: 11px;")
+        day_row.addSpacing(8)
+        day_row.addWidget(hint_lbl)
         day_row.addStretch()
         box_layout.addLayout(day_row)
         self._signoff_every_day_chk[gid] = every_btn
@@ -2532,10 +2617,18 @@ class SettingsDialog(QDialog):
             self._save_signoff_params()
         every_btn.clicked.connect(_on_every_day_clicked)
 
-        # ── 3) 감지영역 선택 행 ─────────────────────────────────────────
+        # ── 5) 감지영역 선택 행 (정파 진입/해제 감지용) ────────────────────
         roi_row = QHBoxLayout()
-        lbl_roi = QLabel("④ 감지영역 선택:")
+        lbl_roi = QLabel("⑥ 정파 감지영역:")
         lbl_roi.setObjectName("signoffRowLabel")
+        lbl_roi.setToolTip(
+            "정파 진입 및 해제를 감지할 영역을 선택합니다.\n\n"
+            "① 정파준비 → 정파:\n"
+            "   정파준비 상태에서 스틸 또는 톤신호가 감지되면 정파로 전환\n\n"
+            "② 정파 → 정파해제:\n"
+            "   정파해제준비 구간에서 스틸과 톤신호 중 하나라도\n"
+            "   감지되지 않으면 정파를 자동 해제"
+        )
         roi_row.addWidget(lbl_roi)
         btn_roi = QPushButton("감지영역 선택")
         btn_roi.clicked.connect(lambda _, g=gid: self._open_signoff_roi_dialog(g))
@@ -2552,9 +2645,44 @@ class SettingsDialog(QDialog):
 
         # 시그널 연결
         name_edit.textChanged.connect(self._save_signoff_params)
-        start_tw.valueChanged.connect(self._save_signoff_params)
-        end_tw.valueChanged.connect(self._save_signoff_params)
+
+        def _auto_check_next_day(s=start_tw, e=end_tw, chk=end_next_day_chk):
+            """시작/종료 시각 변경 시 종료가 시작보다 이르면 익일 자동 체크."""
+            start_min = s.hour() * 60 + s.minute()
+            end_min = e.hour() * 60 + e.minute()
+            chk.blockSignals(True)
+            chk.setChecked(end_min < start_min)
+            chk.blockSignals(False)
+            self._save_signoff_params()
+
+        start_tw.valueChanged.connect(_auto_check_next_day)
+        end_tw.valueChanged.connect(_auto_check_next_day)
         end_next_day_chk.stateChanged.connect(self._save_signoff_params)
+        prep_combo.currentIndexChanged.connect(self._save_signoff_params)
+        exit_prep_combo.currentIndexChanged.connect(self._save_signoff_params)
+
+        def _update_prep_hint(*_, s=start_tw, c=prep_combo, lbl=prep_time_lbl):
+            minutes = c.currentData()
+            if not minutes:
+                lbl.setText("")
+                return
+            total = (s.hour() * 60 + s.minute() - minutes) % 1440
+            lbl.setText(f"{total // 60:02d}:{total % 60:02d}에 정파준비 시작")
+
+        def _update_exit_prep_hint(*_, e=end_tw, c=exit_prep_combo, lbl=exit_prep_time_lbl):
+            minutes = c.currentData()
+            if not minutes:
+                lbl.setText("")
+                return
+            total = (e.hour() * 60 + e.minute() - minutes) % 1440
+            lbl.setText(f"{total // 60:02d}:{total % 60:02d}에 정파해제준비 시작")
+
+        start_tw.valueChanged.connect(_update_prep_hint)
+        prep_combo.currentIndexChanged.connect(_update_prep_hint)
+        end_tw.valueChanged.connect(_update_exit_prep_hint)
+        exit_prep_combo.currentIndexChanged.connect(_update_exit_prep_hint)
+        _update_prep_hint()
+        _update_exit_prep_hint()
         # every_btn 저장은 _on_every_day_clicked 내부에서 처리
         for chk in day_chks:
             chk.stateChanged.connect(self._save_signoff_params)
@@ -2613,13 +2741,19 @@ class SettingsDialog(QDialog):
         for gid in (1, 2):
             stw = self._signoff_start_edit[gid]
             etw = self._signoff_end_edit[gid]
+            prep_combo = self._signoff_prep_min_combo.get(gid)
+            prep_minutes = prep_combo.currentData() if prep_combo is not None else 30
+            exit_prep_combo = self._signoff_exit_prep_min_combo.get(gid)
+            exit_prep_minutes = exit_prep_combo.currentData() if exit_prep_combo is not None else 0
             params[f"group{gid}"] = {
-                "name":       self._signoff_name_edit[gid].text() or f"Group{gid}",
-                "roi_rules":  list(self._signoff_roi_rules.get(gid, [])),
-                "start_time": f"{stw.hour():02d}:{stw.minute():02d}",
-                "end_time":   f"{etw.hour():02d}:{etw.minute():02d}",
-                "end_next_day": self._signoff_end_next_day_chk[gid].isChecked(),
-                "weekdays":   [
+                "name":              self._signoff_name_edit[gid].text() or f"Group{gid}",
+                "roi_rules":         list(self._signoff_roi_rules.get(gid, [])),
+                "start_time":        f"{stw.hour():02d}:{stw.minute():02d}",
+                "end_time":          f"{etw.hour():02d}:{etw.minute():02d}",
+                "prep_minutes":      prep_minutes,
+                "exit_prep_minutes": exit_prep_minutes,
+                "end_next_day":      self._signoff_end_next_day_chk[gid].isChecked(),
+                "weekdays":          [
                     d for d, chk in enumerate(self._signoff_day_chks[gid])
                     if chk.isChecked()
                 ],
@@ -2670,6 +2804,30 @@ class SettingsDialog(QDialog):
             _block(self._signoff_end_next_day_chk[gid],
                    end_next_day,
                    self._signoff_end_next_day_chk[gid].setChecked)
+
+            # prep_minutes 콤보박스 반영
+            prep_combo = self._signoff_prep_min_combo.get(gid)
+            if prep_combo is not None:
+                raw_prep = int(grp.get("prep_minutes", 30))
+                prep_combo.blockSignals(True)
+                idx = prep_combo.findData(raw_prep)
+                if idx >= 0:
+                    prep_combo.setCurrentIndex(idx)
+                else:
+                    prep_combo.setCurrentIndex(1)  # 기본값: 30분 전
+                prep_combo.blockSignals(False)
+
+            # exit_prep_minutes 콤보박스 반영
+            exit_prep_combo = self._signoff_exit_prep_min_combo.get(gid)
+            if exit_prep_combo is not None:
+                raw_exit_prep = int(grp.get("exit_prep_minutes", 0))
+                exit_prep_combo.blockSignals(True)
+                exit_idx = exit_prep_combo.findData(raw_exit_prep)
+                if exit_idx >= 0:
+                    exit_prep_combo.setCurrentIndex(exit_idx)
+                else:
+                    exit_prep_combo.setCurrentIndex(0)  # 기본값: 사용 안 함
+                exit_prep_combo.blockSignals(False)
 
             weekdays = set(grp.get("weekdays", [0, 1, 2, 3, 4, 5, 6]))
             every_day = (len(weekdays) == 7)

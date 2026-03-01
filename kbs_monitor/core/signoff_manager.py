@@ -158,6 +158,7 @@ class SignoffManager(QObject):
         self._signoff_entered_at: Dict[int, Optional[float]] = {}    # SIGNOFF 진입 시각
         self._preparation_entered_at: Dict[int, Optional[float]] = {}  # PREPARATION 진입 시각
         self._manual_override: Dict[int, bool] = {}  # 수동 상태 오버라이드 여부
+        self._exit_released: Dict[int, bool] = {}    # 정파해제준비로 조기 해제 후 자동 재진입 차단 플래그
 
         # 최신 감지 결과 캐시
         self._latest_video: Dict[str, bool] = {}   # label → still 감지 여부
@@ -175,6 +176,7 @@ class SignoffManager(QObject):
     def set_group(self, group: SignoffGroup):
         """그룹 정보 설정. 기존 상태 유지(IDLE에서만 초기화)."""
         gid = group.group_id
+        old_group = self._groups.get(gid)
         self._groups[gid] = group
         if gid not in self._states:
             self._states[gid] = SignoffState.IDLE
@@ -183,6 +185,44 @@ class SignoffManager(QObject):
             self._signoff_entered_at[gid] = None
             self._preparation_entered_at[gid] = None
             self._manual_override[gid] = False
+            self._exit_released[gid] = False
+        elif old_group is not None:
+            schedule_changed = (
+                old_group.start_time != group.start_time
+                or old_group.end_time != group.end_time
+                or set(old_group.weekdays) != set(group.weekdays)
+                or old_group.every_day != group.every_day
+                or old_group.prep_minutes != group.prep_minutes
+                or old_group.exit_prep_minutes != group.exit_prep_minutes
+                or old_group.end_next_day != group.end_next_day
+            )
+            if schedule_changed:
+                # 조기 해제 후 자동 재진입 차단 플래그 리셋
+                self._exit_released[gid] = False
+
+                # 수동 오버라이드가 아닌 경우, 새 스케줄 기준으로 현재 상태 재검사
+                if not self._manual_override.get(gid, False):
+                    now = datetime.datetime.now()
+                    weekday = now.weekday()
+                    current_time = now.strftime("%H:%M")
+                    current_state = self._states.get(gid, SignoffState.IDLE)
+                    in_prep_window = self._is_in_prep_window(group, current_time, weekday)
+                    in_signoff_window = self._is_in_signoff_window(group, current_time, weekday)
+
+                    if current_state == SignoffState.SIGNOFF:
+                        if not in_prep_window:
+                            # 정파 시간창 완전히 벗어남 → IDLE
+                            self._signoff_entered_at[gid] = None
+                            self._transition_to(gid, SignoffState.IDLE)
+                        elif not in_signoff_window:
+                            # 정파준비 구간이지만 정파 시간 미도달 → PREPARATION으로 다운그레이드
+                            self._signoff_entered_at[gid] = None
+                            self._transition_to(gid, SignoffState.PREPARATION)
+                    elif current_state == SignoffState.PREPARATION:
+                        if not in_prep_window:
+                            # 정파준비 시간창 벗어남 → IDLE
+                            self._reset_enter_timers(gid)
+                            self._transition_to(gid, SignoffState.IDLE)
 
     def get_state(self, group_id: int) -> SignoffState:
         return self._states.get(group_id, SignoffState.IDLE)
@@ -417,7 +457,11 @@ class SignoffManager(QObject):
 
             if current_state == SignoffState.IDLE:
                 if self._auto_preparation:
-                    if in_signoff_window:
+                    # 정파해제준비로 조기 해제된 경우: end_time(prep_window 종료)까지 자동 재진입 차단
+                    if self._exit_released.get(gid, False):
+                        if not in_prep_window:
+                            self._exit_released[gid] = False  # 시간창 완전히 벗어남 → 락 해제
+                    elif in_signoff_window:
                         # 이미 정파 시간 내 → prep_minutes 상관없이 바로 SIGNOFF
                         self._transition_to(gid, SignoffState.SIGNOFF)
                     elif in_prep_window:
@@ -438,7 +482,7 @@ class SignoffManager(QObject):
                     self._tick_preparation(gid, group)
 
             elif current_state == SignoffState.SIGNOFF:
-                if not in_signoff_window:
+                if not in_prep_window:
                     # end_time 도달 → IDLE로 전환
                     self._signoff_entered_at[gid] = None
                     self._manual_override[gid] = False
@@ -503,8 +547,23 @@ class SignoffManager(QObject):
 
     def _is_in_prep_window(self, group: SignoffGroup,
                             current_time: str, weekday: int) -> bool:
-        """현재 시각이 정파준비(prep_start ~ end_time) 범위 내인지 판단."""
+        """현재 시각이 정파준비(prep_start ~ end_time) 범위 내인지 판단.
+        prep_start가 end_time보다 클 때(자정을 넘기는 prep 구간)는
+        group.end_next_day와 무관하게 날짜 넘김 로직으로 처리한다."""
         prep_start = self._calc_prep_start_str(group)
+        # prep_start > end_time이면 prep 구간 자체가 자정을 넘김
+        if prep_start > group.end_time:
+            if current_time >= prep_start:
+                if not group.every_day and weekday not in group.weekdays:
+                    return False
+                return True
+            elif current_time < group.end_time:
+                prev_weekday = (weekday - 1) % 7
+                if not group.every_day and prev_weekday not in group.weekdays:
+                    return False
+                return True
+            else:
+                return False
         return self._is_in_time_range(
             group, current_time, weekday,
             prep_start, group.end_time
@@ -549,6 +608,7 @@ class SignoffManager(QObject):
         if exit_triggered:
             self._signoff_entered_at[gid] = None
             self._manual_override[gid] = False
+            self._exit_released[gid] = True  # 조기 해제 후 자동 재진입 차단
             self._transition_to(gid, SignoffState.IDLE)
 
     def _is_in_time_range(self, group: SignoffGroup,

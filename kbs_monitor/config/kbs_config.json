@@ -2,10 +2,10 @@
   "port": 1,
   "detection": {
     "black_threshold": 10,
-    "black_duration": 10,
+    "black_duration": 3,
     "black_alarm_duration": 10,
     "still_threshold": 2,
-    "still_duration": 60,
+    "still_duration": 5,
     "still_alarm_duration": 10,
     "audio_hsv_h_min": 40,
     "audio_hsv_h_max": 80,
@@ -21,7 +21,7 @@
     "embedded_silence_duration": 20,
     "embedded_alarm_duration": 10,
     "audio_tone_std_threshold": 3,
-    "audio_tone_duration": 60,
+    "audio_tone_duration": 10,
     "audio_tone_min_level": 5
   },
   "alarm": {
@@ -91,7 +91,7 @@
     "roi_visible": true
   },
   "signoff": {
-    "auto_preparation": false,
+    "auto_preparation": true,
     "prep_alarm_sound": "resources\\sounds\\sign_off.wav",
     "enter_alarm_sound": "resources\\sounds\\sign_off.wav",
     "release_alarm_sound": "resources\\sounds\\sign_off.wav",
@@ -103,22 +103,32 @@
           "audio_label": "A1"
         }
       ],
-      "start_time": "22:00",
-      "end_time": "05:00",
-      "prep_minutes": 150,
+      "start_time": "02:21",
+      "end_time": "05:25",
+      "prep_minutes": 30,
       "exit_prep_minutes": 30,
-      "end_next_day": true,
+      "end_next_day": false,
       "weekdays": [
         0,
+        1,
+        2,
+        3,
+        4,
+        5,
         6
       ]
     },
     "group2": {
       "name": "2TV",
-      "roi_rules": [],
-      "start_time": "02:00",
-      "end_time": "05:00",
-      "prep_minutes": 90,
+      "roi_rules": [
+        {
+          "video_label": "V1",
+          "audio_label": "A1"
+        }
+      ],
+      "start_time": "01:10",
+      "end_time": "01:25",
+      "prep_minutes": 30,
       "exit_prep_minutes": 30,
       "end_next_day": false,
       "weekdays": [

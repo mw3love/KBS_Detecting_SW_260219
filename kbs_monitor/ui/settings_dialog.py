@@ -623,6 +623,7 @@ class SettingsDialog(QDialog):
         self._signoff_prep_min_combo: dict = {}       # {gid: QComboBox} 정파준비 몇 분전 설정
         self._signoff_exit_prep_min_combo: dict = {}  # {gid: QComboBox} 정파해제준비 몇 분전 설정
         self._signoff_auto_prep_btn = None            # QCheckBox: 자동 정파 준비 활성화
+        self._signoff_hint_fns: dict = {}             # {gid: (prep_hint_fn, exit_prep_hint_fn)}
         self._setup_ui()
         self._load_config(config)
 
@@ -2683,6 +2684,7 @@ class SettingsDialog(QDialog):
         exit_prep_combo.currentIndexChanged.connect(_update_exit_prep_hint)
         _update_prep_hint()
         _update_exit_prep_hint()
+        self._signoff_hint_fns[gid] = (_update_prep_hint, _update_exit_prep_hint)
         # every_btn 저장은 _on_every_day_clicked 내부에서 처리
         for chk in day_chks:
             chk.stateChanged.connect(self._save_signoff_params)
@@ -2858,6 +2860,11 @@ class SettingsDialog(QDialog):
                             })
             self._signoff_roi_rules[gid] = roi_rules
             self._update_signoff_roi_summary(gid)
+
+            # 힌트 레이블 갱신 (blockSignals로 인해 자동 갱신이 안 되므로 수동 호출)
+            for fn in self._signoff_hint_fns.get(gid, ()):
+                if fn:
+                    fn()
 
     def _browse_signoff_sound(self, key: str):
         """정파 알림음 WAV 파일 선택."""

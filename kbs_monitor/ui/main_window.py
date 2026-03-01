@@ -106,6 +106,10 @@ class MainWindow(QMainWindow):
         if not roi_visible:
             self._video_widget.set_show_rois(False)
 
+        # 정파 버튼 활성화 상태 복원 (자동 정파 비활성 시 버튼 비활성화)
+        auto_prep = self._config.get("signoff", {}).get("auto_preparation", True)
+        self._top_bar.set_signoff_buttons_enabled(auto_prep)
+
         # 프로그램 시작 직후 SignoffManager 초기 상태 전환에서는 소리 억제
         self._startup_complete = False
         QTimer.singleShot(3000, lambda: setattr(self, '_startup_complete', True))
@@ -229,7 +233,7 @@ class MainWindow(QMainWindow):
         # ── 비디오 ROI 블랙/스틸 감지 ──
         # (정파 still 결과도 여기서 추출하므로 SignoffManager 업데이트보다 먼저 실행)
         need_still_for_signoff = bool(video_rois and any(
-            bool(group.enter_roi.get("video_label") or group.exit_roi.get("video_label"))
+            bool(group.enter_roi.get("video_label"))
             for group in self._signoff_manager.get_groups().values()
         ))
         video_results = {}
@@ -238,13 +242,23 @@ class MainWindow(QMainWindow):
                            or need_still_for_signoff):
             video_results = self._detector.detect_frame(self._latest_frame, video_rois)
 
-        # ── SignoffManager 업데이트 (스틸 감지 결과 전달) ──
-        still_results = {
-            label: state.get("still", False)
-            for label, state in video_results.items()
-        }
+        # ── SignoffManager 업데이트 (스틸/톤 감지 결과 전달) ──
+        # still_detection_enabled=False 시 detect_frame이 is_still=False 고정 반환 →
+        # _latest_video[label]=False 가 되어 정파해제준비 구간 즉시 정파해제되는 버그 방지.
+        # 스틸 감지 비활성 시 빈 딕셔너리를 전달하면 SignoffManager는 기본값(True=스틸 상태)을
+        # 유지하여 정파해제를 발생시키지 않는다.
+        if self._detector.still_detection_enabled:
+            still_results = {
+                label: state.get("still", False)
+                for label, state in video_results.items()
+            }
+        else:
+            still_results = {}
+
+        # audio_detect_enabled=False 시 _latest_tone이 이전 캐시값으로 남아
+        # 정파해제준비 구간에서 오동작할 수 있으므로 빈 딕셔너리 전달.
         self._signoff_manager.update_detection(
-            audio_results=audio_results,
+            audio_results=audio_results if self._audio_detect_enabled else {},
             still_results=still_results,
         )
 

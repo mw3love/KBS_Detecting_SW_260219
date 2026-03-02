@@ -404,6 +404,7 @@ class TopBar(QWidget):
         self._lbl_signoff_time: dict[int, QLabel] = {}
         for gid in (1, 2):
             grp_widget = QWidget()
+            grp_widget.setFixedWidth(175)
             grp_vbox = QVBoxLayout(grp_widget)
             grp_vbox.setContentsMargins(2, 0, 2, 0)
             grp_vbox.setSpacing(2)

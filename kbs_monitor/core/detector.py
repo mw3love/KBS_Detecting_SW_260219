@@ -138,15 +138,6 @@ class Detector:
         self._audio_level_states: Dict[str, DetectionState] = {}
         self._audio_ratio_buffer: Dict[str, deque] = {}  # 이동 평균 버퍼 (최근 5프레임)
 
-        # 정파용 오디오 톤 감지 설정 (1kHz 일정 톤 = ratio 변화 없음)
-        self.audio_tone_std_threshold = 3.0   # ratio 표준편차 임계값(%) — 이 값 이하면 톤으로 판단
-        self.audio_tone_duration = 60.0       # 톤 상태 지속 시간(초) — 이 시간 이상 지속 시 tone_alerting=True
-        self.audio_tone_min_level = 5.0       # 최소 레벨(%) — 이 값 미만이면 무음으로 판단하여 톤 제외
-
-        # 정파용 오디오 톤 감지 상태
-        self._tone_ratio_buffer: Dict[str, deque] = {}   # 표준편차 계산용 버퍼 (약 6초분, maxlen=30)
-        self._tone_states: Dict[str, DetectionState] = {}
-
         # 임베디드 오디오 상태
         self.embedded_alerting = False
         self._embedded_alert_start: Optional[float] = None
@@ -187,14 +178,6 @@ class Detector:
         for label in list(self._audio_level_states.keys()):
             if label not in labels:
                 del self._audio_level_states[label]
-        # 정파 톤 감지 버퍼/상태 정리
-        for label in list(self._tone_ratio_buffer.keys()):
-            if label not in labels:
-                del self._tone_ratio_buffer[label]
-        for label in list(self._tone_states.keys()):
-            if label not in labels:
-                del self._tone_states[label]
-
         for roi in rois:
             if roi.label not in self._black_states:
                 self._black_states[roi.label] = DetectionState(roi)
@@ -282,7 +265,8 @@ class Detector:
     def detect_audio_roi(self, frame: np.ndarray, audio_rois: List[ROI]) -> Dict[str, dict]:
         """
         오디오 ROI에서 HSV 기반 레벨미터 색상 감지.
-        반환값: {label: {"active": bool, "ratio": float, "alerting": bool, "duration": float}}
+        반환값: {label: {"active": bool, "ratio": float, "alerting": bool, "duration": float,
+                         "resolved": bool, "last_duration": float}}
         레벨미터가 일정 시간 비활성(색 없음)이면 알림 발생.
         전체 프레임 HSV 변환 대신 ROI별 crop 후 변환하여 처리 픽셀 수 대폭 감소.
         """
@@ -330,26 +314,6 @@ class Detector:
 
             alerting = state.update(is_abnormal, self.audio_level_duration, self.audio_level_recovery_seconds)
 
-            # 정파용 톤 감지: ratio 변화량(표준편차) 기반 — 1kHz 일정 톤은 ratio가 거의 변하지 않음
-            if label not in self._tone_ratio_buffer:
-                self._tone_ratio_buffer[label] = deque(maxlen=30)
-            self._tone_ratio_buffer[label].append(avg_ratio)
-
-            buf = list(self._tone_ratio_buffer[label])
-            std_val = 0.0
-            if len(buf) < 10 or avg_ratio < self.audio_tone_min_level:
-                # 버퍼 미충족 또는 무음 → 톤 아님
-                is_tone = False
-            else:
-                std_val = float(np.std(buf))
-                is_tone = std_val <= self.audio_tone_std_threshold
-
-            if label not in self._tone_states:
-                self._tone_states[label] = DetectionState(roi)
-            tone_state = self._tone_states[label]
-            tone_state.roi = roi
-            tone_alerting = tone_state.update(is_tone, self.audio_tone_duration, 0.0)
-
             results[label] = {
                 "active": is_active,
                 "ratio": avg_ratio,
@@ -357,10 +321,6 @@ class Detector:
                 "duration": state.alert_duration,
                 "resolved": state.just_resolved,
                 "last_duration": state.last_alert_duration,
-                # 정파용 톤 감지 결과
-                "tone_active": is_tone,        # 현재 프레임 톤 상태 (bool)
-                "tone_alerting": tone_alerting, # 지속 시간 충족 후 확정 톤 (bool)
-                "tone_std": std_val,            # 디버그용 표준편차 값
             }
 
         return results

@@ -117,6 +117,11 @@ class _TimeWidget(QWidget):
         self._click_timer.timeout.connect(self._on_single_click_timeout)
         self._pending_part: '_TimePartWidget | None' = None
 
+        # MouseButtonPress 기반 더블클릭 직접 추적
+        # (팝업 메뉴 닫기 클릭이 첫 번째 클릭을 소비하는 문제 해결)
+        self._last_press_time: float = 0.0
+        self._last_press_obj: '_TimePartWidget | None' = None
+
     # ── 공개 인터페이스 ───────────────────────────────────────────────
 
     def hour(self) -> int:
@@ -146,17 +151,38 @@ class _TimeWidget(QWidget):
                         # 콜론 클릭 → 타이머 취소 후 바로 에디터
                         self._click_timer.stop()
                         self._pending_part = None
+                        self._last_press_time = 0.0
+                        self._last_press_obj = None
                         self._show_editor()
                     else:
-                        # 시 또는 분 싱글클릭 → 더블클릭 대기 후 메뉴 표시
-                        self._pending_part = obj  # _h 또는 _m
-                        self._click_timer.start(QApplication.doubleClickInterval())
+                        # Press 기반 더블클릭 직접 감지
+                        # (팝업 메뉴 닫기 클릭이 Qt의 DblClick 이벤트를 소비하는 문제 방지)
+                        now = time.monotonic()
+                        dbl_sec = QApplication.doubleClickInterval() / 1000.0
+                        is_dblclick = (
+                            now - self._last_press_time < dbl_sec
+                            and self._last_press_obj is obj
+                        )
+                        self._last_press_time = now
+                        self._last_press_obj = obj
+
+                        if is_dblclick:
+                            # 더블클릭 확정 → 에디터 표시
+                            self._click_timer.stop()
+                            self._pending_part = None
+                            self._last_press_time = 0.0  # 연속 더블클릭 방지
+                            self._show_editor()
+                        else:
+                            # 싱글클릭 → 더블클릭 대기 후 메뉴 표시
+                            self._pending_part = obj
+                            self._click_timer.start(QApplication.doubleClickInterval())
                     return True
             elif t == QEvent.Type.MouseButtonDblClick:
                 if event.button() == Qt.LeftButton:
-                    # 더블클릭 → 타이머 취소 후 수동 입력 에디터
+                    # MouseButtonPress에서 이미 처리됐을 수 있으나 안전장치로 유지
                     self._click_timer.stop()
                     self._pending_part = None
+                    self._last_press_time = 0.0
                     self._show_editor()
                     return True
 
@@ -470,29 +496,21 @@ class _ROITable(QTableWidget):
 class _SignoffRoiDialog(QDialog):
     """
     정파 감지영역 선택 다이얼로그.
-    테이블 형식으로 비디오/오디오 감지영역을 조합하여 규칙을 설정한다.
-
-    열 구성:
-      1열: 비디오 감지영역 (ComboBox) — "V1 (매체명)" 형식 표시
-      2열: 오디오 감지영역 (ComboBox) — "A1 (매체명)" 형식 표시
+    비디오 감지영역을 선택하여 스틸 기반 정파 진입/해제 트리거 ROI를 설정한다.
     """
 
-    def __init__(self, rules: list,
-                 video_rois: list, audio_rois: list, parent=None):
+    def __init__(self, rules: list, video_rois: list, parent=None):
         """
         video_rois: [(label, media_name), ...] 형식
-        audio_rois: [(label, media_name), ...] 형식
         """
         super().__init__(parent)
         self.setWindowTitle("감지영역 선택")
         self.setModal(True)
-        self.setMinimumWidth(580)
-        self.setMinimumHeight(300)
+        self.setMinimumWidth(400)
+        self.setMinimumHeight(260)
 
         self._rules = [dict(r) for r in rules]
-        # (label, media_name) 튜플 목록 저장
         self._video_rois_info: list = list(video_rois)
-        self._audio_rois_info: list = list(audio_rois)
 
         self._setup_ui()
         self._populate_table()
@@ -503,10 +521,9 @@ class _SignoffRoiDialog(QDialog):
 
         # 테이블
         self._table = QTableWidget()
-        self._table.setColumnCount(2)
-        self._table.setHorizontalHeaderLabels(["비디오 감지영역", "오디오 감지영역"])
+        self._table.setColumnCount(1)
+        self._table.setHorizontalHeaderLabels(["비디오 감지영역"])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         layout.addWidget(self._table)
@@ -525,16 +542,13 @@ class _SignoffRoiDialog(QDialog):
         ok_row.addWidget(btn_cancel)
         layout.addLayout(ok_row)
 
-    def _make_row_widgets(self, video_label="", audio_label=""):
-        """새 행을 테이블에 추가하고 ComboBox 위젯을 배치한다.
-        ComboBox 표시: "V1 (매체명)" 형식, userData에 순수 label 저장.
-        """
+    def _make_row_widgets(self, video_label=""):
+        """새 행을 테이블에 추가하고 ComboBox 위젯을 배치한다."""
         row = self._table.rowCount()
         self._table.insertRow(row)
 
-        # 비디오 감지영역 콤보박스
         v_combo = QComboBox()
-        v_combo.addItem("", userData="")
+        v_combo.addItem("(선택 없음)", userData="")
         for lbl, media in self._video_rois_info:
             display = f"{lbl}  ({media})" if media else lbl
             v_combo.addItem(display, userData=lbl)
@@ -543,41 +557,22 @@ class _SignoffRoiDialog(QDialog):
             v_combo.setCurrentIndex(idx)
         self._table.setCellWidget(row, 0, v_combo)
 
-        # 오디오 감지영역 콤보박스
-        a_combo = QComboBox()
-        a_combo.addItem("", userData="")
-        for lbl, media in self._audio_rois_info:
-            display = f"{lbl}  ({media})" if media else lbl
-            a_combo.addItem(display, userData=lbl)
-        idx = a_combo.findData(audio_label)
-        if idx >= 0:
-            a_combo.setCurrentIndex(idx)
-        self._table.setCellWidget(row, 1, a_combo)
-
     def _populate_table(self):
         for rule in self._rules:
-            self._make_row_widgets(
-                rule.get("video_label", ""),
-                rule.get("audio_label", ""),
-            )
+            self._make_row_widgets(rule.get("video_label", ""))
         if self._table.rowCount() == 0:
-            self._make_row_widgets()  # 빈 행 하나
+            self._make_row_widgets()
 
     def get_rules(self) -> list:
-        """현재 테이블의 유효한 규칙 목록 반환. userData(순수 label)를 저장한다."""
+        """현재 테이블의 유효한 규칙 목록 반환."""
         rules = []
         for row in range(self._table.rowCount()):
             v_w = self._table.cellWidget(row, 0)
-            a_w = self._table.cellWidget(row, 1)
-            if v_w is None or a_w is None:
+            if v_w is None:
                 continue
             v_label = v_w.currentData() or ""
-            a_label = a_w.currentData() or ""
-            if v_label or a_label:  # 하나라도 선택되어야 의미 있음
-                rules.append({
-                    "video_label": v_label,
-                    "audio_label": a_label,
-                })
+            if v_label:
+                rules.append({"video_label": v_label})
         return rules
 
 
@@ -620,8 +615,9 @@ class SettingsDialog(QDialog):
         self._signoff_day_chks: dict = {}        # {gid: list[QCheckBox]}
         self._signoff_roi_rules: dict = {}       # {gid: list[dict]}  감지영역 규칙
         self._signoff_roi_summary: dict = {}     # {gid: QLabel}  요약 라벨
-        self._signoff_prep_min_combo: dict = {}       # {gid: QComboBox} 정파준비 몇 분전 설정
-        self._signoff_exit_prep_min_combo: dict = {}  # {gid: QComboBox} 정파해제준비 몇 분전 설정
+        self._signoff_prep_min_combo: dict = {}        # {gid: QComboBox} 정파준비 몇 분전 설정
+        self._signoff_exit_prep_min_combo: dict = {}   # {gid: QComboBox} 정파해제준비 몇 분전 설정
+        self._signoff_exit_trigger_combo: dict = {}    # {gid: QComboBox} 정파해제 트리거 시간(초)
         self._signoff_auto_prep_btn = None            # QCheckBox: 자동 정파 준비 활성화
         self._signoff_hint_fns: dict = {}             # {gid: (prep_hint_fn, exit_prep_hint_fn)}
         self._setup_ui()
@@ -1159,45 +1155,6 @@ class SettingsDialog(QDialog):
 
         audio_layout.addLayout(grid_a2)
         layout.addWidget(group_audio)
-
-        # ── 정파용 오디오 톤 감지 그룹 ──
-        group_tone = QGroupBox("정파용 오디오 톤 감지 설정 (1kHz 일정 톤 감지)")
-        grid_tone = QGridLayout(group_tone)
-        grid_tone.setHorizontalSpacing(12)
-        grid_tone.setVerticalSpacing(8)
-        grid_tone.setColumnStretch(2, 1)
-
-        lbl_tone_std = QLabel("▪  표준편차 임계값(%):")
-        lbl_tone_std.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_audio_tone_std = _NumEdit(3, 1, 50)
-        self._edit_audio_tone_std.editingFinished.connect(self._save_detection_params)
-        desc_tone_std = QLabel("ratio 표준편차가 이 값 이하면 일정 톤으로 판단  (기본값: 3%)")
-        desc_tone_std.setObjectName("paramDescLabel")
-        grid_tone.addWidget(lbl_tone_std,             0, 0)
-        grid_tone.addWidget(self._edit_audio_tone_std, 0, 1)
-        grid_tone.addWidget(desc_tone_std,             0, 2)
-
-        lbl_tone_dur = QLabel("▪  몇 초 이상시 트리거 발생(초):")
-        lbl_tone_dur.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_audio_tone_duration = _NumEdit(60, 1, 120)
-        self._edit_audio_tone_duration.editingFinished.connect(self._save_detection_params)
-        desc_tone_dur = QLabel("톤 상태가 이 시간 이상 지속 시 정파 진입 트리거  (기본값: 60초)")
-        desc_tone_dur.setObjectName("paramDescLabel")
-        grid_tone.addWidget(lbl_tone_dur,                  1, 0)
-        grid_tone.addWidget(self._edit_audio_tone_duration, 1, 1)
-        grid_tone.addWidget(desc_tone_dur,                  1, 2)
-
-        lbl_tone_min = QLabel("▪  최소 레벨(%):")
-        lbl_tone_min.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_audio_tone_min_level = _NumEdit(5, 0, 50)
-        self._edit_audio_tone_min_level.editingFinished.connect(self._save_detection_params)
-        desc_tone_min = QLabel("ratio가 이 값 미만이면 무음으로 판단하여 톤 제외  (기본값: 5%)")
-        desc_tone_min.setObjectName("paramDescLabel")
-        grid_tone.addWidget(lbl_tone_min,                   2, 0)
-        grid_tone.addWidget(self._edit_audio_tone_min_level, 2, 1)
-        grid_tone.addWidget(desc_tone_min,                   2, 2)
-
-        layout.addWidget(group_tone)
 
         # ── 임베디드 오디오 감지 그룹 ──
         group_emb = QGroupBox("임베디드 오디오 감지 (무음 감지)")
@@ -1849,11 +1806,6 @@ class SettingsDialog(QDialog):
         self._edit_audio_level_alarm_duration.setText(str(int(det.get("audio_level_alarm_duration", 10))))
         self._edit_audio_level_recovery_seconds.setText(str(int(det.get("audio_level_recovery_seconds", 2))))
 
-        # 정파용 오디오 톤 감지 설정
-        self._edit_audio_tone_std.setText(str(int(det.get("audio_tone_std_threshold", 3))))
-        self._edit_audio_tone_duration.setText(str(int(det.get("audio_tone_duration", 60))))
-        self._edit_audio_tone_min_level.setText(str(int(det.get("audio_tone_min_level", 5))))
-
         # 임베디드 오디오 설정
         self._edit_embedded_silence_threshold.setText(str(int(det.get("embedded_silence_threshold", -50))))
         self._edit_embedded_silence_duration.setText(str(int(det.get("embedded_silence_duration", 20))))
@@ -1927,10 +1879,6 @@ class SettingsDialog(QDialog):
             "audio_level_duration":             self._edit_audio_level_duration.get_value(),
             "audio_level_alarm_duration":       self._edit_audio_level_alarm_duration.get_value(),
             "audio_level_recovery_seconds":     self._edit_audio_level_recovery_seconds.get_value(),
-            # 정파용 오디오 톤 감지
-            "audio_tone_std_threshold": self._edit_audio_tone_std.get_value(),
-            "audio_tone_duration":      self._edit_audio_tone_duration.get_value(),
-            "audio_tone_min_level":     self._edit_audio_tone_min_level.get_value(),
             # 임베디드 오디오
             "embedded_silence_threshold":  self._edit_embedded_silence_threshold.get_value(),
             "embedded_silence_duration":   self._edit_embedded_silence_duration.get_value(),
@@ -1977,6 +1925,7 @@ class SettingsDialog(QDialog):
         try:
             if col == 1:
                 roi.media_name = item.text()
+                self._refresh_signoff_roi_tags()
             elif col == 2:
                 roi.x = max(0, int(item.text()))
             elif col == 3:
@@ -2408,25 +2357,27 @@ class SettingsDialog(QDialog):
             "<div style='line-height: 2.0;'>"
             "<span style='font-size: 13pt; font-weight: bold;'>"
             "1. 정파준비 구간 (초록색)</span><br>"
-            "• 「정파준비 몇 분전」에 설정한 분 전부터 정파준비(초록색)로 자동 전환<br>"
+            "• 「몇 분전 정파준비 활성화」에서 설정한 시간을 기준으로 정파준비(초록색)로 자동 전환<br>"
             "• 예) 정파모드 시작 00:30, 30분 전 설정 → 00:00에 정파준비 시작<br>"
-            "• 「정파진입 감지영역」에 설정된 ROI에서 스틸 또는 1kHz 톤 감지 기준 충족 시 정파모드로 조기 전환 [OR 방식]<br>"
-            "• 「몇 분전」을 0으로 설정하면 정파준비 단계 없이 시작 시각에 바로 정파모드로 전환<br>"
+            "• 「정파 감지영역」에 설정된 비디오 감지영역에서 스틸이 지속되면 정파모드로 조기 전환<br>"
+            "• 「몇 분전」을 「사용안함」으로 설정하면 정파준비 단계 없이 시작 시각에 바로 정파모드로 전환<br>"
             "<br>"
             "<span style='font-size: 13pt; font-weight: bold;'>"
             "2. 정파모드 (빨간색)</span><br>"
             "• 「정파모드 시작」 시각이 되면 자동으로 정파모드(빨간색)로 전환<br>"
+            "• 정파모드 중에는 해당 감지영역의 블랙/스틸 알림이 억제<br>"
             "• 「종료」 시각이 되면 자동으로 정파 해제<br>"
-            "• 「정파해제준비 몇 분전」 설정 시: 종료 N분 전부터 감지 조건이 사라지면 조기 해제 가능 [OR 방식]<br>"
+            "• 「몇 분전 정파해제준비 활성화」 설정 시:<br> " \
+            "   종료 N분 전, 감지영역이 더 이상 스틸이 아님을 감지하면 종료 시각 전이라도 자동 해제<br>"
             "<br>"
             "<span style='font-size: 13pt; font-weight: bold;'>"
             "3. 상단 정파 버튼 수동 조작</span><br>"
-            "• 클릭마다 비활성(회색) → 정파준비(초록) → 정파모드(빨강) → 비활성 순으로 전환<br>"
+            "• 클릭마다 비활성(회색) → 정파준비(초록) → 정파모드(빨강) → 비활성(회색) 순으로 전환<br>"
             "• 단, 정파 시간대 밖에서는 정파준비 → 비활성으로 직접 복귀 (정파모드 전환 불가)<br>"
             "<br>"
             "<span style='font-size: 13pt; font-weight: bold;'>"
             "4. Group1 / Group2</span><br>"
-            "• 두 그룹이 독립적으로 운영되어 서로 다른 채널·시간대를 동시에 관리 가능"
+            "• 두 그룹이 독립적으로 운영되어 서로 다른 채널과 시간대를 동시에 관리 가능"
             "</div>"
         )
         vbox.addWidget(lbl)
@@ -2544,7 +2495,7 @@ class SettingsDialog(QDialog):
             prep_combo.addItem(label_text, userData=val)
         prep_combo.setCurrentIndex(1)  # 기본값: 30분 전
         prep_combo.setToolTip("정파모드 시작 전 몇 분 전에 정파준비(초록색)로 전환할지 설정\n"
-                              "정파준비 구간에서 스틸/톤 감지로 정파모드 조기 전환 가능")
+                              "정파준비 구간에서 스틸이 지속되면 정파모드 조기 전환 가능")
         prep_row.addWidget(prep_combo)
         prep_time_lbl = QLabel("")
         prep_time_lbl.setObjectName("signoffTimeHintLabel")
@@ -2574,7 +2525,7 @@ class SettingsDialog(QDialog):
         exit_prep_combo.setCurrentIndex(0)  # 기본값: 사용 안 함
         exit_prep_combo.setToolTip(
             "정파 종료 전 몇 분 전부터 정파해제준비 구간을 활성화할지 설정\n"
-            "이 구간에서 스틸/톤 신호가 해제되면 종료 시각 전이라도 정파가 자동 해제됩니다"
+            "이 구간에서 스틸 신호가 해제되면 종료 시각 전이라도 정파가 자동 해제됩니다"
         )
         exit_prep_row.addWidget(exit_prep_combo)
         exit_prep_time_lbl = QLabel("")
@@ -2583,6 +2534,34 @@ class SettingsDialog(QDialog):
         exit_prep_row.addStretch()
         box_layout.addLayout(exit_prep_row)
         self._signoff_exit_prep_min_combo[gid] = exit_prep_combo
+
+        # ── 3-1) 정파해제 트리거 시간 행 ─────────────────────────────────
+        exit_trigger_row = QHBoxLayout()
+        exit_trigger_row.addWidget(QLabel("⑤ 몇 초 이상시 정파해제:"))
+
+        from PySide6.QtWidgets import QComboBox as _QComboBox3
+        exit_trigger_combo = _QComboBox3()
+        exit_trigger_combo.setFixedWidth(120)
+        exit_trigger_options = [
+            ("즉시", 0),
+            ("3초", 3),
+            ("5초 (기본)", 5),
+            ("10초", 10),
+            ("15초", 15),
+            ("30초", 30),
+        ]
+        for label_text, val in exit_trigger_options:
+            exit_trigger_combo.addItem(label_text, userData=val)
+        exit_trigger_combo.setCurrentIndex(2)  # 기본값: 5초
+        exit_trigger_combo.setToolTip(
+            "정파해제준비 구간에서 비-스틸 상태가 N초 이상 연속 지속되어야 정파가 해제됩니다.\n"
+            "순간적인 화면 변화에 의한 오동작을 방지합니다.\n"
+            "'즉시'로 설정하면 비-스틸 감지 즉시 해제됩니다."
+        )
+        exit_trigger_row.addWidget(exit_trigger_combo)
+        exit_trigger_row.addStretch()
+        box_layout.addLayout(exit_trigger_row)
+        self._signoff_exit_trigger_combo[gid] = exit_trigger_combo
 
         # ── 4) 요일 행 ──────────────────────────────────────────────────
         day_row = QHBoxLayout()
@@ -2623,12 +2602,10 @@ class SettingsDialog(QDialog):
         lbl_roi = QLabel("⑥ 정파 감지영역:")
         lbl_roi.setObjectName("signoffRowLabel")
         lbl_roi.setToolTip(
-            "정파 진입 및 해제를 감지할 영역을 선택합니다.\n\n"
-            "① 정파준비 → 정파:\n"
-            "   정파준비 상태에서 스틸 또는 톤신호가 감지되면 정파로 전환\n\n"
-            "② 정파 → 정파해제:\n"
-            "   정파해제준비 구간에서 스틸과 톤신호 중 하나라도\n"
-            "   감지되지 않으면 정파를 자동 해제"
+            "스틸 감지로 정파 진입/해제를 판단할 비디오 감지영역을 선택합니다.\n\n"
+            "• 정파준비 → 정파: 선택된 영역에서 스틸이 지속되면 정파로 조기 전환\n"
+            "• 정파 → 정파해제: 정파해제준비 구간에서 스틸이 해제 상태가\n"
+            "  '몇 초 이상시 정파해제' 시간 이상 지속되면 자동 해제"
         )
         roi_row.addWidget(lbl_roi)
         btn_roi = QPushButton("감지영역 선택")
@@ -2661,6 +2638,7 @@ class SettingsDialog(QDialog):
         end_next_day_chk.stateChanged.connect(self._save_signoff_params)
         prep_combo.currentIndexChanged.connect(self._save_signoff_params)
         exit_prep_combo.currentIndexChanged.connect(self._save_signoff_params)
+        exit_trigger_combo.currentIndexChanged.connect(self._save_signoff_params)
 
         def _update_prep_hint(*_, s=start_tw, c=prep_combo, lbl=prep_time_lbl):
             minutes = c.currentData()
@@ -2694,10 +2672,9 @@ class SettingsDialog(QDialog):
     def _open_signoff_roi_dialog(self, gid: int):
         """감지영역 선택 다이얼로그를 열고 결과를 저장한다."""
         video_rois = [(r.label, r.media_name) for r in self._roi_manager.video_rois]
-        audio_rois = [(r.label, r.media_name) for r in self._roi_manager.audio_rois]
         current_rules = self._signoff_roi_rules.get(gid, [])
 
-        dlg = _SignoffRoiDialog(current_rules, video_rois, audio_rois, parent=self)
+        dlg = _SignoffRoiDialog(current_rules, video_rois, parent=self)
         if dlg.exec() == QDialog.Accepted:
             self._signoff_roi_rules[gid] = dlg.get_rules()
             self._update_signoff_roi_summary(gid)
@@ -2709,20 +2686,19 @@ class SettingsDialog(QDialog):
         if lbl is None:
             return
         rules = self._signoff_roi_rules.get(gid, [])
-        if not rules:
-            lbl.setText("선택 없음")
-            return
+        label_to_media = {r.label: r.media_name for r in self._roi_manager.video_rois}
         parts = []
-        for rule in rules:
-            v = rule.get("video_label", "")
-            a = rule.get("audio_label", "")
-            if v and a:
-                parts.append(f"{v} / {a}")
-            elif v:
-                parts.append(v)
-            elif a:
-                parts.append(a)
-        lbl.setText(" | ".join(parts) if parts else "선택 없음")
+        for r in rules:
+            v_label = r.get("video_label", "")
+            if v_label:
+                media = label_to_media.get(v_label, "")
+                parts.append(f"{v_label}  ({media})" if media else v_label)
+        if parts:
+            lbl.setText(" | ".join(parts))
+            lbl.setStyleSheet("")
+        else:
+            lbl.setText("선택 없음")
+            lbl.setStyleSheet("color: red;")
 
     def _refresh_signoff_roi_tags(self):
         """ROI 목록 변경 시 정파설정 탭의 요약 라벨 갱신.
@@ -2747,6 +2723,8 @@ class SettingsDialog(QDialog):
             prep_minutes = prep_combo.currentData() if prep_combo is not None else 30
             exit_prep_combo = self._signoff_exit_prep_min_combo.get(gid)
             exit_prep_minutes = exit_prep_combo.currentData() if exit_prep_combo is not None else 0
+            exit_trigger_combo = self._signoff_exit_trigger_combo.get(gid)
+            exit_trigger_sec = exit_trigger_combo.currentData() if exit_trigger_combo is not None else 5
             params[f"group{gid}"] = {
                 "name":              self._signoff_name_edit[gid].text() or f"Group{gid}",
                 "roi_rules":         list(self._signoff_roi_rules.get(gid, [])),
@@ -2754,6 +2732,7 @@ class SettingsDialog(QDialog):
                 "end_time":          f"{etw.hour():02d}:{etw.minute():02d}",
                 "prep_minutes":      prep_minutes,
                 "exit_prep_minutes": exit_prep_minutes,
+                "exit_trigger_sec":  exit_trigger_sec,
                 "end_next_day":      self._signoff_end_next_day_chk[gid].isChecked(),
                 "weekdays":          [
                     d for d, chk in enumerate(self._signoff_day_chks[gid])
@@ -2830,6 +2809,18 @@ class SettingsDialog(QDialog):
                 else:
                     exit_prep_combo.setCurrentIndex(0)  # 기본값: 사용 안 함
                 exit_prep_combo.blockSignals(False)
+
+            # exit_trigger_sec 콤보박스 반영
+            exit_trigger_combo = self._signoff_exit_trigger_combo.get(gid)
+            if exit_trigger_combo is not None:
+                raw_exit_trigger = int(grp.get("exit_trigger_sec", 5))
+                exit_trigger_combo.blockSignals(True)
+                et_idx = exit_trigger_combo.findData(raw_exit_trigger)
+                if et_idx >= 0:
+                    exit_trigger_combo.setCurrentIndex(et_idx)
+                else:
+                    exit_trigger_combo.setCurrentIndex(2)  # 기본값: 5초
+                exit_trigger_combo.blockSignals(False)
 
             weekdays = set(grp.get("weekdays", [0, 1, 2, 3, 4, 5, 6]))
             every_day = (len(weekdays) == 7)

@@ -8,7 +8,7 @@ import cv2
 from itertools import chain
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap, QImage
+from PySide6.QtGui import QPixmap, QImage, QPainter, QFont, QColor
 from typing import List, Dict, Optional
 from core.roi_manager import ROI
 
@@ -104,19 +104,21 @@ class VideoWidget(QWidget):
             self._alert_labels.get(r.label, False)
             for r in chain(self._video_rois, self._audio_rois)
         )
+        text_overlays = []
         if self._show_rois or has_alerts:
-            self._draw_rois(frame, w, h)
+            text_overlays = self._draw_rois(frame, w, h)
 
-        self._display_numpy(frame)
+        self._display_numpy(frame, text_overlays)
 
-    def _draw_rois(self, frame: np.ndarray, fw: int, fh: int):
-        """감지영역을 프레임 위에 그리기
+    def _draw_rois(self, frame: np.ndarray, fw: int, fh: int) -> list:
+        """감지영역을 프레임 위에 그리기. 반환: [(fx, fy, text), ...] (QPainter용 텍스트 목록)
         비디오 ROI: 빨간색, 오디오 ROI: 주황색 (정상) / 빨간색 채우기 (알림)
         show_rois=False 시에는 알림 중인 ROI만 그림
         """
         all_rois = ([("video", r) for r in self._video_rois] +
                     [("audio", r) for r in self._audio_rois])
 
+        text_overlays = []
         for roi_type, roi in all_rois:
             alerting = self._alert_labels.get(roi.label, False)
 
@@ -147,21 +149,14 @@ class VideoWidget(QWidget):
             else:
                 cv2.rectangle(frame, (x1, y1), (x2, y2), normal_color, 2)
 
-            # 라벨 텍스트 (매체명 포함): "V1 [매체명]"
-            if roi.media_name:
-                label_text = f"{roi.label} [{roi.media_name}]"
-            else:
-                label_text = roi.label
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            text_y = y1 + 18
-            # 검은 외곽선 + 흰 텍스트 (가독성)
-            cv2.putText(frame, label_text, (x1 + 3, text_y),
-                        font, 0.6, (0, 0, 0), 3, cv2.LINE_AA)
-            cv2.putText(frame, label_text, (x1 + 3, text_y),
-                        font, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
+            # 텍스트는 cv2.putText 미지원(한글 깨짐) → QPainter로 처리
+            label_text = f"{roi.label} [{roi.media_name}]" if roi.media_name else roi.label
+            text_overlays.append((x1 + 3, y1 + 18, label_text))
 
-    def _display_numpy(self, frame: np.ndarray):
-        """numpy BGR 배열을 QLabel에 표시"""
+        return text_overlays
+
+    def _display_numpy(self, frame: np.ndarray, text_overlays: list = None):
+        """numpy BGR 배열을 QLabel에 표시. 한글 포함 텍스트는 QPainter로 오버레이"""
         h, w, ch = frame.shape
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         # rgb.tobytes()로 복사본을 전달 → numpy 배열 gc 후 dangling pointer 방지
@@ -177,6 +172,25 @@ class VideoWidget(QWidget):
             )
         else:
             pixmap = QPixmap.fromImage(image)
+
+        # cv2.putText 대신 QPainter로 텍스트 렌더링 (한글 유니코드 지원)
+        if text_overlays and w > 0:
+            scale = pixmap.width() / w
+            font = QFont()
+            font.setPixelSize(max(9, int(14 * scale)))
+            painter = QPainter(pixmap)
+            painter.setFont(font)
+            for fx, fy, text in text_overlays:
+                px = int(fx * scale)
+                py = int(fy * scale)
+                # 검은 외곽선 (4방향)
+                painter.setPen(QColor(0, 0, 0))
+                for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                    painter.drawText(px + dx, py + dy, text)
+                # 흰 텍스트
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(px, py, text)
+            painter.end()
 
         self._label.setPixmap(pixmap)
 

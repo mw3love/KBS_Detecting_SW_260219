@@ -2,7 +2,7 @@
   "port": 1,
   "detection": {
     "black_threshold": 10,
-    "black_duration": 3,
+    "black_duration": 7,
     "black_alarm_duration": 10,
     "still_threshold": 2,
     "still_duration": 5,
@@ -36,25 +36,24 @@
     "video": [
       {
         "label": "V1",
-        "media_name": "dfg",
+        "media_name": "1TV ON AIR123",
         "x": 999,
         "y": 6,
         "w": 273,
         "h": 165,
         "roi_type": "video"
+      },
+      {
+        "label": "V2",
+        "media_name": "2TV 온에어",
+        "x": 1008,
+        "y": 551,
+        "w": 261,
+        "h": 135,
+        "roi_type": "video"
       }
     ],
-    "audio": [
-      {
-        "label": "A1",
-        "media_name": "sdf",
-        "x": 966,
-        "y": 99,
-        "w": 20,
-        "h": 70,
-        "roi_type": "audio"
-      }
-    ]
+    "audio": []
   },
   "performance": {
     "detection_interval": 200,
@@ -87,7 +86,7 @@
     "output_fps": 10
   },
   "ui_state": {
-    "detection_enabled": false,
+    "detection_enabled": true,
     "roi_visible": true
   },
   "signoff": {
@@ -99,14 +98,14 @@
       "name": "1TV",
       "roi_rules": [
         {
-          "video_label": "V1",
-          "audio_label": "A1"
+          "video_label": "V1"
         }
       ],
-      "start_time": "02:21",
-      "end_time": "05:25",
+      "start_time": "16:15",
+      "end_time": "18:25",
       "prep_minutes": 30,
-      "exit_prep_minutes": 30,
+      "exit_prep_minutes": 120,
+      "exit_trigger_sec": 5,
       "end_next_day": false,
       "weekdays": [
         0,
@@ -122,14 +121,15 @@
       "name": "2TV",
       "roi_rules": [
         {
-          "video_label": "V1",
-          "audio_label": "A1"
+          "video_label": "V2",
+          "audio_label": "A2"
         }
       ],
-      "start_time": "01:10",
-      "end_time": "01:25",
+      "start_time": "07:15",
+      "end_time": "08:25",
       "prep_minutes": 30,
-      "exit_prep_minutes": 30,
+      "exit_prep_minutes": 120,
+      "exit_trigger_sec": 5,
       "end_next_day": false,
       "weekdays": [
         0,

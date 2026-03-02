@@ -16,12 +16,13 @@
                        (prep_minutes=0이면 이 단계 없이 바로 SIGNOFF)
   PREPARATION → SIGNOFF :
       1) start_time 도달 시 자동 전환 (시간 기반, 최우선)
-      2) 그 전에 enter_roi 스틸/톤 감지 충족 시 조기 전환 (OR 방식)
-  SIGNOFF → IDLE : end_time 도달 시 자동 전환 (시간 기반만, 감지 해제 없음)
+      2) 그 전에 enter_roi 스틸이 still_trigger_sec 이상 지속 시 조기 전환
+  SIGNOFF → IDLE : end_time 도달 시 자동 전환
+                   또는 정파해제준비 구간에서 스틸 해제가 exit_trigger_sec 이상 지속 시 조기 종료
 
 enter_roi 형식 (정파준비 → 정파모드):
-  {"video_label": str, "audio_label": str}
-  - 논리: OR (스틸 OR 톤 중 먼저 충족되는 쪽으로 전환)
+  {"video_label": str}
+  - 진입/해제 트리거: 비디오 감지영역 스틸 감지
 """
 import time
 import datetime
@@ -44,7 +45,7 @@ class SignoffGroup:
     """그룹별 정파 설정"""
     group_id: int
     name: str
-    enter_roi: dict          # {"video_label": str, "audio_label": str}
+    enter_roi: dict          # {"video_label": str}
     start_time: str          # "HH:MM" 형식 — 정파모드(SIGNOFF) 시작 시각
     end_time: str            # "HH:MM" 형식 — 정파 종료 시각
     prep_minutes: int        # 정파준비 시작 = start_time - prep_minutes (0, 30, 60, 90, 120, 150, 180)
@@ -53,7 +54,7 @@ class SignoffGroup:
     every_day: bool          # True이면 weekdays 무시하고 매일 적용
     weekdays: List[int]      # 0=월 ~ 6=일
     still_trigger_sec: float  # 스틸 감지 기준 시간 (감도설정 still_duration)
-    tone_trigger_sec: float   # 톤 감지 기준 시간 (감도설정 audio_tone_duration)
+    exit_trigger_sec: float   # 정파해제 트리거 시간: 비-스틸 상태가 N초 이상 지속 시 해제
 
     def to_dict(self) -> dict:
         return {
@@ -63,6 +64,7 @@ class SignoffGroup:
             "end_time":          self.end_time,
             "prep_minutes":      self.prep_minutes,
             "exit_prep_minutes": self.exit_prep_minutes,
+            "exit_trigger_sec":  self.exit_trigger_sec,
             "end_next_day":      self.end_next_day,
             "every_day":         self.every_day,
             "weekdays":          list(self.weekdays),
@@ -70,36 +72,31 @@ class SignoffGroup:
 
     @classmethod
     def from_dict(cls, d: dict, group_id: int,
-                  still_trigger_sec: float,
-                  tone_trigger_sec: float) -> "SignoffGroup":
+                  still_trigger_sec: float) -> "SignoffGroup":
         """
         구버전(roi_rules, roi_labels, exit_roi) → 신버전(enter_roi) 자동 마이그레이션.
         """
         # 신버전 enter_roi 우선 사용
         enter_roi = d.get("enter_roi", {})
 
-        # 구버전 roi_rules 마이그레이션 → enter_roi로 변환 (첫 번째 행)
+        # 구버전 roi_rules 마이그레이션 → enter_roi로 변환 (첫 번째 행의 video_label만 사용)
         if not enter_roi:
             old_rules = d.get("roi_rules", [])
             if old_rules:
                 first = old_rules[0]
-                enter_roi = {
-                    "video_label": first.get("video_label", ""),
-                    "audio_label": first.get("audio_label", ""),
-                }
+                enter_roi = {"video_label": first.get("video_label", "")}
 
         # 구버전 roi_labels 마이그레이션
         if not enter_roi:
             old_labels = d.get("roi_labels", [])
             if old_labels:
                 v_lbl = next((l for l in old_labels if l.startswith("V")), "")
-                a_lbl = next((l for l in old_labels if l.startswith("A")), "")
-                if v_lbl or a_lbl:
-                    enter_roi = {"video_label": v_lbl, "audio_label": a_lbl}
+                if v_lbl:
+                    enter_roi = {"video_label": v_lbl}
 
         # 기본값 보장
         if not enter_roi:
-            enter_roi = {"video_label": "", "audio_label": ""}
+            enter_roi = {"video_label": ""}
 
         # every_day: weekdays가 7개(전체)이면 True, 빈 배열은 "요일 미설정" = False
         raw_weekdays = list(d.get("weekdays", [0, 1, 2, 3, 4, 5, 6]))
@@ -112,6 +109,8 @@ class SignoffGroup:
         exit_prep_minutes = int(d.get("exit_prep_minutes", 0))
         exit_prep_minutes = max(0, min(180, (exit_prep_minutes // 30) * 30))
 
+        exit_trigger_sec = max(0.0, float(d.get("exit_trigger_sec", 5.0)))
+
         return cls(
             group_id=group_id,
             name=d.get("name", f"Group{group_id}"),
@@ -120,11 +119,11 @@ class SignoffGroup:
             end_time=d.get("end_time",   "06:00"),
             prep_minutes=prep_minutes,
             exit_prep_minutes=exit_prep_minutes,
+            exit_trigger_sec=exit_trigger_sec,
             end_next_day=bool(d.get("end_next_day", False)),
             every_day=every_day,
             weekdays=raw_weekdays,
             still_trigger_sec=still_trigger_sec,
-            tone_trigger_sec=tone_trigger_sec,
         )
 
 
@@ -133,12 +132,13 @@ class SignoffManager(QObject):
     정파준비/정파모드 상태 관리자.
     QTimer 기반으로 1초마다 상태 전환 조건 점검.
 
-    정파준비→정파 전환 (OR 방식):
+    정파준비→정파 전환 (스틸 단독):
       1순위: start_time 도달 시 자동 전환
-      2순위: 스틸이 still_trigger_sec 이상 지속 OR 톤이 tone_trigger_sec 이상 지속 시 조기 전환
+      2순위: 스틸이 still_trigger_sec 이상 지속 시 조기 전환
 
     정파→정파해제:
-      end_time 도달 시 자동 전환 (감지 기반 해제 없음)
+      end_time 도달 시 자동 전환
+      또는 정파해제준비 구간에서 비-스틸 상태가 exit_trigger_sec 이상 지속 시 조기 종료
     """
 
     # (group_id, state_str)
@@ -151,9 +151,10 @@ class SignoffManager(QObject):
         self._groups: Dict[int, SignoffGroup] = {}
         self._states: Dict[int, SignoffState] = {}
 
-        # 정파준비→정파 진입 타이머 (각 항목 독립)
+        # 정파준비→정파 진입 타이머
         self._video_enter_start: Dict[int, Optional[float]] = {}   # 스틸 감지 시작 시각
-        self._tone_enter_start: Dict[int, Optional[float]] = {}    # 톤 감지 시작 시각
+        # 정파해제준비 구간: 비-스틸 지속 타이머
+        self._video_exit_start: Dict[int, Optional[float]] = {}    # 비-스틸 감지 시작 시각
 
         self._signoff_entered_at: Dict[int, Optional[float]] = {}    # SIGNOFF 진입 시각
         self._preparation_entered_at: Dict[int, Optional[float]] = {}  # PREPARATION 진입 시각
@@ -162,7 +163,6 @@ class SignoffManager(QObject):
 
         # 최신 감지 결과 캐시
         self._latest_video: Dict[str, bool] = {}   # label → still 감지 여부
-        self._latest_tone: Dict[str, bool] = {}    # label → tone(active) 여부
 
         self._auto_preparation: bool = True  # 자동 정파 준비 모드
 
@@ -181,7 +181,7 @@ class SignoffManager(QObject):
         if gid not in self._states:
             self._states[gid] = SignoffState.IDLE
             self._video_enter_start[gid] = None
-            self._tone_enter_start[gid] = None
+            self._video_exit_start[gid] = None
             self._signoff_entered_at[gid] = None
             self._preparation_entered_at[gid] = None
             self._manual_override[gid] = False
@@ -231,8 +231,7 @@ class SignoffManager(QObject):
         return dict(self._groups)
 
     def configure_from_dict(self, signoff_cfg: dict,
-                            still_trigger_sec: float = 60.0,
-                            tone_trigger_sec: float = 5.0):
+                            still_trigger_sec: float = 60.0):
         """config["signoff"] dict에서 그룹 설정 전체 로드."""
         self._auto_preparation = bool(signoff_cfg.get("auto_preparation", True))
 
@@ -241,25 +240,18 @@ class SignoffManager(QObject):
             grp_data = signoff_cfg.get(key, {})
             group = SignoffGroup.from_dict(
                 grp_data, gid,
-                still_trigger_sec, tone_trigger_sec
+                still_trigger_sec
             )
             self.set_group(group)
 
     # ── 감지 데이터 수신 인터페이스 ──────────────────────────────────────
 
-    def update_detection(self,
-                         audio_results: dict,
-                         still_results: dict = None,
-                         white_results: dict = None):
+    def update_detection(self, still_results: dict):
         """
         _run_detection()에서 매 감지 주기마다 호출.
-        audio_results : {label: {"active": bool, ...}}
-        still_results : {label: bool}
+        still_results : {label: bool}  — 비디오 ROI별 스틸 감지 여부
         """
-        video_results = still_results if still_results is not None else (white_results or {})
-        self._latest_video.update(video_results)
-        for label, state in audio_results.items():
-            self._latest_tone[label] = state.get("tone_alerting", state.get("active", False))
+        self._latest_video.update(still_results)
 
     # ── 수동 상태 전환 ────────────────────────────────────────────────────
 
@@ -305,15 +297,21 @@ class SignoffManager(QObject):
     # ── 알림 차단 판단 ────────────────────────────────────────────────────
 
     def is_signoff_label(self, label: str) -> bool:
-        """해당 label이 현재 SIGNOFF 상태인 그룹의 enter_roi에 속하는지 반환."""
+        """해당 label이 현재 SIGNOFF 상태인 그룹의 enter_roi video_label인지 반환."""
         for gid, group in self._groups.items():
             if self._states.get(gid) == SignoffState.SIGNOFF:
-                relevant = {
-                    group.enter_roi.get("video_label", ""),
-                    group.enter_roi.get("audio_label", ""),
-                }
-                relevant.discard("")
-                if label in relevant:
+                v_label = group.enter_roi.get("video_label", "")
+                if v_label and label == v_label:
+                    return True
+        return False
+
+    def is_prep_label(self, label: str) -> bool:
+        """해당 label이 현재 PREPARATION 상태인 그룹의 enter_roi video_label인지 반환.
+        True이면 스틸 알림을 억제한다."""
+        for gid, group in self._groups.items():
+            if self._states.get(gid) == SignoffState.PREPARATION:
+                v_label = group.enter_roi.get("video_label", "")
+                if v_label and label == v_label:
                     return True
         return False
 
@@ -440,7 +438,6 @@ class SignoffManager(QObject):
     def _reset_enter_timers(self, gid: int):
         """정파 진입 타이머 초기화."""
         self._video_enter_start[gid] = None
-        self._tone_enter_start[gid] = None
 
     # ── 1초 주기 상태 점검 ────────────────────────────────────────────────
 
@@ -494,46 +491,27 @@ class SignoffManager(QObject):
 
     def _tick_preparation(self, gid: int, group: SignoffGroup):
         """
-        PREPARATION 구간에서 스틸/톤 감지로 조기 SIGNOFF 전환 판단 (OR 방식).
-        enter_roi의 video(스틸) 또는 audio(톤) 중 하나라도
-        각자의 기준 시간 이상 지속되면 SIGNOFF 조기 전환.
+        PREPARATION 구간에서 스틸 감지로 조기 SIGNOFF 전환 판단 (스틸 단독).
+        enter_roi의 video_label 스틸이 still_trigger_sec 이상 지속되면 SIGNOFF 조기 전환.
         """
-        roi = group.enter_roi
-        v_label = roi.get("video_label", "")
-        a_label = roi.get("audio_label", "")
+        v_label = group.enter_roi.get("video_label", "")
 
-        if not v_label and not a_label:
-            return  # 감지영역 미설정 — 감지 기반 조기 전환 없음
+        if not v_label:
+            return  # video_label 미설정 — 감지 기반 조기 전환 없음
 
         now = time.time()
 
         # ── 스틸 타이머 갱신 ──
-        v_active = self._latest_video.get(v_label, False) if v_label else False
-        if v_active and v_label:
+        if self._latest_video.get(v_label, False):
             if self._video_enter_start[gid] is None:
                 self._video_enter_start[gid] = now
         else:
             self._video_enter_start[gid] = None
 
-        # ── 톤 타이머 갱신 ──
-        a_active = self._latest_tone.get(a_label, False) if a_label else False
-        if a_active and a_label:
-            if self._tone_enter_start[gid] is None:
-                self._tone_enter_start[gid] = now
-        else:
-            self._tone_enter_start[gid] = None
-
-        # ── OR 판단: 하나라도 기준 시간 초과 시 SIGNOFF 전환 ──
+        # ── 판단: still_trigger_sec 이상 지속 시 SIGNOFF 전환 ──
         v_elapsed = (now - self._video_enter_start[gid]) if self._video_enter_start[gid] is not None else 0.0
-        a_elapsed = (now - self._tone_enter_start[gid])  if self._tone_enter_start[gid]  is not None else 0.0
 
-        triggered = False
-        if v_label and v_elapsed >= group.still_trigger_sec:
-            triggered = True
-        if a_label and a_elapsed >= group.tone_trigger_sec:
-            triggered = True
-
-        if triggered:
+        if v_elapsed >= group.still_trigger_sec:
             self._reset_enter_timers(gid)
             self._transition_to(gid, SignoffState.SIGNOFF)
 
@@ -584,32 +562,31 @@ class SignoffManager(QObject):
         return remaining <= group.exit_prep_minutes * 60
 
     def _tick_exit_preparation(self, gid: int, group: SignoffGroup):
-        """정파해제준비 구간에서 스틸/톤 해제 감지 시 SIGNOFF 조기 종료 (OR 방식).
-        조건:
-          1) 더 이상 1kHz TONE 신호가 아닐 때
-          2) 더 이상 스틸이 아닐 때
-        하나라도 해제되면 SIGNOFF 종료.
+        """정파해제준비 구간에서 스틸 해제가 exit_trigger_sec 이상 지속 시 SIGNOFF 조기 종료.
+        스틸이 해제된 상태(비-스틸)가 group.exit_trigger_sec 초 이상 연속 지속되어야 정파 해제.
+        순간적인 화면 변화에 의한 오동작 방지.
         """
-        roi = group.enter_roi
-        v_label = roi.get("video_label", "")
-        a_label = roi.get("audio_label", "")
+        v_label = group.enter_roi.get("video_label", "")
 
-        if not v_label and not a_label:
-            return  # 감지영역 미설정 — 감지 기반 조기 해제 없음
+        if not v_label:
+            return  # video_label 미설정 — 감지 기반 조기 해제 없음
 
-        exit_triggered = False
-        # 스틸 해제: 설정된 ROI가 있고, 더 이상 스틸이 감지되지 않으면
-        if v_label and not self._latest_video.get(v_label, True):
-            exit_triggered = True
-        # 톤 해제: 설정된 ROI가 있고, 더 이상 톤이 감지되지 않으면
-        if a_label and not self._latest_tone.get(a_label, True):
-            exit_triggered = True
+        now = time.time()
 
-        if exit_triggered:
-            self._signoff_entered_at[gid] = None
-            self._manual_override[gid] = False
-            self._exit_released[gid] = True  # 조기 해제 후 자동 재진입 차단
-            self._transition_to(gid, SignoffState.IDLE)
+        # 비-스틸 상태이면 타이머 갱신, 스틸 상태이면 리셋
+        if not self._latest_video.get(v_label, True):  # 스틸 아님 (기본값 True=스틸 상태)
+            if self._video_exit_start[gid] is None:
+                self._video_exit_start[gid] = now
+            v_elapsed = now - self._video_exit_start[gid]
+            if v_elapsed >= group.exit_trigger_sec:
+                self._video_exit_start[gid] = None
+                self._signoff_entered_at[gid] = None
+                self._manual_override[gid] = False
+                self._exit_released[gid] = True  # 조기 해제 후 자동 재진입 차단
+                self._transition_to(gid, SignoffState.IDLE)
+        else:
+            # 스틸 상태 복귀 → 해제 타이머 리셋
+            self._video_exit_start[gid] = None
 
     def _is_in_time_range(self, group: SignoffGroup,
                            current_time: str, weekday: int,

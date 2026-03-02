@@ -242,7 +242,7 @@ class MainWindow(QMainWindow):
                            or need_still_for_signoff):
             video_results = self._detector.detect_frame(self._latest_frame, video_rois)
 
-        # ── SignoffManager 업데이트 (스틸/톤 감지 결과 전달) ──
+        # ── SignoffManager 업데이트 (스틸 감지 결과 전달) ──
         # still_detection_enabled=False 시 detect_frame이 is_still=False 고정 반환 →
         # _latest_video[label]=False 가 되어 정파해제준비 구간 즉시 정파해제되는 버그 방지.
         # 스틸 감지 비활성 시 빈 딕셔너리를 전달하면 SignoffManager는 기본값(True=스틸 상태)을
@@ -255,12 +255,7 @@ class MainWindow(QMainWindow):
         else:
             still_results = {}
 
-        # audio_detect_enabled=False 시 _latest_tone이 이전 캐시값으로 남아
-        # 정파해제준비 구간에서 오동작할 수 있으므로 빈 딕셔너리 전달.
-        self._signoff_manager.update_detection(
-            audio_results=audio_results if self._audio_detect_enabled else {},
-            still_results=still_results,
-        )
+        self._signoff_manager.update_detection(still_results=still_results)
 
         # ── 비디오 ROI 알림 처리 ──
         if video_results:
@@ -286,6 +281,12 @@ class MainWindow(QMainWindow):
                 name = media or label                          # 텔레그램/알람용
                 log_prefix = f"{label}. {media}" if media else label  # 로그용
 
+                # PREPARATION 상태: 스틸 알림만 억제 (블랙 알림은 계속)
+                is_in_prep = self._signoff_manager.is_prep_label(label)
+                if is_in_prep:
+                    self._alarm.resolve("스틸", label)
+                    self._still_logged.discard(label)
+
                 # ── 블랙 ──
                 if black_alert:
                     if label not in self._black_logged:
@@ -307,28 +308,29 @@ class MainWindow(QMainWindow):
                     self._alarm.resolve("블랙", label)
                     self._black_logged.discard(label)
 
-                # ── 스틸 ──
-                if still_alert:
-                    if label not in self._still_logged:
-                        self._logger.still_error(f"{log_prefix} - 스틸 감지")
-                        tg = self._config.get("telegram", {})
-                        if tg.get("notify_still", True):
-                            self._telegram.notify("스틸", label, name, self._latest_frame)
-                        self._recorder.trigger("스틸", label, media)
-                    self._alarm.trigger("스틸", label, self._detector.still_alarm_duration)
-                    self._still_logged.add(label)
-                else:
-                    if still_resolved and label in self._still_logged:
-                        last_dur = state.get("still_last_duration", 0)
-                        self._logger.still_error(f"{log_prefix} - 스틸 {last_dur:.0f}초")
-                        self._logger.info(f"{log_prefix} - 스틸 정상 복구")
-                        tg = self._config.get("telegram", {})
-                        if tg.get("notify_still", True):
-                            self._telegram.notify("스틸", label, name, self._latest_frame, is_recovery=True)
-                    self._alarm.resolve("스틸", label)
-                    self._still_logged.discard(label)
+                # ── 스틸 (PREPARATION 상태에서는 억제) ──
+                if not is_in_prep:
+                    if still_alert:
+                        if label not in self._still_logged:
+                            self._logger.still_error(f"{log_prefix} - 스틸 감지")
+                            tg = self._config.get("telegram", {})
+                            if tg.get("notify_still", True):
+                                self._telegram.notify("스틸", label, name, self._latest_frame)
+                            self._recorder.trigger("스틸", label, media)
+                        self._alarm.trigger("스틸", label, self._detector.still_alarm_duration)
+                        self._still_logged.add(label)
+                    else:
+                        if still_resolved and label in self._still_logged:
+                            last_dur = state.get("still_last_duration", 0)
+                            self._logger.still_error(f"{log_prefix} - 스틸 {last_dur:.0f}초")
+                            self._logger.info(f"{log_prefix} - 스틸 정상 복구")
+                            tg = self._config.get("telegram", {})
+                            if tg.get("notify_still", True):
+                                self._telegram.notify("스틸", label, name, self._latest_frame, is_recovery=True)
+                        self._alarm.resolve("스틸", label)
+                        self._still_logged.discard(label)
 
-                self._video_widget.set_alert_state(label, black_alert or still_alert)
+                self._video_widget.set_alert_state(label, black_alert or (still_alert and not is_in_prep))
 
         # ── 오디오 ROI 레벨미터 처리 (사전 계산된 audio_results 재사용) ──
         if audio_rois and self._audio_detect_enabled and audio_results:
@@ -800,17 +802,21 @@ class MainWindow(QMainWindow):
     def _apply_signoff_config(self, signoff_cfg: dict):
         """signoff 설정을 SignoffManager에 반영.
         감도설정의 스틸/톤 기준 시간을 함께 전달한다.
+        설정 적용 중 발생하는 상태 전환은 소리 없이 처리한다.
         """
-        det_cfg = self._config.get("detection", {})
-        still_trigger_sec = float(det_cfg.get("still_duration", 60.0))
-        tone_trigger_sec  = float(det_cfg.get("audio_tone_duration", 60.0))
-        self._signoff_manager.configure_from_dict(
-            signoff_cfg, still_trigger_sec, tone_trigger_sec
-        )
-        # 자동 정파 준비 비활성화 시 상단 정파 버튼 비활성화
-        auto_prep = signoff_cfg.get("auto_preparation", True)
-        if hasattr(self, '_top_bar'):
-            self._top_bar.set_signoff_buttons_enabled(auto_prep)
+        self._signoff_settings_applying = True
+        try:
+            det_cfg = self._config.get("detection", {})
+            still_trigger_sec = float(det_cfg.get("still_duration", 60.0))
+            self._signoff_manager.configure_from_dict(
+                signoff_cfg, still_trigger_sec
+            )
+            # 자동 정파 준비 비활성화 시 상단 정파 버튼 비활성화
+            auto_prep = signoff_cfg.get("auto_preparation", True)
+            if hasattr(self, '_top_bar'):
+                self._top_bar.set_signoff_buttons_enabled(auto_prep)
+        finally:
+            self._signoff_settings_applying = False
 
     def _on_signoff_settings_changed(self, params: dict):
         """SettingsDialog 정파 설정 변경 → 즉시 적용"""
@@ -833,11 +839,13 @@ class MainWindow(QMainWindow):
         )
 
     def _on_signoff_event(self, group_id: int, message: str):
-        """정파 이벤트 발생 시 로그 기록 + 알림음 재생 (수동 클릭 또는 시작 직후엔 소리 없음)"""
+        """정파 이벤트 발생 시 로그 기록 + 알림음 재생 (수동 클릭, 시작 직후, 설정 적용 중엔 소리 없음)"""
         self._logger.info(f"SIGNOFF - {message}")
         if getattr(self, '_signoff_manual_click', False):
             return
         if not self._startup_complete:
+            return
+        if getattr(self, '_signoff_settings_applying', False):
             return
         signoff_cfg = self._config.get("signoff", {})
         state = self._signoff_manager.get_state(group_id)

@@ -633,8 +633,8 @@ class SettingsDialog(QDialog):
         self._tabs.addTab(self._create_tab_video_roi(),         "비디오 영역 설정")
         self._tabs.addTab(self._create_tab_audio_roi(),         "오디오 레벨미터 영역 설정")
         self._tabs.addTab(self._create_tab_detection_params(),  "감도설정")
-        self._tabs.addTab(self._create_tab_alarm(),             "알림설정")
         self._tabs.addTab(self._create_tab_signoff(),           "정파설정")
+        self._tabs.addTab(self._create_tab_alarm(),             "알림설정")
         self._tabs.addTab(self._create_tab_save_load(),         "저장/불러오기")
 
     # ── 탭 1: 입력선택 ────────────────────────────────

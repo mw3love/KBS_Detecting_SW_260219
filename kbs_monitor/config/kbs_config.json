@@ -90,9 +90,9 @@
   },
   "signoff": {
     "auto_preparation": true,
-    "prep_alarm_sound": "resources\\sounds\\sign_off.wav",
-    "enter_alarm_sound": "resources\\sounds\\sign_off.wav",
-    "release_alarm_sound": "resources\\sounds\\sign_off.wav",
+    "prep_alarm_sound": "",
+    "enter_alarm_sound": "",
+    "release_alarm_sound": "",
     "group1": {
       "name": "1TV",
       "roi_rules": [
@@ -108,26 +108,20 @@
       "end_next_day": false,
       "weekdays": [
         0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
+        1
       ]
     },
     "group2": {
       "name": "2TV",
       "roi_rules": [
         {
-          "video_label": "V2",
-          "audio_label": "A2"
+          "video_label": "V2"
         }
       ],
       "start_time": "02:00",
       "end_time": "05:00",
       "prep_minutes": 90,
-      "exit_prep_minutes": 30,
+      "exit_prep_minutes": 60,
       "exit_trigger_sec": 5,
       "end_next_day": false,
       "weekdays": [

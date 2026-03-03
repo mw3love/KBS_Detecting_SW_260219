@@ -1189,8 +1189,9 @@ class SettingsDialog(QDialog):
         self._edit_embedded_alarm_duration.editingFinished.connect(self._save_detection_params)
         desc_ead = QLabel("알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
         desc_ead.setObjectName("paramDescLabel")
-        grid_e.addWidget(lbl_ead,                          2, 0)
-        grid_e.addWidget(desc_ead,                         2, 2)
+        grid_e.addWidget(lbl_ead,                              2, 0)
+        grid_e.addWidget(self._edit_embedded_alarm_duration,  2, 1)
+        grid_e.addWidget(desc_ead,                             2, 2)
 
         layout.addWidget(group_emb)
 
@@ -2405,21 +2406,21 @@ class SettingsDialog(QDialog):
             "enter_alarm_sound":   "",
             "release_alarm_sound": "",
             "group1": {
-                "name":              "Group1",
+                "name":              "1TV",
                 "roi_rules":         [],
-                "start_time":        "00:30",
-                "end_time":          "06:00",
-                "prep_minutes":      30,
-                "exit_prep_minutes": 0,
-                "weekdays":          [0, 1, 2, 3, 4, 5, 6],
+                "start_time":        "03:00",
+                "end_time":          "05:00",
+                "prep_minutes":      150,
+                "exit_prep_minutes": 30,
+                "weekdays":          [0, 1],
             },
             "group2": {
-                "name":              "Group2",
+                "name":              "2TV",
                 "roi_rules":         [],
-                "start_time":        "00:30",
-                "end_time":          "06:00",
-                "prep_minutes":      30,
-                "exit_prep_minutes": 0,
+                "start_time":        "02:00",
+                "end_time":          "05:00",
+                "prep_minutes":      90,
+                "exit_prep_minutes": 30,
                 "weekdays":          [0, 1, 2, 3, 4, 5, 6],
             },
         }

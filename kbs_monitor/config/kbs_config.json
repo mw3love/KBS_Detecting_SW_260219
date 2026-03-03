@@ -56,12 +56,11 @@
     "audio": []
   },
   "performance": {
-    "detection_interval": 200,
+    "detection_interval": 1000,
     "scale_factor": 1.0,
-    "video_detection_enabled": true,
-    "audio_detection_enabled": true,
-    "still_detection_enabled": true,
     "black_detection_enabled": true,
+    "still_detection_enabled": true,
+    "audio_detection_enabled": true,
     "embedded_detection_enabled": true
   },
   "telegram": {
@@ -101,10 +100,10 @@
           "video_label": "V1"
         }
       ],
-      "start_time": "16:15",
-      "end_time": "18:25",
-      "prep_minutes": 30,
-      "exit_prep_minutes": 120,
+      "start_time": "03:00",
+      "end_time": "05:00",
+      "prep_minutes": 150,
+      "exit_prep_minutes": 30,
       "exit_trigger_sec": 5,
       "end_next_day": false,
       "weekdays": [
@@ -125,10 +124,10 @@
           "audio_label": "A2"
         }
       ],
-      "start_time": "07:15",
-      "end_time": "08:25",
-      "prep_minutes": 30,
-      "exit_prep_minutes": 120,
+      "start_time": "02:00",
+      "end_time": "05:00",
+      "prep_minutes": 90,
+      "exit_prep_minutes": 30,
       "exit_trigger_sec": 5,
       "end_next_day": false,
       "weekdays": [

@@ -50,11 +50,12 @@ DEFAULT_CONFIG = {
         "audio": [],
     },
     "performance": {
-        "detection_interval":      200,    # ms, QTimer 감지 주기 (100~1000)
-        "scale_factor":            1.0,    # 감지 해상도 스케일 (1.0 / 0.5 / 0.25)
-        "video_detection_enabled": True,   # 비디오 블랙/스틸 감지 활성화
-        "audio_detection_enabled": True,   # 오디오 레벨미터 HSV 감지 활성화
-        "still_detection_enabled": True,   # 스틸 감지 활성화
+        "detection_interval":        200,   # ms, QTimer 감지 주기 (100~1000)
+        "scale_factor":              1.0,   # 감지 해상도 스케일 (1.0 / 0.5 / 0.25)
+        "black_detection_enabled":   True,  # 블랙 감지 활성화
+        "still_detection_enabled":   True,  # 스틸 감지 활성화
+        "audio_detection_enabled":   True,  # 오디오 레벨미터 HSV 감지 활성화
+        "embedded_detection_enabled": True, # 임베디드 오디오 무음 감지 활성화
     },
     "telegram": {
         "enabled": False,
@@ -82,26 +83,31 @@ DEFAULT_CONFIG = {
         "roi_visible": True,
     },
     "signoff": {
+        "auto_preparation":    True,   # 자동 정파 준비 활성화
         "prep_alarm_sound":    "",     # 정파준비 시작 알림음 WAV 경로
         "enter_alarm_sound":   "",     # 정파모드 진입 알림음 WAV 경로
         "release_alarm_sound": "",     # 정파 해제 알림음 WAV 경로
         "group1": {
-            "name":       "Group1",
-            "enter_roi":  {"video_label": "", "audio_label": ""},
-            "exit_roi":   {"video_label": "", "audio_label": ""},
-            "start_time": "00:30",
-            "end_time":   "06:00",
-            "every_day":  True,
-            "weekdays":   [0, 1, 2, 3, 4, 5, 6],
+            "name":              "1TV",
+            "roi_rules":         [],
+            "start_time":        "03:00",
+            "end_time":          "05:00",
+            "end_next_day":      False,
+            "prep_minutes":      150,
+            "exit_prep_minutes": 30,
+            "exit_trigger_sec":  5,
+            "weekdays":          [0, 1],
         },
         "group2": {
-            "name":       "Group2",
-            "enter_roi":  {"video_label": "", "audio_label": ""},
-            "exit_roi":   {"video_label": "", "audio_label": ""},
-            "start_time": "00:30",
-            "end_time":   "06:00",
-            "every_day":  True,
-            "weekdays":   [0, 1, 2, 3, 4, 5, 6],
+            "name":              "2TV",
+            "roi_rules":         [],
+            "start_time":        "02:00",
+            "end_time":          "05:00",
+            "end_next_day":      False,
+            "prep_minutes":      90,
+            "exit_prep_minutes": 30,
+            "exit_trigger_sec":  5,
+            "weekdays":          [0, 1, 2, 3, 4, 5, 6],
         },
     },
 }

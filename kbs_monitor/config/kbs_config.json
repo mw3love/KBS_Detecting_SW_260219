@@ -2,25 +2,25 @@
   "port": 1,
   "detection": {
     "black_threshold": 10,
-    "black_duration": 3,
-    "black_alarm_duration": 10,
-    "still_threshold": 2,
+    "black_duration": 20,
+    "black_alarm_duration": 60,
+    "still_threshold": 8,
     "still_changed_ratio": 2.0,
-    "still_duration": 5,
-    "still_alarm_duration": 10,
+    "still_duration": 60,
+    "still_alarm_duration": 60,
     "audio_hsv_h_min": 40,
-    "audio_hsv_h_max": 80,
-    "audio_hsv_s_min": 30,
+    "audio_hsv_h_max": 95,
+    "audio_hsv_s_min": 80,
     "audio_hsv_s_max": 255,
-    "audio_hsv_v_min": 30,
+    "audio_hsv_v_min": 60,
     "audio_hsv_v_max": 255,
     "audio_pixel_ratio": 5,
     "audio_level_duration": 20,
-    "audio_level_alarm_duration": 10,
+    "audio_level_alarm_duration": 60,
     "audio_level_recovery_seconds": 2,
     "embedded_silence_threshold": -50,
     "embedded_silence_duration": 20,
-    "embedded_alarm_duration": 10,
+    "embedded_alarm_duration": 60,
     "audio_tone_std_threshold": 3,
     "audio_tone_duration": 10,
     "audio_tone_min_level": 5
@@ -54,7 +54,26 @@
         "roi_type": "video"
       }
     ],
-    "audio": []
+    "audio": [
+      {
+        "label": "A1",
+        "media_name": "111",
+        "x": 965,
+        "y": 89,
+        "w": 18,
+        "h": 73,
+        "roi_type": "audio"
+      },
+      {
+        "label": "A2",
+        "media_name": "222",
+        "x": 968,
+        "y": 633,
+        "w": 19,
+        "h": 72,
+        "roi_type": "audio"
+      }
+    ]
   },
   "performance": {
     "detection_interval": 200,
@@ -91,16 +110,12 @@
   },
   "signoff": {
     "auto_preparation": true,
-    "prep_alarm_sound": "",
-    "enter_alarm_sound": "",
-    "release_alarm_sound": "",
+    "prep_alarm_sound": "resources\\sounds\\sign_off.wav",
+    "enter_alarm_sound": "resources\\sounds\\sign_off.wav",
+    "release_alarm_sound": "resources\\sounds\\sign_off.wav",
     "group1": {
       "name": "1TV",
-      "roi_rules": [
-        {
-          "video_label": "V1"
-        }
-      ],
+      "roi_rules": [],
       "start_time": "03:00",
       "end_time": "05:00",
       "prep_minutes": 150,
@@ -114,15 +129,11 @@
     },
     "group2": {
       "name": "2TV",
-      "roi_rules": [
-        {
-          "video_label": "V2"
-        }
-      ],
+      "roi_rules": [],
       "start_time": "02:00",
       "end_time": "05:00",
       "prep_minutes": 90,
-      "exit_prep_minutes": 60,
+      "exit_prep_minutes": 30,
       "exit_trigger_sec": 5,
       "end_next_day": false,
       "weekdays": [

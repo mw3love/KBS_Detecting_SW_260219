@@ -981,9 +981,9 @@ class SettingsDialog(QDialog):
 
         lbl_btr = QLabel("▪  몇 초 이상시 알림 발생(초):")
         lbl_btr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_black_duration = _NumEdit(10, 1, 120)
+        self._edit_black_duration = _NumEdit(20, 1, 120)
         self._edit_black_duration.editingFinished.connect(self._save_detection_params)
-        desc_btr = QLabel("1~120초 / 블랙이 이 시간 이상 지속되면 알림 발생  (기본값: 10초)")
+        desc_btr = QLabel("1~120초 / 블랙이 이 시간 이상 지속되면 알림 발생  (기본값: 20초)")
         desc_btr.setObjectName("paramDescLabel")
         grid_b.addWidget(lbl_btr,                  1, 0)
         grid_b.addWidget(self._edit_black_duration, 1, 1)
@@ -993,7 +993,7 @@ class SettingsDialog(QDialog):
         lbl_bad.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._edit_black_alarm_duration = _NumEdit(10, 1, 60)
         self._edit_black_alarm_duration.editingFinished.connect(self._save_detection_params)
-        desc_bad = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
+        desc_bad = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 60초)")
         desc_bad.setObjectName("paramDescLabel")
         grid_b.addWidget(lbl_bad,                        2, 0)
         grid_b.addWidget(self._edit_black_alarm_duration, 2, 1)
@@ -1048,7 +1048,7 @@ class SettingsDialog(QDialog):
         lbl_sad.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._edit_still_alarm_duration = _NumEdit(10, 1, 60)
         self._edit_still_alarm_duration.editingFinished.connect(self._save_detection_params)
-        desc_sad = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
+        desc_sad = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 60초)")
         desc_sad.setObjectName("paramDescLabel")
         grid_s.addWidget(lbl_sad,                        3, 0)
         grid_s.addWidget(self._edit_still_alarm_duration, 3, 1)
@@ -1075,7 +1075,7 @@ class SettingsDialog(QDialog):
         self._lbl_h_val = QLabel("40 ~ 80")
         self._lbl_h_val.setObjectName("paramDescLabel")
         self._lbl_h_val.setFixedWidth(80)
-        desc_h = QLabel("0~179 / OpenCV HSV H값  (기본값: 40~80 — 초록 계열)")
+        desc_h = QLabel("0~179 / OpenCV HSV H값  (기본값: 40~95 — 초록 계열)")
         desc_h.setObjectName("paramDescLabel")
         grid_a.addWidget(lbl_h,              0, 0)
         grid_a.addWidget(self._slider_hsv_h, 0, 1)
@@ -1091,7 +1091,7 @@ class SettingsDialog(QDialog):
         self._lbl_s_val = QLabel("30 ~ 255")
         self._lbl_s_val.setObjectName("paramDescLabel")
         self._lbl_s_val.setFixedWidth(80)
-        desc_s = QLabel("0~255 / 색의 선명도  (기본값: 30~255)")
+        desc_s = QLabel("0~255 / 색의 선명도  (기본값: 80~255)")
         desc_s.setObjectName("paramDescLabel")
         grid_a.addWidget(lbl_s,              1, 0)
         grid_a.addWidget(self._slider_hsv_s, 1, 1)
@@ -1107,7 +1107,7 @@ class SettingsDialog(QDialog):
         self._lbl_v_val = QLabel("30 ~ 255")
         self._lbl_v_val.setObjectName("paramDescLabel")
         self._lbl_v_val.setFixedWidth(80)
-        desc_v = QLabel("0~255 / 밝기  (기본값: 30~255)")
+        desc_v = QLabel("0~255 / 밝기  (기본값: 60~255)")
         desc_v.setObjectName("paramDescLabel")
         grid_a.addWidget(lbl_v,              2, 0)
         grid_a.addWidget(self._slider_hsv_v, 2, 1)
@@ -1149,7 +1149,7 @@ class SettingsDialog(QDialog):
         lbl_alad.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._edit_audio_level_alarm_duration = _NumEdit(10, 1, 60)
         self._edit_audio_level_alarm_duration.editingFinished.connect(self._save_detection_params)
-        desc_alad = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
+        desc_alad = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 60초)")
         desc_alad.setObjectName("paramDescLabel")
         grid_a2.addWidget(lbl_alad,                          2, 0)
         grid_a2.addWidget(self._edit_audio_level_alarm_duration, 2, 1)
@@ -1199,7 +1199,7 @@ class SettingsDialog(QDialog):
         lbl_ead.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._edit_embedded_alarm_duration = _NumEdit(10, 1, 60)
         self._edit_embedded_alarm_duration.editingFinished.connect(self._save_detection_params)
-        desc_ead = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
+        desc_ead = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 60초)")
         desc_ead.setObjectName("paramDescLabel")
         grid_e.addWidget(lbl_ead,                              2, 0)
         grid_e.addWidget(self._edit_embedded_alarm_duration,  2, 1)
@@ -1717,7 +1717,7 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.1")
+        lbl_version = QLabel("KBS Peacock v1.2")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)
@@ -1788,7 +1788,7 @@ class SettingsDialog(QDialog):
     def _apply_detection_params_to_ui(self, det: dict):
         """감지 파라미터 dict를 UI 위젯에 적용 (신호 없이 조용히 갱신)"""
         self._edit_black_threshold.setText(str(int(det.get("black_threshold", 10))))
-        self._edit_black_duration.setText(str(int(det.get("black_duration", 10))))
+        self._edit_black_duration.setText(str(int(det.get("black_duration", 20))))
         self._edit_black_alarm_duration.setText(str(int(det.get("black_alarm_duration", 10))))
         self._edit_still_threshold.setText(str(int(det.get("still_threshold", 8))))
         self._edit_still_changed_ratio.setText(str(float(det.get("still_changed_ratio", 2.0))))
@@ -2426,7 +2426,7 @@ class SettingsDialog(QDialog):
                 "end_time":          "05:00",
                 "prep_minutes":      150,
                 "exit_prep_minutes": 30,
-                "weekdays":          [0, 1],
+                "weekdays":          [6, 0],
             },
             "group2": {
                 "name":              "2TV",

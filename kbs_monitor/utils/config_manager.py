@@ -12,17 +12,17 @@ DEFAULT_CONFIG = {
     "port": 0,
     "detection": {
         "black_threshold": 10,
-        "black_duration": 10,
+        "black_duration": 20,
         "black_alarm_duration": 60,
         "still_threshold": 8,
         "still_changed_ratio": 2.0,
         "still_duration": 60,
         "still_alarm_duration": 60,
         "audio_hsv_h_min": 40,
-        "audio_hsv_h_max": 80,
-        "audio_hsv_s_min": 30,
+        "audio_hsv_h_max": 95,
+        "audio_hsv_s_min": 80,
         "audio_hsv_s_max": 255,
-        "audio_hsv_v_min": 30,
+        "audio_hsv_v_min": 60,
         "audio_hsv_v_max": 255,
         "audio_pixel_ratio": 5,
         "audio_level_duration": 20,
@@ -70,7 +70,7 @@ DEFAULT_CONFIG = {
         "notify_embedded": True,
     },
     "recording": {
-        "enabled": False,
+        "enabled": True,
         "save_dir": "recordings",  # 저장 폴더 경로
         "pre_seconds": 5,          # 사고 전 버퍼 시간(초)
         "post_seconds": 15,        # 사고 후 녹화 시간(초)
@@ -97,7 +97,7 @@ DEFAULT_CONFIG = {
             "prep_minutes":      150,
             "exit_prep_minutes": 30,
             "exit_trigger_sec":  5,
-            "weekdays":          [0, 1],
+            "weekdays":          [6, 0],
         },
         "group2": {
             "name":              "2TV",

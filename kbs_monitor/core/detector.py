@@ -142,6 +142,7 @@ class Detector:
         # 임베디드 오디오 상태
         self.embedded_alerting = False
         self._embedded_alert_start: Optional[float] = None
+        self._tone_states: Dict[str, DetectionState] = {}
 
     def _apply_scale_factor(self, frame: np.ndarray) -> np.ndarray:
         """해상도 스케일 적용 (scale_factor < 1.0 인 경우에만 축소)"""

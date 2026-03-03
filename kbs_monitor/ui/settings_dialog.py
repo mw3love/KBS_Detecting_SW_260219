@@ -496,39 +496,88 @@ class _ROITable(QTableWidget):
 class _SignoffRoiDialog(QDialog):
     """
     정파 감지영역 선택 다이얼로그.
-    비디오 감지영역을 선택하여 스틸 기반 정파 진입/해제 트리거 ROI를 설정한다.
+
+    상단: 진입 트리거 — 스틸 감지로 정파 진입/해제를 판단할 ROI 1개 선택.
+    하단: 알림 억제 대상 — 정파(준비/모드) 중 일반 알림을 끄고 싶은 ROI 다중 선택.
+          트리거로 선택한 ROI는 자동으로 체크된다.
     """
 
-    def __init__(self, rules: list, video_rois: list, parent=None):
+    def __init__(self, enter_label: str, suppressed_labels: list,
+                 video_rois: list, parent=None):
         """
-        video_rois: [(label, media_name), ...] 형식
+        enter_label      : 현재 진입 트리거 label (str)
+        suppressed_labels: 현재 억제 대상 label 목록 (list[str])
+        video_rois       : [(label, media_name), ...] 형식
         """
         super().__init__(parent)
         self.setWindowTitle("감지영역 선택")
         self.setModal(True)
-        self.setMinimumWidth(400)
-        self.setMinimumHeight(260)
+        self.setMinimumWidth(440)
+        self.setMinimumHeight(340)
 
-        self._rules = [dict(r) for r in rules]
+        self._enter_label: str = enter_label
+        self._suppressed_labels: list = list(suppressed_labels)
         self._video_rois_info: list = list(video_rois)
 
+        # 억제 대상 체크박스 목록 {label: QCheckBox}
+        self._suppress_chks: dict = {}
+
         self._setup_ui()
-        self._populate_table()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
-        # 테이블
-        self._table = QTableWidget()
-        self._table.setColumnCount(1)
-        self._table.setHorizontalHeaderLabels(["비디오 감지영역"])
-        self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        layout.addWidget(self._table)
+        # ── 진입 트리거 ──────────────────────────────────────────────────
+        trigger_group = QGroupBox("진입 트리거")
+        trigger_group.setToolTip(
+            "스틸 감지로 정파 진입/해제를 판단할 비디오 감지영역을 선택합니다.\n"
+            "정파준비(Preparation) 구간에서 이 영역이 정해진 시간 이상 스틸이면\n"
+            "정파모드(Signoff)로 조기 진입합니다."
+        )
+        trigger_layout = QHBoxLayout(trigger_group)
+        trigger_layout.setContentsMargins(8, 6, 8, 6)
 
-        # 확인 / 취소
+        self._trigger_combo = QComboBox()
+        self._trigger_combo.addItem("(선택 없음)", userData="")
+        for lbl, media in self._video_rois_info:
+            display = f"{lbl}  ({media})" if media else lbl
+            self._trigger_combo.addItem(display, userData=lbl)
+        idx = self._trigger_combo.findData(self._enter_label)
+        if idx >= 0:
+            self._trigger_combo.setCurrentIndex(idx)
+        self._trigger_combo.currentIndexChanged.connect(self._on_trigger_changed)
+        trigger_layout.addWidget(self._trigger_combo, 1)
+        layout.addWidget(trigger_group)
+
+        # ── 알림 억제 대상 ───────────────────────────────────────────────
+        suppress_group = QGroupBox("알림 억제 대상")
+        suppress_group.setToolTip(
+            "정파준비/정파모드 중 일반 알림(블랙·스틸·오디오 등)을 끄고 싶은\n"
+            "감지영역을 선택합니다. 트리거로 선택한 영역은 자동으로 포함됩니다.\n\n"
+            "예) 1TV 온에어가 트리거이면, 1TV MPEG ENC도 여기서 체크하면\n"
+            "    정파 중에 1TV MPEG ENC의 알림이 억제됩니다."
+        )
+        suppress_layout = QVBoxLayout(suppress_group)
+        suppress_layout.setContentsMargins(8, 6, 8, 6)
+        suppress_layout.setSpacing(4)
+
+        if self._video_rois_info:
+            for lbl, media in self._video_rois_info:
+                display = f"{lbl}  ({media})" if media else lbl
+                chk = QCheckBox(display)
+                chk.setChecked(lbl in self._suppressed_labels)
+                self._suppress_chks[lbl] = chk
+                suppress_layout.addWidget(chk)
+        else:
+            suppress_layout.addWidget(QLabel("비디오 감지영역 없음"))
+
+        # 진입 트리거 ROI 자동 체크 (동기화)
+        self._sync_trigger_suppress()
+
+        layout.addWidget(suppress_group, 1)
+
+        # ── 확인 / 취소 ──────────────────────────────────────────────────
         ok_row = QHBoxLayout()
         ok_row.addStretch()
         btn_ok = QPushButton("확인")
@@ -542,38 +591,24 @@ class _SignoffRoiDialog(QDialog):
         ok_row.addWidget(btn_cancel)
         layout.addLayout(ok_row)
 
-    def _make_row_widgets(self, video_label=""):
-        """새 행을 테이블에 추가하고 ComboBox 위젯을 배치한다."""
-        row = self._table.rowCount()
-        self._table.insertRow(row)
+    def _on_trigger_changed(self):
+        """트리거 콤보 변경 시 해당 ROI를 억제 대상에 자동 체크."""
+        self._sync_trigger_suppress()
 
-        v_combo = QComboBox()
-        v_combo.addItem("(선택 없음)", userData="")
-        for lbl, media in self._video_rois_info:
-            display = f"{lbl}  ({media})" if media else lbl
-            v_combo.addItem(display, userData=lbl)
-        idx = v_combo.findData(video_label)
-        if idx >= 0:
-            v_combo.setCurrentIndex(idx)
-        self._table.setCellWidget(row, 0, v_combo)
+    def _sync_trigger_suppress(self):
+        """현재 트리거 label을 억제 대상 체크박스에서 강제 체크한다."""
+        trigger = self._trigger_combo.currentData() or ""
+        if trigger and trigger in self._suppress_chks:
+            self._suppress_chks[trigger].setChecked(True)
 
-    def _populate_table(self):
-        for rule in self._rules:
-            self._make_row_widgets(rule.get("video_label", ""))
-        if self._table.rowCount() == 0:
-            self._make_row_widgets()
-
-    def get_rules(self) -> list:
-        """현재 테이블의 유효한 규칙 목록 반환."""
-        rules = []
-        for row in range(self._table.rowCount()):
-            v_w = self._table.cellWidget(row, 0)
-            if v_w is None:
-                continue
-            v_label = v_w.currentData() or ""
-            if v_label:
-                rules.append({"video_label": v_label})
-        return rules
+    def get_result(self) -> tuple:
+        """(enter_label: str, suppressed_labels: list[str]) 반환."""
+        enter_label = self._trigger_combo.currentData() or ""
+        suppressed = [lbl for lbl, chk in self._suppress_chks.items() if chk.isChecked()]
+        # enter_label이 억제 목록에 없으면 자동 포함
+        if enter_label and enter_label not in suppressed:
+            suppressed.insert(0, enter_label)
+        return enter_label, suppressed
 
 
 class SettingsDialog(QDialog):
@@ -613,7 +648,8 @@ class SettingsDialog(QDialog):
         self._signoff_end_next_day_chk: dict = {}    # {gid: QCheckBox} 종료 익일 여부
         self._signoff_every_day_chk: dict = {}   # {gid: QPushButton}
         self._signoff_day_chks: dict = {}        # {gid: list[QCheckBox]}
-        self._signoff_roi_rules: dict = {}       # {gid: list[dict]}  감지영역 규칙
+        self._signoff_enter_label: dict = {}     # {gid: str}        진입 트리거 label
+        self._signoff_suppressed_labels: dict = {}  # {gid: list[str]} 알림 억제 대상 labels
         self._signoff_roi_summary: dict = {}     # {gid: QLabel}  요약 라벨
         self._signoff_prep_min_combo: dict = {}        # {gid: QComboBox} 정파준비 몇 분전 설정
         self._signoff_exit_prep_min_combo: dict = {}   # {gid: QComboBox} 정파해제준비 몇 분전 설정
@@ -1717,7 +1753,7 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.2")
+        lbl_version = QLabel("KBS Peacock v1.3")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)
@@ -1948,7 +1984,7 @@ class SettingsDialog(QDialog):
             elif col == 4:
                 roi.w = max(1, min(500, int(item.text())))
             elif col == 5:
-                roi.h = max(1, min(250, int(item.text())))
+                roi.h = max(1, min(300, int(item.text())))
         except ValueError:
             pass
 
@@ -2421,7 +2457,8 @@ class SettingsDialog(QDialog):
             "release_alarm_sound": "",
             "group1": {
                 "name":              "1TV",
-                "roi_rules":         [],
+                "enter_roi":         {"video_label": ""},
+                "suppressed_labels": [],
                 "start_time":        "03:00",
                 "end_time":          "05:00",
                 "prep_minutes":      150,
@@ -2430,7 +2467,8 @@ class SettingsDialog(QDialog):
             },
             "group2": {
                 "name":              "2TV",
-                "roi_rules":         [],
+                "enter_roi":         {"video_label": ""},
+                "suppressed_labels": [],
                 "start_time":        "02:00",
                 "end_time":          "05:00",
                 "prep_minutes":      90,
@@ -2633,7 +2671,8 @@ class SettingsDialog(QDialog):
         roi_row.addStretch()
         box_layout.addLayout(roi_row)
 
-        self._signoff_roi_rules[gid] = []
+        self._signoff_enter_label[gid] = ""
+        self._signoff_suppressed_labels[gid] = []
         self._signoff_roi_summary[gid] = roi_summary
 
         # 시그널 연결
@@ -2687,11 +2726,14 @@ class SettingsDialog(QDialog):
     def _open_signoff_roi_dialog(self, gid: int):
         """감지영역 선택 다이얼로그를 열고 결과를 저장한다."""
         video_rois = [(r.label, r.media_name) for r in self._roi_manager.video_rois]
-        current_rules = self._signoff_roi_rules.get(gid, [])
+        enter_label = self._signoff_enter_label.get(gid, "")
+        suppressed_labels = self._signoff_suppressed_labels.get(gid, [])
 
-        dlg = _SignoffRoiDialog(current_rules, video_rois, parent=self)
+        dlg = _SignoffRoiDialog(enter_label, suppressed_labels, video_rois, parent=self)
         if dlg.exec() == QDialog.Accepted:
-            self._signoff_roi_rules[gid] = dlg.get_rules()
+            enter_label, suppressed_labels = dlg.get_result()
+            self._signoff_enter_label[gid] = enter_label
+            self._signoff_suppressed_labels[gid] = suppressed_labels
             self._update_signoff_roi_summary(gid)
             self._save_signoff_params()
 
@@ -2700,16 +2742,17 @@ class SettingsDialog(QDialog):
         lbl = self._signoff_roi_summary.get(gid)
         if lbl is None:
             return
-        rules = self._signoff_roi_rules.get(gid, [])
+        enter_label = self._signoff_enter_label.get(gid, "")
+        suppressed = self._signoff_suppressed_labels.get(gid, [])
         label_to_media = {r.label: r.media_name for r in self._roi_manager.video_rois}
-        parts = []
-        for r in rules:
-            v_label = r.get("video_label", "")
-            if v_label:
-                media = label_to_media.get(v_label, "")
-                parts.append(f"{v_label}  ({media})" if media else v_label)
-        if parts:
-            lbl.setText(" | ".join(parts))
+        if enter_label:
+            media = label_to_media.get(enter_label, "")
+            trigger_text = f"{enter_label}  ({media})" if media else enter_label
+            extra = len([s for s in suppressed if s != enter_label])
+            if extra:
+                lbl.setText(f"트리거: {trigger_text}  |  억제: +{extra}개")
+            else:
+                lbl.setText(f"트리거: {trigger_text}")
             lbl.setStyleSheet("")
         else:
             lbl.setText("선택 없음")
@@ -2742,7 +2785,8 @@ class SettingsDialog(QDialog):
             exit_trigger_sec = exit_trigger_combo.currentData() if exit_trigger_combo is not None else 5
             params[f"group{gid}"] = {
                 "name":              self._signoff_name_edit[gid].text() or f"Group{gid}",
-                "roi_rules":         list(self._signoff_roi_rules.get(gid, [])),
+                "enter_roi":         {"video_label": self._signoff_enter_label.get(gid, "")},
+                "suppressed_labels": list(self._signoff_suppressed_labels.get(gid, [])),
                 "start_time":        f"{stw.hour():02d}:{stw.minute():02d}",
                 "end_time":          f"{etw.hour():02d}:{etw.minute():02d}",
                 "prep_minutes":      prep_minutes,
@@ -2845,26 +2889,26 @@ class SettingsDialog(QDialog):
             for d, chk in enumerate(self._signoff_day_chks[gid]):
                 _block(chk, d in weekdays, chk.setChecked)
 
-            # roi_rules 로드 (구버전 roi_labels 자동 마이그레이션)
-            roi_rules = grp.get("roi_rules", [])
-            if not roi_rules:
+            # enter_roi / suppressed_labels 로드 (구버전 roi_rules/roi_labels 자동 마이그레이션)
+            enter_roi = grp.get("enter_roi", {})
+            if not enter_roi:
+                # 구버전 roi_rules → enter_roi 마이그레이션 (첫 번째 video_label 사용)
+                old_rules = grp.get("roi_rules", [])
+                if old_rules:
+                    enter_roi = {"video_label": old_rules[0].get("video_label", "")}
+            if not enter_roi:
+                # 구버전 roi_labels → enter_roi 마이그레이션
                 old_labels = grp.get("roi_labels", [])
-                if old_labels:
-                    old_cond = cfg.get("detect_condition", "OR")
-                    for lbl in old_labels:
-                        if lbl.startswith("V"):
-                            roi_rules.append({
-                                "video_label": lbl,
-                                "operator": old_cond,
-                                "audio_label": "",
-                            })
-                        elif lbl.startswith("A"):
-                            roi_rules.append({
-                                "video_label": "",
-                                "operator": "",
-                                "audio_label": lbl,
-                            })
-            self._signoff_roi_rules[gid] = roi_rules
+                v_lbl = next((l for l in old_labels if l.startswith("V")), "")
+                if v_lbl:
+                    enter_roi = {"video_label": v_lbl}
+            enter_label = enter_roi.get("video_label", "") if enter_roi else ""
+            self._signoff_enter_label[gid] = enter_label
+
+            suppressed_labels = list(grp.get("suppressed_labels", []))
+            if not suppressed_labels and enter_label:
+                suppressed_labels = [enter_label]  # 구버전 호환: 트리거 자동 포함
+            self._signoff_suppressed_labels[gid] = suppressed_labels
             self._update_signoff_roi_summary(gid)
 
             # 힌트 레이블 갱신 (blockSignals로 인해 자동 갱신이 안 되므로 수동 호출)

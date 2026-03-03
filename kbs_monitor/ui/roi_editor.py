@@ -642,7 +642,7 @@ class ROIEditorCanvas(QWidget):
                     abs(event.position().y() - self._drag_start_w.y()) >= self.MIN_ROI_PX and
                     rw > 0 and rh > 0):
                 rw = min(rw, 500)
-                rh = min(rh, 250)
+                rh = min(rh, 300)
                 new_roi = ROI(
                     label="",
                     media_name="",
@@ -694,8 +694,8 @@ class ROIEditorCanvas(QWidget):
 
         if x2 - x1 > 500:
             x2 = x1 + 500
-        if y2 - y1 > 250:
-            y2 = y1 + 250
+        if y2 - y1 > 300:
+            y2 = y1 + 300
 
         roi.x, roi.y = x1, y1
         roi.w, roi.h = x2 - x1, y2 - y1
@@ -749,7 +749,7 @@ class ROIEditorCanvas(QWidget):
             roi.w = max(2, roi.w + dx)
             roi.h = max(2, roi.h + dy)
             roi.w = min(roi.w, 500)
-            roi.h = min(roi.h, 250)
+            roi.h = min(roi.h, 300)
         else:
             # 이동
             roi.x = max(0, roi.x + dx)

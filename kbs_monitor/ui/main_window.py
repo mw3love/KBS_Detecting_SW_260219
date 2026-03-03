@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.2")
+        self.setWindowTitle("KBS Peacock v1.3")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -690,6 +690,7 @@ class MainWindow(QMainWindow):
             notify_still=bool(tg.get("notify_still", True)),
             notify_audio_level=bool(tg.get("notify_audio_level", True)),
             notify_embedded=bool(tg.get("notify_embedded", True)),
+            notify_signoff=bool(tg.get("notify_signoff", True)),
         )
 
     def _on_telegram_settings_changed(self, params: dict):
@@ -857,6 +858,8 @@ class MainWindow(QMainWindow):
             return
         signoff_cfg = self._config.get("signoff", {})
         state = self._signoff_manager.get_state(group_id)
+        group = self._signoff_manager.get_groups().get(group_id)
+        group_name = group.name if group else f"Group{group_id}"
         if state == SignoffState.PREPARATION:
             sound = signoff_cfg.get("prep_alarm_sound", "")
         elif state == SignoffState.SIGNOFF:
@@ -865,6 +868,14 @@ class MainWindow(QMainWindow):
             sound = signoff_cfg.get("release_alarm_sound", "")
         if sound:
             self._alarm.play_test_sound(sound)
+
+        # 텔레그램 알림: 정파모드 진입 및 해제 시만 발송
+        tg = self._config.get("telegram", {})
+        if tg.get("notify_signoff", True):
+            if state == SignoffState.SIGNOFF:
+                self._telegram.notify("정파", group_name, group_name, self._latest_frame)
+            elif state == SignoffState.IDLE:
+                self._telegram.notify("정파", group_name, group_name, self._latest_frame, is_recovery=True)
 
     def _on_signoff_button_clicked(self, group_id: int):
         """정파 버튼 클릭: IDLE→PREPARATION→SIGNOFF→IDLE 순서로 상태 로테이션. 소리 없음."""

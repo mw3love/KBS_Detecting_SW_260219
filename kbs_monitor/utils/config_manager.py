@@ -90,7 +90,8 @@ DEFAULT_CONFIG = {
         "release_alarm_sound": "",     # 정파 해제 알림음 WAV 경로
         "group1": {
             "name":              "1TV",
-            "roi_rules":         [],
+            "enter_roi":         {"video_label": ""},
+            "suppressed_labels": [],
             "start_time":        "03:00",
             "end_time":          "05:00",
             "end_next_day":      False,
@@ -101,7 +102,8 @@ DEFAULT_CONFIG = {
         },
         "group2": {
             "name":              "2TV",
-            "roi_rules":         [],
+            "enter_roi":         {"video_label": ""},
+            "suppressed_labels": [],
             "start_time":        "02:00",
             "end_time":          "05:00",
             "end_next_day":      False,

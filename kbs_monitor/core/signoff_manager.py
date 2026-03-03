@@ -45,7 +45,8 @@ class SignoffGroup:
     """그룹별 정파 설정"""
     group_id: int
     name: str
-    enter_roi: dict          # {"video_label": str}
+    enter_roi: dict          # {"video_label": str} — 정파 진입 트리거 ROI
+    suppressed_labels: List[str]  # 정파(SIGNOFF/PREPARATION) 중 알림을 억제할 video ROI label 목록
     start_time: str          # "HH:MM" 형식 — 정파모드(SIGNOFF) 시작 시각
     end_time: str            # "HH:MM" 형식 — 정파 종료 시각
     prep_minutes: int        # 정파준비 시작 = start_time - prep_minutes (0, 30, 60, 90, 120, 150, 180)
@@ -60,6 +61,7 @@ class SignoffGroup:
         return {
             "name":              self.name,
             "enter_roi":         dict(self.enter_roi),
+            "suppressed_labels": list(self.suppressed_labels),
             "start_time":        self.start_time,
             "end_time":          self.end_time,
             "prep_minutes":      self.prep_minutes,
@@ -98,6 +100,13 @@ class SignoffGroup:
         if not enter_roi:
             enter_roi = {"video_label": ""}
 
+        # suppressed_labels 로드 (구버전 호환: 없으면 enter_roi.video_label 자동 포함)
+        suppressed_labels = list(d.get("suppressed_labels", []))
+        if not suppressed_labels:
+            v_label = enter_roi.get("video_label", "")
+            if v_label:
+                suppressed_labels = [v_label]
+
         # every_day: weekdays가 7개(전체)이면 True, 빈 배열은 "요일 미설정" = False
         raw_weekdays = list(d.get("weekdays", [0, 1, 2, 3, 4, 5, 6]))
         every_day = d.get("every_day", len(raw_weekdays) == 7)
@@ -115,6 +124,7 @@ class SignoffGroup:
             group_id=group_id,
             name=d.get("name", f"Group{group_id}"),
             enter_roi=enter_roi,
+            suppressed_labels=suppressed_labels,
             start_time=d.get("start_time", "00:30"),
             end_time=d.get("end_time",   "06:00"),
             prep_minutes=prep_minutes,
@@ -297,21 +307,26 @@ class SignoffManager(QObject):
     # ── 알림 차단 판단 ────────────────────────────────────────────────────
 
     def is_signoff_label(self, label: str) -> bool:
-        """해당 label이 현재 SIGNOFF 상태인 그룹의 enter_roi video_label인지 반환."""
+        """해당 label이 현재 SIGNOFF 상태인 그룹의 억제 대상인지 반환.
+        enter_roi.video_label 또는 suppressed_labels 포함 여부를 확인한다."""
         for gid, group in self._groups.items():
             if self._states.get(gid) == SignoffState.SIGNOFF:
                 v_label = group.enter_roi.get("video_label", "")
                 if v_label and label == v_label:
                     return True
+                if label in group.suppressed_labels:
+                    return True
         return False
 
     def is_prep_label(self, label: str) -> bool:
-        """해당 label이 현재 PREPARATION 상태인 그룹의 enter_roi video_label인지 반환.
+        """해당 label이 현재 PREPARATION 상태인 그룹의 억제 대상인지 반환.
         True이면 스틸 알림을 억제한다."""
         for gid, group in self._groups.items():
             if self._states.get(gid) == SignoffState.PREPARATION:
                 v_label = group.enter_roi.get("video_label", "")
                 if v_label and label == v_label:
+                    return True
+                if label in group.suppressed_labels:
                     return True
         return False
 

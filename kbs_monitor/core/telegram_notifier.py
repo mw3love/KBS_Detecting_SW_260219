@@ -37,6 +37,7 @@ class TelegramNotifier:
             "스틸": True,
             "오디오": True,
             "무음": True,
+            "정파": True,
         }
         self._last_sent: dict = {}          # {key: timestamp}
 
@@ -89,6 +90,7 @@ class TelegramNotifier:
         notify_still: bool = True,
         notify_audio_level: bool = True,
         notify_embedded: bool = True,
+        notify_signoff: bool = True,
     ):
         """설정 반영 (메인 스레드에서 호출)"""
         self._enabled = enabled
@@ -101,6 +103,7 @@ class TelegramNotifier:
             "스틸": notify_still,
             "오디오": notify_audio_level,
             "무음": notify_embedded,
+            "정파": notify_signoff,
         }
 
     # ── 알림 발생 ─────────────────────────────────────────────────────────────

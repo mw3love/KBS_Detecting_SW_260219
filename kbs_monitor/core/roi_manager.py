@@ -50,7 +50,7 @@ class ROI:
 class ROIManager:
     """감지영역 목록을 관리하는 클래스"""
 
-    MAX_SIZE = (500, 250)  # 최대 감지영역 크기
+    MAX_SIZE = (500, 300)  # 최대 감지영역 크기
 
     def __init__(self):
         self._video_rois: List[ROI] = []

@@ -981,9 +981,9 @@ class SettingsDialog(QDialog):
 
         lbl_btr = QLabel("▪  몇 초 이상시 알림 발생(초):")
         lbl_btr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_black_duration = _NumEdit(10, 1, 300)
+        self._edit_black_duration = _NumEdit(10, 1, 120)
         self._edit_black_duration.editingFinished.connect(self._save_detection_params)
-        desc_btr = QLabel("블랙이 이 시간 이상 지속되면 알림 발생  (기본값: 10초)")
+        desc_btr = QLabel("1~120초 / 블랙이 이 시간 이상 지속되면 알림 발생  (기본값: 10초)")
         desc_btr.setObjectName("paramDescLabel")
         grid_b.addWidget(lbl_btr,                  1, 0)
         grid_b.addWidget(self._edit_black_duration, 1, 1)
@@ -991,9 +991,9 @@ class SettingsDialog(QDialog):
 
         lbl_bad = QLabel("▪  알림 지속시간(초):")
         lbl_bad.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_black_alarm_duration = _NumEdit(10, 1, 300)
+        self._edit_black_alarm_duration = _NumEdit(10, 1, 60)
         self._edit_black_alarm_duration.editingFinished.connect(self._save_detection_params)
-        desc_bad = QLabel("알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
+        desc_bad = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
         desc_bad.setObjectName("paramDescLabel")
         grid_b.addWidget(lbl_bad,                        2, 0)
         grid_b.addWidget(self._edit_black_alarm_duration, 2, 1)
@@ -1023,10 +1023,10 @@ class SettingsDialog(QDialog):
 
         lbl_scr = QLabel("▪  변화 픽셀 비율 임계값(%):")
         lbl_scr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_still_changed_ratio = _NumEdit(2.0, 0.1, 50.0, is_float=True)
+        self._edit_still_changed_ratio = _NumEdit(2.0, 0.1, 10.0, is_float=True)
         self._edit_still_changed_ratio.editingFinished.connect(self._save_detection_params)
         desc_scr = QLabel(
-            "• 0.1~50.0% / 변화한 픽셀이 이 비율 미만이면 정지로 판단  (기본값: 2.0%)<br>"
+            "• 0.1~10.0% / 변화한 픽셀이 이 비율 미만이면 정지로 판단  (기본값: 2.0%)<br>"
             "• 낮출수록 엄격 (조금만 변해도 정지 아님)  /  높일수록 느슨 (오감지 위험)"
         )
         desc_scr.setObjectName("paramDescLabel")
@@ -1036,9 +1036,9 @@ class SettingsDialog(QDialog):
 
         lbl_str = QLabel("▪  몇 초 이상시 알림 발생(초):")
         lbl_str.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_still_duration = _NumEdit(60, 1, 300)
+        self._edit_still_duration = _NumEdit(60, 1, 120)
         self._edit_still_duration.editingFinished.connect(self._save_detection_params)
-        desc_str = QLabel("스틸이 이 시간 이상 지속되면 알림 발생  (기본값: 60초)")
+        desc_str = QLabel("1~120초 / 스틸이 이 시간 이상 지속되면 알림 발생  (기본값: 60초)")
         desc_str.setObjectName("paramDescLabel")
         grid_s.addWidget(lbl_str,                  2, 0)
         grid_s.addWidget(self._edit_still_duration, 2, 1)
@@ -1046,9 +1046,9 @@ class SettingsDialog(QDialog):
 
         lbl_sad = QLabel("▪  알림 지속시간(초):")
         lbl_sad.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_still_alarm_duration = _NumEdit(10, 1, 300)
+        self._edit_still_alarm_duration = _NumEdit(10, 1, 60)
         self._edit_still_alarm_duration.editingFinished.connect(self._save_detection_params)
-        desc_sad = QLabel("알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
+        desc_sad = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
         desc_sad.setObjectName("paramDescLabel")
         grid_s.addWidget(lbl_sad,                        3, 0)
         grid_s.addWidget(self._edit_still_alarm_duration, 3, 1)
@@ -1123,10 +1123,10 @@ class SettingsDialog(QDialog):
 
         lbl_apr = QLabel("▪  감지 픽셀 비율(%):")
         lbl_apr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_audio_pixel_ratio = _NumEdit(5, 1, 100)
+        self._edit_audio_pixel_ratio = _NumEdit(5, 1, 50)
         self._edit_audio_pixel_ratio.editingFinished.connect(self._save_detection_params)
         desc_apr = QLabel(
-            "• ROI 내 HSV 범위 픽셀 비율이 이 값 이상이면 활성  (기본값: 5%)\n"
+            "• 1~50% / ROI 내 HSV 범위 픽셀 비율이 이 값 이상이면 활성  (기본값: 5%)\n"
             "• 소리 없음 → 초록색 없음 → ratio < 5% → is_active=False → 이상(무음) → 알람"
         )
         desc_apr.setObjectName("paramDescLabel")
@@ -1137,9 +1137,9 @@ class SettingsDialog(QDialog):
 
         lbl_ald = QLabel("▪  몇 초 이상시 알림 발생(초):")
         lbl_ald.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_audio_level_duration = _NumEdit(20, 1, 300)
+        self._edit_audio_level_duration = _NumEdit(20, 1, 120)
         self._edit_audio_level_duration.editingFinished.connect(self._save_detection_params)
-        desc_ald = QLabel("레벨미터 비활성이 이 시간 이상 지속되면 알림  (기본값: 20초)")
+        desc_ald = QLabel("1~120초 / 레벨미터 비활성이 이 시간 이상 지속되면 알림  (기본값: 20초)")
         desc_ald.setObjectName("paramDescLabel")
         grid_a2.addWidget(lbl_ald,                      1, 0)
         grid_a2.addWidget(self._edit_audio_level_duration, 1, 1)
@@ -1147,9 +1147,9 @@ class SettingsDialog(QDialog):
 
         lbl_alad = QLabel("▪  알림 지속시간(초):")
         lbl_alad.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_audio_level_alarm_duration = _NumEdit(10, 1, 300)
+        self._edit_audio_level_alarm_duration = _NumEdit(10, 1, 60)
         self._edit_audio_level_alarm_duration.editingFinished.connect(self._save_detection_params)
-        desc_alad = QLabel("알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
+        desc_alad = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
         desc_alad.setObjectName("paramDescLabel")
         grid_a2.addWidget(lbl_alad,                          2, 0)
         grid_a2.addWidget(self._edit_audio_level_alarm_duration, 2, 1)
@@ -1157,9 +1157,9 @@ class SettingsDialog(QDialog):
 
         lbl_alrs = QLabel("▪  복구 딜레이(초):")
         lbl_alrs.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_audio_level_recovery_seconds = _NumEdit(2, 0, 30)
+        self._edit_audio_level_recovery_seconds = _NumEdit(2, 0, 10)
         self._edit_audio_level_recovery_seconds.editingFinished.connect(self._save_detection_params)
-        desc_alrs = QLabel("알림 발생 후 정상 복구 판정을 위한 최소 정상 지속 시간  (기본값: 2초, 0=즉시복구)")
+        desc_alrs = QLabel("0~10초 / 알림 발생 후 정상 복구 판정을 위한 최소 정상 지속 시간  (기본값: 2초, 0=즉시복구)")
         desc_alrs.setObjectName("paramDescLabel")
         grid_a2.addWidget(lbl_alrs,                               3, 0)
         grid_a2.addWidget(self._edit_audio_level_recovery_seconds, 3, 1)
@@ -1187,9 +1187,9 @@ class SettingsDialog(QDialog):
 
         lbl_esd = QLabel("▪  몇 초 이상시 알림 발생(초):")
         lbl_esd.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_embedded_silence_duration = _NumEdit(20, 1, 300)
+        self._edit_embedded_silence_duration = _NumEdit(20, 1, 120)
         self._edit_embedded_silence_duration.editingFinished.connect(self._save_detection_params)
-        desc_esd = QLabel("무음이 이 시간 이상 지속되면 알림 발생  (기본값: 20초)")
+        desc_esd = QLabel("1~120초 / 무음이 이 시간 이상 지속되면 알림 발생  (기본값: 20초)")
         desc_esd.setObjectName("paramDescLabel")
         grid_e.addWidget(lbl_esd,                             1, 0)
         grid_e.addWidget(self._edit_embedded_silence_duration, 1, 1)
@@ -1197,9 +1197,9 @@ class SettingsDialog(QDialog):
 
         lbl_ead = QLabel("▪  알림 지속시간(초):")
         lbl_ead.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_embedded_alarm_duration = _NumEdit(10, 1, 300)
+        self._edit_embedded_alarm_duration = _NumEdit(10, 1, 60)
         self._edit_embedded_alarm_duration.editingFinished.connect(self._save_detection_params)
-        desc_ead = QLabel("알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
+        desc_ead = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
         desc_ead.setObjectName("paramDescLabel")
         grid_e.addWidget(lbl_ead,                              2, 0)
         grid_e.addWidget(self._edit_embedded_alarm_duration,  2, 1)

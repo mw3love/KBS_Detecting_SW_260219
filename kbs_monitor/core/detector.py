@@ -105,7 +105,8 @@ class Detector:
         self.black_alarm_duration = 10.0   # 알림 지속 시간(초)
 
         # 스틸 감지 설정
-        self.still_threshold = 2           # 픽셀 차이 임계값
+        self.still_threshold = 8           # 픽셀당 변화 기준값 (0~255): 이 값 이상 차이나면 '변화한 픽셀'로 분류
+        self.still_changed_ratio = 2.0     # 변화 픽셀 비율 임계값 (%): 이 비율 미만이면 정지로 판단
         self.still_duration = 10.0         # 몇 초 이상 지속 시 알림 발생
         self.still_alarm_duration = 10.0   # 알림 지속 시간(초)
 
@@ -218,7 +219,7 @@ class Detector:
                 avg_brightness = float(np.mean(gray))
                 is_black = avg_brightness < self.black_threshold
 
-            # 스틸 감지 (비활성화 시 float32 변환 및 복사 생략)
+            # 스틸 감지 (변화 픽셀 비율 방식 — 비활성화 시 float32 변환 및 복사 생략)
             is_still = False
             if self.still_detection_enabled:
                 if label in self._prev_frames:
@@ -226,8 +227,9 @@ class Detector:
                     crop_f = crop.astype(np.float32)
                     if prev.shape == crop_f.shape:
                         diff = np.abs(crop_f - prev)
-                        avg_diff = float(np.mean(diff))
-                        is_still = avg_diff < self.still_threshold
+                        # 변화한 픽셀 비율 계산: diff > threshold인 픽셀 비율(%)
+                        changed_ratio = float(np.mean(diff > self.still_threshold)) * 100.0
+                        is_still = changed_ratio < self.still_changed_ratio
                     else:
                         is_still = False
                 # float32로 저장하여 다음 사이클의 재변환 비용 제거

@@ -47,6 +47,8 @@ class AlarmSystem(QObject):
         self._stop_sound = threading.Event()
         self._logger = None
 
+        self._acknowledged_alarms: set = set()  # 확인된 알람 (재알림 방지)
+
         self._blink_timer.timeout.connect(self._toggle_blink)
         self._blink_timer.setInterval(500)
 
@@ -63,8 +65,14 @@ class AlarmSystem(QObject):
     def trigger(self, alarm_type: str, label: str, alarm_duration: float = 0.0):
         """알림 발생. alarm_duration > 0이면 해당 초 후 소리 자동 중지."""
         key = f"{alarm_type}_{label}"
-        if key not in self._active_alarms:
-            self._active_alarms.add(key)
+        is_new = key not in self._active_alarms
+        self._active_alarms.add(key)
+
+        # 이미 확인된(acknowledged) 알람은 소리/깜빡임 재활성화 안 함
+        if key in self._acknowledged_alarms:
+            return
+
+        if is_new:
             self.alarm_triggered.emit(f"{label} {alarm_type} 감지")
             self._play_sound(alarm_type, alarm_duration)
 
@@ -72,9 +80,10 @@ class AlarmSystem(QObject):
             self._blink_timer.start()
 
     def resolve(self, alarm_type: str, label: str):
-        """알림 해제"""
+        """알림 해제 (이상 상태 복구 시 호출)"""
         key = f"{alarm_type}_{label}"
         self._active_alarms.discard(key)
+        self._acknowledged_alarms.discard(key)  # acknowledged 상태도 제거
 
         if not self._active_alarms:
             self._stop_playback()
@@ -83,8 +92,20 @@ class AlarmSystem(QObject):
             self.visual_blink.emit(False)
 
     def resolve_all(self):
-        """모든 알림 해제"""
+        """모든 알림 강제 해제 (감지기 상태 초기화 시 호출)"""
         self._active_alarms.clear()
+        self._acknowledged_alarms.clear()
+        self._stop_playback()
+        self._blink_timer.stop()
+        self._blink_state = False
+        self.visual_blink.emit(False)
+
+    def acknowledge_all(self):
+        """알림확인 — 소리·깜빡임 해제, 현재 알람을 acknowledged로 표시.
+        감지기 상태는 유지되므로 이상이 지속돼도 재알림 발생하지 않음.
+        이상이 해제(resolve)된 후 새 이상이 발생하면 정상적으로 알림 재개.
+        """
+        self._acknowledged_alarms = set(self._active_alarms)
         self._stop_playback()
         self._blink_timer.stop()
         self._blink_state = False

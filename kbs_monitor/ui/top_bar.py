@@ -256,6 +256,7 @@ class TopBar(QWidget):
     sound_toggled = Signal(bool)
     volume_changed = Signal(int)
     clear_alarm_requested = Signal()
+    alarm_acknowledged = Signal()      # 알림확인 버튼 클릭 (소리+깜빡임 해제)
     dark_mode_toggled = Signal(bool)
     fullscreen_toggled = Signal()
     signoff_manual_release = Signal(int)  # group_id: 정파 버튼 수동 해제 클릭
@@ -389,13 +390,14 @@ class TopBar(QWidget):
 
         layout.addWidget(self._make_separator())
 
-        # 7. 설정
-        self._btn_settings = QPushButton("설정  ⚙")
-        self._btn_settings.setObjectName("btnSettings")
-        self._btn_settings.setFixedSize(86, 36)
-        self._btn_settings.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        self._btn_settings.clicked.connect(self.settings_requested)
-        layout.addWidget(self._btn_settings)
+        # 7. 알림확인 버튼 (기존 설정 버튼 위치)
+        self._btn_ack = QPushButton("알림확인")
+        self._btn_ack.setObjectName("btnAlarmAck")
+        self._btn_ack.setFixedSize(86, 36)
+        self._btn_ack.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self._btn_ack.setToolTip("알림확인 — 소리 및 깜빡임 해제")
+        self._btn_ack.clicked.connect(self.alarm_acknowledged)
+        layout.addWidget(self._btn_ack)
 
         layout.addWidget(self._make_separator())
 
@@ -404,7 +406,7 @@ class TopBar(QWidget):
         self._lbl_signoff_time: dict[int, QLabel] = {}
         for gid in (1, 2):
             grp_widget = QWidget()
-            grp_widget.setFixedWidth(175)
+            grp_widget.setFixedWidth(210)
             grp_vbox = QVBoxLayout(grp_widget)
             grp_vbox.setContentsMargins(2, 0, 2, 0)
             grp_vbox.setSpacing(2)
@@ -429,6 +431,16 @@ class TopBar(QWidget):
             self._lbl_signoff_time[gid] = lbl
 
         layout.addStretch()
+
+        # 설정 버튼 (아이콘, 다크모드 버튼 왼쪽)
+        self._btn_settings = QPushButton()
+        self._btn_settings.setObjectName("btnSettings")
+        self._btn_settings.setFixedSize(36, 36)
+        self._btn_settings.setIcon(self._make_gear_icon())
+        self._btn_settings.setIconSize(QSize(22, 22))
+        self._btn_settings.setToolTip("설정")
+        self._btn_settings.clicked.connect(self.settings_requested)
+        layout.addWidget(self._btn_settings)
 
         # 6. 주간/야간 모드 토글 (전체화면 버튼 왼쪽, 아이콘 버튼)
         self._btn_dark = QPushButton()
@@ -457,9 +469,10 @@ class TopBar(QWidget):
         """감지현황 표시 위젯 (세로 레이아웃)"""
         container = QWidget()
         container.setObjectName("summaryContainer")
+        container.setMaximumWidth(90)
         vbox = QVBoxLayout(container)
-        vbox.setContentsMargins(6, 0, 6, 0)
-        vbox.setSpacing(6)
+        vbox.setContentsMargins(2, 0, 2, 0)
+        vbox.setSpacing(4)
 
         # 상단 제목
         title = QLabel("감지 현황")
@@ -472,7 +485,8 @@ class TopBar(QWidget):
         items_widget = QWidget()
         hbox = QHBoxLayout(items_widget)
         hbox.setContentsMargins(0, 0, 0, 0)
-        hbox.setSpacing(10)
+        hbox.setSpacing(4)
+        hbox.setAlignment(Qt.AlignHCenter)
 
         item_font = QFont("Segoe UI", 10, QFont.Bold)
 
@@ -491,9 +505,11 @@ class TopBar(QWidget):
         self._lbl_ea.setAlignment(Qt.AlignCenter)
         self._lbl_ea.setFont(item_font)
 
+        hbox.addStretch()
         hbox.addWidget(self._lbl_v)
         hbox.addWidget(self._lbl_a)
         hbox.addWidget(self._lbl_ea)
+        hbox.addStretch()
         vbox.addWidget(items_widget)
 
         return container
@@ -564,6 +580,52 @@ class TopBar(QWidget):
         painter.end()
         return QIcon(px)
 
+    def _make_gear_icon(self) -> QIcon:
+        """설정 톱니바퀴 아이콘 생성 (8치아, 다크/라이트 모드 대응)"""
+        from PySide6.QtGui import QPainterPath
+        size = 22
+        px = QPixmap(size, size)
+        px.fill(Qt.transparent)
+        painter = QPainter(px)
+        painter.setRenderHint(QPainter.Antialiasing)
+        fg = QColor("#dddddd") if self._dark_mode else QColor("#404040")
+
+        cx, cy = size / 2.0, size / 2.0
+        n_teeth = 8
+        r_out = 10.0
+        r_in = 7.2
+        r_hole = 3.5
+
+        path = QPainterPath()
+        for i in range(n_teeth):
+            step = 2 * math.pi / n_teeth
+            a = i * step - math.pi / 2
+            tooth_half = step * 0.3
+            pts = [
+                (cx + r_in * math.cos(a - tooth_half * 1.3), cy + r_in * math.sin(a - tooth_half * 1.3)),
+                (cx + r_out * math.cos(a - tooth_half), cy + r_out * math.sin(a - tooth_half)),
+                (cx + r_out * math.cos(a + tooth_half), cy + r_out * math.sin(a + tooth_half)),
+                (cx + r_in * math.cos(a + tooth_half * 1.3), cy + r_in * math.sin(a + tooth_half * 1.3)),
+            ]
+            if i == 0:
+                path.moveTo(*pts[0])
+            else:
+                path.lineTo(*pts[0])
+            for pt in pts[1:]:
+                path.lineTo(*pt)
+        path.closeSubpath()
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(fg)
+        painter.drawPath(path)
+
+        # 중앙 구멍
+        painter.setCompositionMode(QPainter.CompositionMode_Clear)
+        painter.drawEllipse(cx - r_hole, cy - r_hole, r_hole * 2, r_hole * 2)
+
+        painter.end()
+        return QIcon(px)
+
     def _make_volume_icon(self, muted: bool) -> QIcon:
         """볼륨/음소거 아이콘 반환 (야간모드에서 픽셀 반전으로 밝게 처리)"""
         icon_type = QStyle.SP_MediaVolumeMuted if muted else QStyle.SP_MediaVolume
@@ -615,6 +677,7 @@ class TopBar(QWidget):
         self._btn_dark.setIcon(self._make_darkmode_icon(checked))
         self._btn_embed_mute.setIcon(self._make_volume_icon(self._btn_embed_mute.isChecked()))
         self._btn_fullscreen.setIcon(self._make_fullscreen_icon(self._btn_fullscreen.isChecked()))
+        self._btn_settings.setIcon(self._make_gear_icon())
         self.dark_mode_toggled.emit(checked)
 
     # --- 외부에서 호출하는 메서드 ---
@@ -683,6 +746,16 @@ class TopBar(QWidget):
         self._btn_fullscreen.setChecked(is_fullscreen)
         self._btn_fullscreen.setIcon(self._make_fullscreen_icon(is_fullscreen))
         self._btn_fullscreen.blockSignals(False)
+
+    def set_alarm_blink_state(self, active: bool):
+        """visual_blink 신호 수신 — True=빨간 버튼, False=기본 버튼.
+        AlarmSystem의 깜빡임 주기(500ms)와 동기화되어 버튼이 점멸한다."""
+        if active:
+            self._btn_ack.setStyleSheet(
+                "QPushButton#btnAlarmAck { background-color: #cc0000; color: white; }"
+            )
+        else:
+            self._btn_ack.setStyleSheet("")
 
     def update_signoff_state(self, group_id: int, state: str,
                               group_name: str, seconds: float = 0.0,

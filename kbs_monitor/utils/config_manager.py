@@ -13,10 +13,11 @@ DEFAULT_CONFIG = {
     "detection": {
         "black_threshold": 10,
         "black_duration": 10,
-        "black_alarm_duration": 10,
-        "still_threshold": 2,
+        "black_alarm_duration": 60,
+        "still_threshold": 8,
+        "still_changed_ratio": 2.0,
         "still_duration": 60,
-        "still_alarm_duration": 10,
+        "still_alarm_duration": 60,
         "audio_hsv_h_min": 40,
         "audio_hsv_h_max": 80,
         "audio_hsv_s_min": 30,
@@ -25,11 +26,11 @@ DEFAULT_CONFIG = {
         "audio_hsv_v_max": 255,
         "audio_pixel_ratio": 5,
         "audio_level_duration": 20,
-        "audio_level_alarm_duration": 10,
+        "audio_level_alarm_duration": 60,
         "audio_level_recovery_seconds": 2,
         "embedded_silence_threshold": -50,
         "embedded_silence_duration": 20,
-        "embedded_alarm_duration": 10,
+        "embedded_alarm_duration": 60,
         "audio_tone_std_threshold": 3.0,   # 정파 톤 감지: ratio 표준편차 임계값(%) — 이 값 이하면 일정 톤으로 판단
         "audio_tone_duration":      60.0,  # 정파 톤 감지: 톤 상태 지속 시간(초) — 정파 진입 트리거 조건
         "audio_tone_min_level":     5.0,   # 정파 톤 감지: 최소 레벨(%) — 이 값 미만이면 무음(톤 아님)으로 처리

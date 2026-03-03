@@ -76,7 +76,6 @@ class MainWindow(QMainWindow):
         # 임베디드 오디오 알림 로그 중복 방지
         self._embedded_log_sent = False
         self._last_silence_seconds = 0.0  # 마지막 무음 지속 시간 (복구 시 참조)
-        self._embedded_audio_present = False  # 실제 임베디드 오디오 신호 존재 여부 (EA 표시용)
 
         # 비디오/오디오 알림 로그 중복 방지 (label 기반)
         self._black_logged: set = set()
@@ -154,6 +153,7 @@ class MainWindow(QMainWindow):
         self._top_bar.sound_toggled.connect(self._on_sound_toggled)
         self._top_bar.volume_changed.connect(self._on_volume_changed)
         self._top_bar.clear_alarm_requested.connect(self._on_clear_alarm)
+        self._top_bar.alarm_acknowledged.connect(self._on_alarm_acknowledged)
         self._top_bar.dark_mode_toggled.connect(self._on_dark_mode_toggled)
         self._top_bar.fullscreen_toggled.connect(self._toggle_fullscreen)
         self._top_bar.signoff_manual_release.connect(self._on_signoff_button_clicked)
@@ -162,6 +162,7 @@ class MainWindow(QMainWindow):
         self._signoff_manager.event_occurred.connect(self._on_signoff_event)
 
         self._alarm.visual_blink.connect(self._video_widget.set_blink_state)
+        self._alarm.visual_blink.connect(self._top_bar.set_alarm_blink_state)
 
         self._logger.log_signal.connect(self._on_log_message)
 
@@ -382,7 +383,7 @@ class MainWindow(QMainWindow):
         a_count = len(self._roi_manager.audio_rois)
         self._top_bar.update_summary(
             v_count, a_count,
-            self._embedded_detect_enabled and self._embedded_audio_present,
+            self._embedded_detect_enabled,
             self._detector.embedded_alerting,
         )
         # 감지영역 정보를 비디오 위젯에도 동기화
@@ -415,6 +416,14 @@ class MainWindow(QMainWindow):
         self._embedded_log_sent = False
         self._last_silence_seconds = 0.0
         self._logger.info("SYSTEM - 알림 초기화")
+
+    def _on_alarm_acknowledged(self):
+        """알림확인 버튼 클릭 — 소리 및 깜빡임 해제 (감지기 상태·로그 집합 유지).
+        acknowledge_all()로 현재 알람을 confirmed 처리 → 이상이 지속돼도 재알림 없음.
+        이상이 실제 해제(resolve)되면 acknowledged 상태도 제거되어 다음 이상 시 정상 알림.
+        """
+        self._alarm.acknowledge_all()
+        self._logger.info("SYSTEM - 알림확인")
 
     # ── 설정 다이얼로그 ────────────────────────────────
 
@@ -509,7 +518,8 @@ class MainWindow(QMainWindow):
         self._detector.black_threshold = det.get("black_threshold", 10)
         self._detector.black_duration = det.get("black_duration", 10.0)
         self._detector.black_alarm_duration = det.get("black_alarm_duration", 10.0)
-        self._detector.still_threshold = det.get("still_threshold", 2)
+        self._detector.still_threshold = det.get("still_threshold", 8)
+        self._detector.still_changed_ratio = det.get("still_changed_ratio", 2.0)
         self._detector.still_duration = det.get("still_duration", 60.0)
         self._detector.still_alarm_duration = det.get("still_alarm_duration", 10.0)
         # 오디오 레벨미터 HSV
@@ -554,8 +564,6 @@ class MainWindow(QMainWindow):
     def _on_audio_level_for_silence(self, l_db: float, r_db: float):
         """level_updated 수신 — 정상 오디오 수신 시 임베디드 감지 리셋"""
         avg_db = (l_db + r_db) / 2.0
-        # EA 감지현황 표시용 — 실제 오디오 신호 존재 여부 항상 추적
-        self._embedded_audio_present = (avg_db > self._detector.embedded_silence_threshold)
         if not self._detection_enabled or not self._embedded_detect_enabled:
             return
         if self._signoff_manager.is_any_signoff():

@@ -1008,19 +1008,31 @@ class SettingsDialog(QDialog):
         grid_s.setVerticalSpacing(8)
         grid_s.setColumnStretch(2, 1)
 
-        lbl_st = QLabel("▪  픽셀 차이 임계값:")
+        lbl_st = QLabel("▪  픽셀당 변화 기준값:")
         lbl_st.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_still_threshold = _NumEdit(2, 0, 255)
+        self._edit_still_threshold = _NumEdit(8, 0, 255)
         self._edit_still_threshold.editingFinished.connect(self._save_detection_params)
         desc_st = QLabel(
-            "• 0~255 / 값이 낮을수록 미세한 변화도 정지로 판단  (기본값: 2)<br>"
-            "• 임계값 2 → \"거의 2픽셀도 달라지면 안 됨\" → 엄격 (정지 감지가 잘 안 됨)<br>"
-            "• 임계값 10 → \"10픽셀 정도 변화해도 정지로 봄\" → 느슨 (오감지 위험)"
+            "• 0~255 / 각 픽셀의 밝기 차이가 이 값 이상이면 '변화한 픽셀'로 분류  (기본값: 8)<br>"
+            "• 높을수록 인코더 압축 노이즈를 무시  /  낮을수록 미세한 변화도 움직임으로 감지"
         )
         desc_st.setObjectName("paramDescLabel")
         grid_s.addWidget(lbl_st,                    0, 0)
         grid_s.addWidget(self._edit_still_threshold, 0, 1)
         grid_s.addWidget(desc_st,                   0, 2)
+
+        lbl_scr = QLabel("▪  변화 픽셀 비율 임계값(%):")
+        lbl_scr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._edit_still_changed_ratio = _NumEdit(2.0, 0.1, 50.0, is_float=True)
+        self._edit_still_changed_ratio.editingFinished.connect(self._save_detection_params)
+        desc_scr = QLabel(
+            "• 0.1~50.0% / 변화한 픽셀이 이 비율 미만이면 정지로 판단  (기본값: 2.0%)<br>"
+            "• 낮출수록 엄격 (조금만 변해도 정지 아님)  /  높일수록 느슨 (오감지 위험)"
+        )
+        desc_scr.setObjectName("paramDescLabel")
+        grid_s.addWidget(lbl_scr,                        1, 0)
+        grid_s.addWidget(self._edit_still_changed_ratio,  1, 1)
+        grid_s.addWidget(desc_scr,                       1, 2)
 
         lbl_str = QLabel("▪  몇 초 이상시 알림 발생(초):")
         lbl_str.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -1028,9 +1040,9 @@ class SettingsDialog(QDialog):
         self._edit_still_duration.editingFinished.connect(self._save_detection_params)
         desc_str = QLabel("스틸이 이 시간 이상 지속되면 알림 발생  (기본값: 60초)")
         desc_str.setObjectName("paramDescLabel")
-        grid_s.addWidget(lbl_str,                  1, 0)
-        grid_s.addWidget(self._edit_still_duration, 1, 1)
-        grid_s.addWidget(desc_str,                 1, 2)
+        grid_s.addWidget(lbl_str,                  2, 0)
+        grid_s.addWidget(self._edit_still_duration, 2, 1)
+        grid_s.addWidget(desc_str,                 2, 2)
 
         lbl_sad = QLabel("▪  알림 지속시간(초):")
         lbl_sad.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -1038,9 +1050,9 @@ class SettingsDialog(QDialog):
         self._edit_still_alarm_duration.editingFinished.connect(self._save_detection_params)
         desc_sad = QLabel("알림 발생 시 소리를 울리는 시간  (기본값: 10초)")
         desc_sad.setObjectName("paramDescLabel")
-        grid_s.addWidget(lbl_sad,                        2, 0)
-        grid_s.addWidget(self._edit_still_alarm_duration, 2, 1)
-        grid_s.addWidget(desc_sad,                       2, 2)
+        grid_s.addWidget(lbl_sad,                        3, 0)
+        grid_s.addWidget(self._edit_still_alarm_duration, 3, 1)
+        grid_s.addWidget(desc_sad,                       3, 2)
 
         layout.addWidget(group_still)
 
@@ -1705,11 +1717,11 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.04")
+        lbl_version = QLabel("KBS Peacock v1.1")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)
-        lbl_date = QLabel("2026-02-23")
+        lbl_date = QLabel("2026-03-03")
         about_layout.addWidget(lbl_date, 1, 1)
 
         about_layout.addWidget(QLabel("GitHub:"), 2, 0)
@@ -1778,7 +1790,8 @@ class SettingsDialog(QDialog):
         self._edit_black_threshold.setText(str(int(det.get("black_threshold", 10))))
         self._edit_black_duration.setText(str(int(det.get("black_duration", 10))))
         self._edit_black_alarm_duration.setText(str(int(det.get("black_alarm_duration", 10))))
-        self._edit_still_threshold.setText(str(int(det.get("still_threshold", 2))))
+        self._edit_still_threshold.setText(str(int(det.get("still_threshold", 8))))
+        self._edit_still_changed_ratio.setText(str(float(det.get("still_changed_ratio", 2.0))))
         self._edit_still_duration.setText(str(int(det.get("still_duration", 60))))
         self._edit_still_alarm_duration.setText(str(int(det.get("still_alarm_duration", 10))))
 
@@ -1867,6 +1880,7 @@ class SettingsDialog(QDialog):
             "black_duration":       self._edit_black_duration.get_value(),
             "black_alarm_duration": self._edit_black_alarm_duration.get_value(),
             "still_threshold":      self._edit_still_threshold.get_value(),
+            "still_changed_ratio":  self._edit_still_changed_ratio.get_value(),
             "still_duration":       self._edit_still_duration.get_value(),
             "still_alarm_duration": self._edit_still_alarm_duration.get_value(),
             # 오디오 레벨미터 HSV

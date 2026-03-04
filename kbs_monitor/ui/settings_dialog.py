@@ -1035,16 +1035,6 @@ class SettingsDialog(QDialog):
         grid_b.addWidget(self._edit_black_threshold, 0, 1)
         grid_b.addWidget(desc_bt,                   0, 2)
 
-        lbl_btr = QLabel("▪  몇 초 이상시 알림 발생(초):")
-        lbl_btr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_black_duration = _NumEdit(20, 1, 120)
-        self._edit_black_duration.editingFinished.connect(self._save_detection_params)
-        desc_btr = QLabel("1~120초 / 블랙이 이 시간 이상 지속되면 알림 발생  (기본값: 20초)")
-        desc_btr.setObjectName("paramDescLabel")
-        grid_b.addWidget(lbl_btr,                  1, 0)
-        grid_b.addWidget(self._edit_black_duration, 1, 1)
-        grid_b.addWidget(desc_btr,                 1, 2)
-
         lbl_bdr = QLabel("▪  어두운 픽셀 비율 임계값(%):")
         lbl_bdr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._edit_black_dark_ratio = _NumEdit(95.0, 50.0, 100.0, is_float=True)
@@ -1054,9 +1044,19 @@ class SettingsDialog(QDialog):
             "• 높일수록 엄격 (자막 등 밝은 요소 허용 줄임)  /  낮출수록 느슨 (자막 있어도 블랙 감지)"
         )
         desc_bdr.setObjectName("paramDescLabel")
-        grid_b.addWidget(lbl_bdr,                     2, 0)
-        grid_b.addWidget(self._edit_black_dark_ratio,  2, 1)
-        grid_b.addWidget(desc_bdr,                    2, 2)
+        grid_b.addWidget(lbl_bdr,                     1, 0)
+        grid_b.addWidget(self._edit_black_dark_ratio,  1, 1)
+        grid_b.addWidget(desc_bdr,                    1, 2)
+
+        lbl_btr = QLabel("▪  몇 초 이상시 알림 발생(초):")
+        lbl_btr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._edit_black_duration = _NumEdit(20, 1, 120)
+        self._edit_black_duration.editingFinished.connect(self._save_detection_params)
+        desc_btr = QLabel("1~120초 / 블랙이 이 시간 이상 지속되면 알림 발생  (기본값: 20초)")
+        desc_btr.setObjectName("paramDescLabel")
+        grid_b.addWidget(lbl_btr,                  2, 0)
+        grid_b.addWidget(self._edit_black_duration, 2, 1)
+        grid_b.addWidget(desc_btr,                 2, 2)
 
         lbl_bad = QLabel("▪  알림 지속시간(초):")
         lbl_bad.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -1786,7 +1786,7 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.3")
+        lbl_version = QLabel("KBS Peacock v1.4.1")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)

@@ -21,7 +21,7 @@ from ui.main_window import MainWindow
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("KBS Peacock v1.4")
+    app.setApplicationName("KBS Peacock v1.4.1")
     app.setOrganizationName("KBS")
 
     # 다크 테마 QSS 로드

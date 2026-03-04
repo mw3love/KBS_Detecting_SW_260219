@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.3")
+        self.setWindowTitle("KBS Peacock v1.4")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -516,6 +516,7 @@ class MainWindow(QMainWindow):
     def _apply_detection_config(self, det: dict):
         """config dict에서 감지 파라미터 적용"""
         self._detector.black_threshold = det.get("black_threshold", 10)
+        self._detector.black_dark_ratio = det.get("black_dark_ratio", 95.0)
         self._detector.black_duration = det.get("black_duration", 10.0)
         self._detector.black_alarm_duration = det.get("black_alarm_duration", 10.0)
         self._detector.still_threshold = det.get("still_threshold", 8)

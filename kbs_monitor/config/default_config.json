@@ -2,6 +2,7 @@
   "port": 0,
   "detection": {
     "black_threshold": 10,
+    "black_dark_ratio": 95.0,
     "black_duration": 20,
     "black_alarm_duration": 10,
     "still_threshold": 8,

@@ -100,7 +100,8 @@ class Detector:
         self.still_detection_enabled = True  # 스틸 감지 활성화 여부
 
         # 블랙 감지 설정
-        self.black_threshold = 10          # 밝기 임계값 (0~255)
+        self.black_threshold = 10          # 픽셀당 어두움 기준 (0~255): 이 값 미만이면 '어두운 픽셀'로 분류
+        self.black_dark_ratio = 95.0       # 어두운 픽셀 비율 임계값 (%): 이 비율 이상이면 블랙으로 판단
         self.black_duration = 10.0         # 몇 초 이상 지속 시 알림 발생
         self.black_alarm_duration = 10.0   # 알림 지속 시간(초)
 
@@ -213,12 +214,12 @@ class Detector:
 
             crop = frame[y1:y2, x1:x2]
 
-            # 블랙 감지 (비활성화 시 밝기 계산 생략)
+            # 블랙 감지 (어두운 픽셀 비율 방식 — 비활성화 시 계산 생략)
             is_black = False
             if self.black_detection_enabled:
                 gray = crop if len(crop.shape) == 2 else crop.mean(axis=2)
-                avg_brightness = float(np.mean(gray))
-                is_black = avg_brightness < self.black_threshold
+                dark_ratio = float(np.mean(gray < self.black_threshold)) * 100.0
+                is_black = dark_ratio >= self.black_dark_ratio
 
             # 스틸 감지 (변화 픽셀 비율 방식 — 비활성화 시 float32 변환 및 복사 생략)
             is_still = False

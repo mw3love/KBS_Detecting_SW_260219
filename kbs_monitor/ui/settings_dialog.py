@@ -521,6 +521,8 @@ class _SignoffRoiDialog(QDialog):
 
         # 억제 대상 체크박스 목록 {label: QCheckBox}
         self._suppress_chks: dict = {}
+        # 현재 자동 체크+비활성화된 트리거 label 추적
+        self._auto_checked_label: str = ""
 
         self._setup_ui()
 
@@ -592,14 +594,32 @@ class _SignoffRoiDialog(QDialog):
         layout.addLayout(ok_row)
 
     def _on_trigger_changed(self):
-        """트리거 콤보 변경 시 해당 ROI를 억제 대상에 자동 체크."""
+        """트리거 콤보 변경 시 해당 ROI를 억제 대상에 자동 체크+비활성화."""
         self._sync_trigger_suppress()
 
     def _sync_trigger_suppress(self):
-        """현재 트리거 label을 억제 대상 체크박스에서 강제 체크한다."""
-        trigger = self._trigger_combo.currentData() or ""
-        if trigger and trigger in self._suppress_chks:
-            self._suppress_chks[trigger].setChecked(True)
+        """
+        트리거 label에 해당하는 체크박스를 자동 체크+비활성화한다.
+        이전 트리거 체크박스는 체크 해제 후 다시 활성화한다.
+        """
+        new_trigger = self._trigger_combo.currentData() or ""
+
+        # 이전 트리거 복원: 체크 해제 + 활성화 + 툴팁 제거
+        if self._auto_checked_label and self._auto_checked_label != new_trigger:
+            old_chk = self._suppress_chks.get(self._auto_checked_label)
+            if old_chk:
+                old_chk.setChecked(False)
+                old_chk.setEnabled(True)
+                old_chk.setToolTip("")
+
+        # 새 트리거 자동 체크 + 비활성화
+        if new_trigger and new_trigger in self._suppress_chks:
+            chk = self._suppress_chks[new_trigger]
+            chk.setChecked(True)
+            chk.setEnabled(False)
+            chk.setToolTip("진입 트리거로 선택된 항목은 자동으로 억제됩니다")
+
+        self._auto_checked_label = new_trigger
 
     def get_result(self) -> tuple:
         """(enter_label: str, suppressed_labels: list[str]) 반환."""
@@ -1025,15 +1045,28 @@ class SettingsDialog(QDialog):
         grid_b.addWidget(self._edit_black_duration, 1, 1)
         grid_b.addWidget(desc_btr,                 1, 2)
 
+        lbl_bdr = QLabel("▪  어두운 픽셀 비율 임계값(%):")
+        lbl_bdr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._edit_black_dark_ratio = _NumEdit(95.0, 50.0, 100.0, is_float=True)
+        self._edit_black_dark_ratio.editingFinished.connect(self._save_detection_params)
+        desc_bdr = QLabel(
+            "• 50~100% / 감지영역 픽셀 중 이 비율 이상이 어두우면 블랙으로 판단  (기본값: 95%)<br>"
+            "• 높일수록 엄격 (자막 등 밝은 요소 허용 줄임)  /  낮출수록 느슨 (자막 있어도 블랙 감지)"
+        )
+        desc_bdr.setObjectName("paramDescLabel")
+        grid_b.addWidget(lbl_bdr,                     2, 0)
+        grid_b.addWidget(self._edit_black_dark_ratio,  2, 1)
+        grid_b.addWidget(desc_bdr,                    2, 2)
+
         lbl_bad = QLabel("▪  알림 지속시간(초):")
         lbl_bad.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._edit_black_alarm_duration = _NumEdit(10, 1, 60)
         self._edit_black_alarm_duration.editingFinished.connect(self._save_detection_params)
         desc_bad = QLabel("1~60초 / 알림 발생 시 소리를 울리는 시간  (기본값: 60초)")
         desc_bad.setObjectName("paramDescLabel")
-        grid_b.addWidget(lbl_bad,                        2, 0)
-        grid_b.addWidget(self._edit_black_alarm_duration, 2, 1)
-        grid_b.addWidget(desc_bad,                       2, 2)
+        grid_b.addWidget(lbl_bad,                        3, 0)
+        grid_b.addWidget(self._edit_black_alarm_duration, 3, 1)
+        grid_b.addWidget(desc_bad,                       3, 2)
 
         layout.addWidget(group_black)
 
@@ -1824,6 +1857,7 @@ class SettingsDialog(QDialog):
     def _apply_detection_params_to_ui(self, det: dict):
         """감지 파라미터 dict를 UI 위젯에 적용 (신호 없이 조용히 갱신)"""
         self._edit_black_threshold.setText(str(int(det.get("black_threshold", 10))))
+        self._edit_black_dark_ratio.setText(str(float(det.get("black_dark_ratio", 95.0))))
         self._edit_black_duration.setText(str(int(det.get("black_duration", 20))))
         self._edit_black_alarm_duration.setText(str(int(det.get("black_alarm_duration", 10))))
         self._edit_still_threshold.setText(str(int(det.get("still_threshold", 8))))
@@ -1913,6 +1947,7 @@ class SettingsDialog(QDialog):
         v_min, v_max = self._slider_hsv_v.get_range()
         return {
             "black_threshold":      self._edit_black_threshold.get_value(),
+            "black_dark_ratio":     self._edit_black_dark_ratio.get_value(),
             "black_duration":       self._edit_black_duration.get_value(),
             "black_alarm_duration": self._edit_black_alarm_duration.get_value(),
             "still_threshold":      self._edit_still_threshold.get_value(),

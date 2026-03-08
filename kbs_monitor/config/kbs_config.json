@@ -3,93 +3,57 @@
   "detection": {
     "black_threshold": 10,
     "black_dark_ratio": 95.0,
-    "black_duration": 20,
-    "black_alarm_duration": 60,
-    "still_threshold": 8,
+    "black_duration": 10,
+    "black_alarm_duration": 10,
+    "still_threshold": 2,
     "still_changed_ratio": 2.0,
-    "still_duration": 60,
-    "still_alarm_duration": 60,
+    "still_duration": 30,
+    "still_alarm_duration": 10,
     "audio_hsv_h_min": 40,
-    "audio_hsv_h_max": 95,
-    "audio_hsv_s_min": 80,
+    "audio_hsv_h_max": 80,
+    "audio_hsv_s_min": 30,
     "audio_hsv_s_max": 255,
-    "audio_hsv_v_min": 60,
+    "audio_hsv_v_min": 30,
     "audio_hsv_v_max": 255,
     "audio_pixel_ratio": 5,
     "audio_level_duration": 20,
-    "audio_level_alarm_duration": 60,
+    "audio_level_alarm_duration": 10,
     "audio_level_recovery_seconds": 2,
     "embedded_silence_threshold": -50,
     "embedded_silence_duration": 20,
-    "embedded_alarm_duration": 60,
-    "audio_tone_std_threshold": 3,
-    "audio_tone_duration": 10,
-    "audio_tone_min_level": 5
+    "embedded_alarm_duration": 10,
+    "audio_tone_std_threshold": 3.0,
+    "audio_tone_duration": 60.0,
+    "audio_tone_min_level": 5.0
   },
   "alarm": {
     "sound_enabled": true,
     "volume": 0,
     "sounds_dir": "resources/sounds",
     "sound_files": {
-      "default": "resources\\sounds\\alarm.wav"
+      "default": "resources\\sounds\\Alert.wav"
     }
   },
   "rois": {
     "video": [
       {
         "label": "V1",
-        "media_name": "1",
-        "x": 991,
+        "media_name": "dfg",
+        "x": 999,
         "y": 6,
-        "w": 284,
-        "h": 300,
-        "roi_type": "video"
-      },
-      {
-        "label": "V2",
-        "media_name": "2",
-        "x": 235,
-        "y": 166,
-        "w": 121,
-        "h": 114,
-        "roi_type": "video"
-      },
-      {
-        "label": "V3",
-        "media_name": "3",
-        "x": 200,
-        "y": 357,
-        "w": 212,
-        "h": 206,
-        "roi_type": "video"
-      },
-      {
-        "label": "V4",
-        "media_name": "4",
-        "x": 327,
-        "y": 656,
-        "w": 171,
-        "h": 89,
+        "w": 273,
+        "h": 165,
         "roi_type": "video"
       }
     ],
     "audio": [
       {
         "label": "A1",
-        "media_name": "111",
-        "x": 965,
-        "y": 89,
-        "w": 18,
-        "h": 73,
-        "roi_type": "audio"
-      },
-      {
-        "label": "A2",
-        "media_name": "222",
-        "x": 968,
-        "y": 633,
-        "w": 19,
-        "h": 72,
+        "media_name": "sdf",
+        "x": 966,
+        "y": 99,
+        "w": 20,
+        "h": 70,
         "roi_type": "audio"
       }
     ]
@@ -100,7 +64,8 @@
     "black_detection_enabled": true,
     "still_detection_enabled": true,
     "audio_detection_enabled": true,
-    "embedded_detection_enabled": true
+    "embedded_detection_enabled": true,
+    "video_detection_enabled": true
   },
   "telegram": {
     "enabled": false,
@@ -129,41 +94,41 @@
   },
   "signoff": {
     "auto_preparation": true,
-    "prep_alarm_sound": "resources\\sounds\\sign_off.wav",
-    "enter_alarm_sound": "resources\\sounds\\sign_off.wav",
-    "release_alarm_sound": "resources\\sounds\\sign_off.wav",
+    "prep_alarm_sound": "",
+    "enter_alarm_sound": "",
+    "release_alarm_sound": "",
     "group1": {
-      "name": "1TV",
-      "enter_roi": {
-        "video_label": "V2"
-      },
-      "suppressed_labels": [
-        "V1",
-        "V2",
-        "V3",
-        "V4"
-      ],
-      "start_time": "03:00",
-      "end_time": "05:00",
-      "prep_minutes": 150,
-      "exit_prep_minutes": 30,
-      "exit_trigger_sec": 5,
-      "end_next_day": false,
-      "weekdays": [
-        0,
-        6
-      ]
-    },
-    "group2": {
-      "name": "2TV",
+      "name": "Group1",
       "enter_roi": {
         "video_label": ""
       },
       "suppressed_labels": [],
-      "start_time": "02:00",
+      "start_time": "00:30",
       "end_time": "05:00",
-      "prep_minutes": 90,
-      "exit_prep_minutes": 30,
+      "prep_minutes": 30,
+      "exit_prep_minutes": 0,
+      "exit_trigger_sec": 5,
+      "end_next_day": false,
+      "weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "group2": {
+      "name": "Group2",
+      "enter_roi": {
+        "video_label": ""
+      },
+      "suppressed_labels": [],
+      "start_time": "00:30",
+      "end_time": "05:00",
+      "prep_minutes": 30,
+      "exit_prep_minutes": 0,
       "exit_trigger_sec": 5,
       "end_next_day": false,
       "weekdays": [

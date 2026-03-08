@@ -8,6 +8,9 @@ import queue
 import time
 import datetime
 
+_SEND_RETRY_COUNT = 2      # 전송 실패 시 최대 재시도 횟수
+_SEND_RETRY_DELAY = 5.0    # 재시도 대기 시간(초)
+
 import cv2
 import numpy as np
 
@@ -193,7 +196,7 @@ class TelegramNotifier:
             else:
                 return False, f"오류 {resp.status_code}: {resp.text[:120]}"
         except Exception as exc:
-            return False, str(exc)
+            return False, f"{type(exc).__name__}: {exc}"
 
     # ── 워커 스레드 ───────────────────────────────────────────────────────────
 
@@ -242,28 +245,41 @@ class TelegramNotifier:
         base = self._API_BASE.format(token=self._bot_token)
         timeout = 15.0
 
-        try:
-            if item.get("jpeg_bytes"):
-                resp = _requests.post(
-                    f"{base}/sendPhoto",
-                    data={"chat_id": self._chat_id, "caption": text},
-                    files={
-                        "photo": ("snapshot.jpg", item["jpeg_bytes"], "image/jpeg")
-                    },
-                    timeout=timeout,
-                )
-            else:
-                resp = _requests.post(
-                    f"{base}/sendMessage",
-                    json={"chat_id": self._chat_id, "text": text},
-                    timeout=timeout,
-                )
-            if resp.status_code == 200:
-                kind = "복구" if is_recovery else "알림"
-                self._log(f"{alarm_type} {kind} 전송 완료 ({channel_str})")
-            else:
-                self._log(
-                    f"전송 실패 {resp.status_code}: {resp.text[:120]}", error=True
-                )
-        except Exception as exc:
-            self._log(f"전송 오류: {exc}", error=True)
+        for attempt in range(1 + _SEND_RETRY_COUNT):
+            try:
+                if item.get("jpeg_bytes"):
+                    resp = _requests.post(
+                        f"{base}/sendPhoto",
+                        data={"chat_id": self._chat_id, "caption": text},
+                        files={
+                            "photo": ("snapshot.jpg", item["jpeg_bytes"], "image/jpeg")
+                        },
+                        timeout=timeout,
+                    )
+                else:
+                    resp = _requests.post(
+                        f"{base}/sendMessage",
+                        json={"chat_id": self._chat_id, "text": text},
+                        timeout=timeout,
+                    )
+                if resp.status_code == 200:
+                    kind = "복구" if is_recovery else "알림"
+                    self._log(f"{alarm_type} {kind} 전송 완료 ({channel_str})")
+                else:
+                    self._log(
+                        f"전송 실패 {resp.status_code}: {resp.text[:120]}", error=True
+                    )
+                return  # 성공 또는 HTTP 오류 모두 재시도 없이 종료
+            except Exception as exc:
+                if attempt < _SEND_RETRY_COUNT:
+                    self._log(
+                        f"전송 오류 (재시도 {attempt + 1}/{_SEND_RETRY_COUNT}): "
+                        f"{type(exc).__name__}: {exc}",
+                        error=True,
+                    )
+                    time.sleep(_SEND_RETRY_DELAY)
+                else:
+                    self._log(
+                        f"전송 실패 (재시도 소진): {type(exc).__name__}: {exc}",
+                        error=True,
+                    )

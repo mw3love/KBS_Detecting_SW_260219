@@ -10,7 +10,9 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QApplication,
 )
-from PySide6.QtCore import Qt, QTimer
+import threading
+
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent
 
 from ui.top_bar import TopBar
@@ -33,9 +35,11 @@ from utils.logger import AppLogger
 class MainWindow(QMainWindow):
     """KBS 16채널 모니터링 메인 윈도우"""
 
+    _telegram_test_done = Signal(bool, str)   # 백그라운드 테스트 → 메인 스레드 결과 전달
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.4.1")
+        self.setWindowTitle("KBS Peacock v1.4.2")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -168,6 +172,7 @@ class MainWindow(QMainWindow):
 
         # 텔레그램 로거 주입 (전송 성공은 파일에만, 오류는 UI에도 표시)
         self._telegram.set_logger(self._logger.file_only, self._logger.error)
+        self._telegram_test_done.connect(self._on_telegram_test_done)
 
     # ── 스레드 시작 ────────────────────────────────────
 
@@ -700,8 +705,15 @@ class MainWindow(QMainWindow):
         self._apply_telegram_config(params)
 
     def _on_telegram_test(self, token: str, chat_id: str):
-        """연결 테스트 결과를 설정창에 반환"""
-        ok, msg = self._telegram.test_connection(token, chat_id)
+        """연결 테스트를 백그라운드 스레드에서 실행 (메인 스레드 블로킹 방지)"""
+        def _run():
+            ok, msg = self._telegram.test_connection(token, chat_id)
+            self._telegram_test_done.emit(ok, msg)
+
+        threading.Thread(target=_run, daemon=True, name="TelegramTestThread").start()
+
+    def _on_telegram_test_done(self, ok: bool, msg: str):
+        """테스트 결과 수신 — 메인 스레드에서 UI 업데이트"""
         if self._settings_dialog:
             self._settings_dialog.set_telegram_test_result(ok, msg)
 

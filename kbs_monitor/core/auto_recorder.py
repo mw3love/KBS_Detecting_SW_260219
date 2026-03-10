@@ -2,11 +2,14 @@
 자동 녹화 모듈
 알림 발생 시 사고 전 N초 + 사고 후 M초를 지정 해상도/FPS로 MP4 자동 저장.
 순환 버퍼(JPEG 압축)로 "사고 전" 구간 구현, 오래된 파일 자동 삭제.
-감지 루프와 독립적으로 daemon 스레드에서 처리.
+오디오(임베디드)를 WAV로 동시 버퍼링하여 ffmpeg로 영상과 합성.
+ffmpeg 미설치 시 영상만 저장(폴백).
 """
 import os
+import subprocess
 import threading
 import time
+import wave
 import datetime
 from collections import deque
 from typing import Optional
@@ -17,12 +20,18 @@ import numpy as np
 
 _JPEG_QUALITY = 85
 
+# AudioMonitorThread 와 동일한 오디오 파라미터
+_AUDIO_SR    = 44100   # 샘플레이트 (Hz)
+_AUDIO_CH    = 2       # 채널 수 (스테레오)
+_AUDIO_CHUNK = 1024    # 청크 크기 (AudioMonitorThread.CHUNK 와 동일)
+
 
 class AutoRecorder:
     """
     순환 버퍼 기반 자동 녹화기.
-    - push_frame(): frame_ready 신호마다 호출, 버퍼에 JPEG 압축 저장
-    - trigger(): 알림 발생 시 호출, 별도 스레드에서 MP4 생성
+    - push_frame(): frame_ready 신호마다 호출, 비디오 버퍼에 JPEG 압축 저장
+    - push_audio(): audio_chunk 신호마다 호출, 오디오 버퍼에 raw PCM 저장
+    - trigger(): 알림 발생 시 호출, 별도 스레드에서 MP4(+오디오) 생성
     - _cleanup_loop(): 1시간마다 오래된 파일 자동 삭제
     """
 
@@ -33,22 +42,29 @@ class AutoRecorder:
         self._post_seconds: float = 15.0
         self._max_keep_days: int = 7
 
-        # 녹화 출력 해상도/FPS (configure()로 변경 가능)
+        # 녹화 출력 해상도/FPS
         self._out_w: int = 960
         self._out_h: int = 540
         self._out_fps: int = 10
         self._buf_interval: float = 1.0 / self._out_fps
 
-        # 순환 버퍼: deque[(timestamp, jpeg_bytes)]
+        # ── 비디오 순환 버퍼: deque[(timestamp, jpeg_bytes)] ──────────────
         maxlen = int(self._pre_seconds * self._out_fps) + 5
         self._buffer: deque = deque(maxlen=maxlen)
         self._buffer_lock = threading.Lock()
         self._last_buf_time: float = 0.0
 
+        # ── 오디오 순환 버퍼: deque[(timestamp, bytes)] ──────────────────
+        # 청크 수 = pre_seconds * 샘플레이트 / 청크크기
+        audio_maxlen = int(self._pre_seconds * _AUDIO_SR / _AUDIO_CHUNK) + 10
+        self._audio_buffer: deque = deque(maxlen=audio_maxlen)
+        self._audio_lock = threading.Lock()
+
         # 녹화 상태
         self._recording: bool = False
         self._record_end: float = 0.0
-        self._record_queue: deque = deque()
+        self._record_queue: deque = deque()          # 사고 후 비디오 프레임 큐
+        self._audio_record_queue: deque = deque()    # 사고 후 오디오 청크 큐
         self._record_thread: Optional[threading.Thread] = None
 
         # 자동 삭제 스레드
@@ -92,10 +108,17 @@ class AutoRecorder:
         self._out_fps = max(1, int(output_fps))
         self._buf_interval = 1.0 / self._out_fps
 
+        # 비디오 버퍼 크기 재계산
         new_maxlen = int(self._pre_seconds * self._out_fps) + 5
         with self._buffer_lock:
             old = list(self._buffer)[-new_maxlen:]
             self._buffer = deque(old, maxlen=new_maxlen)
+
+        # 오디오 버퍼 크기 재계산
+        new_audio_maxlen = int(self._pre_seconds * _AUDIO_SR / _AUDIO_CHUNK) + 10
+        with self._audio_lock:
+            old_audio = list(self._audio_buffer)[-new_audio_maxlen:]
+            self._audio_buffer = deque(old_audio, maxlen=new_audio_maxlen)
 
     # ── 프레임 수신 ───────────────────────────────────────────────────────────
 
@@ -104,14 +127,12 @@ class AutoRecorder:
         frame_ready 신호마다 호출.
         _out_fps 간격으로 JPEG 인코딩 후 순환 버퍼에 저장.
         녹화 중이면 출력 해상도로 리사이즈한 프레임을 녹화 큐에도 추가.
-        성능: JPEG 인코딩 약 1~2ms / 호출마다 if 비교 1회
         """
         if not self._enabled:
             return
 
         now = time.time()
 
-        # 버퍼: _buf_interval 간격으로만 저장 (다운샘플)
         if now - self._last_buf_time >= self._buf_interval:
             self._last_buf_time = now
             try:
@@ -126,7 +147,6 @@ class AutoRecorder:
             except Exception:
                 pass
 
-        # 녹화 중: 녹화 큐에 출력 해상도 리사이즈 프레임 추가
         if self._recording:
             if now < self._record_end:
                 try:
@@ -135,7 +155,25 @@ class AutoRecorder:
                 except Exception:
                     pass
             else:
-                self._recording = False     # 녹화 종료 플래그
+                self._recording = False
+
+    # ── 오디오 청크 수신 ──────────────────────────────────────────────────────
+
+    def push_audio(self, samples: np.ndarray, timestamp: float):
+        """
+        audio_chunk 신호마다 호출 (AudioMonitorThread → MainWindow → 여기).
+        int16 raw PCM을 순환 버퍼에 저장.
+        녹화 중이면 녹화 큐에도 추가.
+        """
+        if not self._enabled:
+            return
+
+        raw = samples.tobytes()
+        with self._audio_lock:
+            self._audio_buffer.append((timestamp, raw))
+
+        if self._recording and timestamp < self._record_end:
+            self._audio_record_queue.append((timestamp, raw))
 
     # ── 알림 발생 트리거 ──────────────────────────────────────────────────────
 
@@ -151,7 +189,6 @@ class AutoRecorder:
         new_end = now + self._post_seconds
 
         if self._recording:
-            # 종료 시간 연장 (연속 알림 시 녹화 이어서 진행)
             if new_end > self._record_end:
                 self._record_end = new_end
             return
@@ -160,10 +197,13 @@ class AutoRecorder:
         self._recording = True
         self._record_end = new_end
         self._record_queue.clear()
+        self._audio_record_queue.clear()
 
         # 사고 전 버퍼 스냅샷
         with self._buffer_lock:
             pre_frames = list(self._buffer)
+        with self._audio_lock:
+            pre_audio = list(self._audio_buffer)
 
         # 파일 경로 생성
         os.makedirs(self._save_dir, exist_ok=True)
@@ -179,7 +219,7 @@ class AutoRecorder:
 
         self._record_thread = threading.Thread(
             target=self._record_worker,
-            args=(pre_frames, filepath),
+            args=(pre_frames, pre_audio, filepath),
             daemon=True,
             name="RecorderWriter",
         )
@@ -187,39 +227,172 @@ class AutoRecorder:
 
     # ── 녹화 워커 ─────────────────────────────────────────────────────────────
 
-    def _record_worker(self, pre_frames: list, filepath: str):
+    def _record_worker(self, pre_frames: list, pre_audio: list, filepath: str):
         """
         MP4 녹화 워커 스레드.
-        pre_frames(JPEG bytes 리스트) → 실시간 record_queue → VideoWriter 저장.
+        1) 비디오(mp4v)와 오디오(WAV)를 임시 파일로 동시 기록
+        2) ffmpeg로 합성 → 최종 MP4
+        3) ffmpeg 미설치 시 비디오만 저장(폴백)
         """
+        base = filepath[:-4] if filepath.endswith(".mp4") else filepath
+        vtmp = base + "_vtmp.mp4"
+        atmp = base + "_atmp.wav"
+
+        # ── 비디오 Writer ──────────────────────────────────────────────────
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer = cv2.VideoWriter(filepath, fourcc, self._out_fps, (self._out_w, self._out_h))
+        writer = cv2.VideoWriter(vtmp, fourcc, self._out_fps, (self._out_w, self._out_h))
         if not writer.isOpened():
             return
 
+        # ── 오디오 WAV Writer ──────────────────────────────────────────────
+        wav_file = wave.open(atmp, "wb")
+        wav_file.setnchannels(_AUDIO_CH)
+        wav_file.setsampwidth(2)          # int16 = 2바이트
+        wav_file.setframerate(_AUDIO_SR)
+
+        has_audio = False
+
         try:
-            # 1) 사고 전 버퍼 기록
+            # 1) 사고 전 비디오 버퍼 기록
             for _ts, jpeg_bytes in pre_frames:
                 arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
                 frm = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                 if frm is not None:
                     writer.write(frm)
 
-            # 2) 사고 후 실시간 프레임 기록 (녹화 플래그 해제까지)
+            # 2) 사고 전 오디오 버퍼 기록
+            for _ts, raw in pre_audio:
+                wav_file.writeframes(raw)
+                has_audio = True
+
+            # 3) 사고 후 실시간 프레임/오디오 기록 (녹화 플래그 해제까지)
             while True:
-                if self._record_queue:
+                while self._record_queue:
                     _ts, frm = self._record_queue.popleft()
                     writer.write(frm)
-                elif not self._recording:
+
+                while self._audio_record_queue:
+                    _ts, raw = self._audio_record_queue.popleft()
+                    wav_file.writeframes(raw)
+                    has_audio = True
+
+                if not self._recording:
                     # 남은 큐 모두 기록 후 종료
                     while self._record_queue:
                         _ts, frm = self._record_queue.popleft()
                         writer.write(frm)
+                    while self._audio_record_queue:
+                        _ts, raw = self._audio_record_queue.popleft()
+                        wav_file.writeframes(raw)
+                        has_audio = True
                     break
                 else:
-                    time.sleep(0.02)    # 큐 채워지기 대기
+                    time.sleep(0.02)
         finally:
             writer.release()
+            wav_file.close()
+
+        # 4) ffmpeg 합성 (오디오가 있을 때만 시도)
+        if has_audio:
+            # 비디오/오디오 시작 타임스탬프 기반 싱크 오프셋 계산
+            v_start = pre_frames[0][0] if pre_frames else None
+            a_start = pre_audio[0][0] if pre_audio else None
+            audio_offset = (a_start - v_start) if (v_start and a_start) else 0.0
+
+            merged = self._merge_with_ffmpeg(vtmp, atmp, filepath, audio_offset)
+        else:
+            merged = False
+
+        # 5) 정리: 임시 파일 삭제, 폴백 처리
+        if merged:
+            # 합성 성공 → vtmp 삭제 (atmp는 아래에서 삭제)
+            try:
+                os.remove(vtmp)
+            except Exception:
+                pass
+        else:
+            # 합성 실패 또는 오디오 없음 → vtmp를 최종 파일로 사용
+            try:
+                if os.path.exists(vtmp):
+                    os.rename(vtmp, filepath)
+            except Exception:
+                pass
+
+        try:
+            if os.path.exists(atmp):
+                os.remove(atmp)
+        except Exception:
+            pass
+
+    # ── ffmpeg 합성 ───────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _find_ffmpeg() -> str:
+        """
+        ffmpeg 실행파일 경로 탐색.
+        우선순위:
+          1) 시스템 PATH — winget으로 설치 권장 (winget install ffmpeg)
+          2) 전용 설치 위치 (C:\\KBS_Tools\\ffmpeg.exe) — 수동 설치 시
+          3) 번들 (resources/bin/ffmpeg.exe) — 직접 동봉 시
+        설치 명령: winget install ffmpeg  (한 번만 설치, 프로그램 업데이트와 무관)
+        """
+        import shutil
+        # 1) 시스템 PATH (winget 설치 기본 경로)
+        if shutil.which("ffmpeg"):
+            return "ffmpeg"
+        # 2) KBS 전용 위치 (수동 설치)
+        dedicated = r"C:\KBS_Tools\ffmpeg.exe"
+        if os.path.isfile(dedicated):
+            return dedicated
+        # 3) 번들 (resources/bin/ffmpeg.exe)
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        bundled = os.path.join(base_dir, "resources", "bin", "ffmpeg.exe")
+        if os.path.isfile(bundled):
+            return bundled
+        return "ffmpeg"
+
+    @staticmethod
+    def _merge_with_ffmpeg(vtmp: str, atmp: str, output: str, audio_offset: float = 0.0) -> bool:
+        """
+        ffmpeg로 비디오(vtmp)와 오디오(atmp)를 합성하여 output MP4 생성.
+        audio_offset > 0: 오디오가 비디오보다 늦게 시작 → itsoffset으로 딜레이
+        audio_offset < 0: 오디오가 비디오보다 빨리 시작 → -ss로 앞부분 트림
+        반환값: True(성공) / False(ffmpeg 미설치 또는 오류)
+        """
+        ffmpeg = AutoRecorder._find_ffmpeg()
+        cmd = [ffmpeg, "-y", "-i", vtmp]
+
+        if audio_offset > 0.05:
+            cmd += ["-itsoffset", f"{audio_offset:.3f}"]
+            cmd += ["-i", atmp]
+        elif audio_offset < -0.05:
+            cmd += ["-ss", f"{-audio_offset:.3f}", "-i", atmp]
+        else:
+            cmd += ["-i", atmp]
+
+        cmd += [
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            "-shortest",
+            output,
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=120,
+            )
+            return result.returncode == 0
+        except FileNotFoundError:
+            # ffmpeg 미설치
+            return False
+        except subprocess.TimeoutExpired:
+            return False
+        except Exception:
+            return False
 
     # ── 자동 삭제 ─────────────────────────────────────────────────────────────
 
@@ -227,7 +400,6 @@ class AutoRecorder:
         """1시간마다 max_keep_days 초과 파일 자동 삭제"""
         while self._running:
             self._delete_old_files()
-            # 1시간 대기 (1초씩 체크하여 stop() 즉시 반응)
             for _ in range(3600):
                 if not self._running:
                     return

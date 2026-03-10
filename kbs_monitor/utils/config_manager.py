@@ -99,7 +99,7 @@ DEFAULT_CONFIG = {
             "prep_minutes":      150,
             "exit_prep_minutes": 30,
             "exit_trigger_sec":  5,
-            "weekdays":          [6, 0],
+            "weekdays":          [0, 1],
         },
         "group2": {
             "name":              "2TV",

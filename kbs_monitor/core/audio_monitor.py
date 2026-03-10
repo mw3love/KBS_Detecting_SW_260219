@@ -2,6 +2,7 @@
 임베디드 오디오 모니터링 모듈
 sounddevice를 사용하여 시스템 오디오(임베디드)를 캡처하고 L/R 레벨을 분석
 """
+import time
 import numpy as np
 import math
 from PySide6.QtCore import QThread, Signal
@@ -19,6 +20,7 @@ class AudioMonitorThread(QThread):
     level_updated = Signal(float, float)   # L dB, R dB (-60 ~ 0)
     status_changed = Signal(str)
     silence_detected = Signal(float)       # 무음 지속 시간(초)
+    audio_chunk = Signal(object)           # (np.ndarray int16, timestamp float) — 녹화용 raw 샘플
 
     CHUNK = 1024
     SAMPLE_RATE = 44100
@@ -98,6 +100,9 @@ class AudioMonitorThread(QThread):
                 try:
                     data, overflowed = stream.read(self.CHUNK)
                     samples = np.frombuffer(data, dtype=np.int16)
+
+                    # 녹화용 raw 샘플 emit (복사본, 타임스탬프 포함)
+                    self.audio_chunk.emit((samples.copy(), time.time()))
 
                     # 패스스루: 캡처 오디오를 출력 장치로 전송
                     if output_stream is not None and not self._muted and self._volume > 0:

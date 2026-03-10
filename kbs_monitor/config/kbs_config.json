@@ -4,7 +4,7 @@
     "black_threshold": 10,
     "black_dark_ratio": 95.0,
     "black_duration": 10,
-    "black_alarm_duration": 10,
+    "black_alarm_duration": 3,
     "still_threshold": 2,
     "still_changed_ratio": 2.0,
     "still_duration": 30,
@@ -59,13 +59,12 @@
     ]
   },
   "performance": {
-    "detection_interval": 200,
+    "detection_interval": 100,
     "scale_factor": 1.0,
     "black_detection_enabled": true,
     "still_detection_enabled": true,
     "audio_detection_enabled": true,
-    "embedded_detection_enabled": true,
-    "video_detection_enabled": true
+    "embedded_detection_enabled": true
   },
   "telegram": {
     "enabled": false,
@@ -98,37 +97,32 @@
     "enter_alarm_sound": "",
     "release_alarm_sound": "",
     "group1": {
-      "name": "Group1",
+      "name": "1TV",
       "enter_roi": {
         "video_label": ""
       },
       "suppressed_labels": [],
-      "start_time": "00:30",
+      "start_time": "03:00",
       "end_time": "05:00",
-      "prep_minutes": 30,
-      "exit_prep_minutes": 0,
+      "prep_minutes": 150,
+      "exit_prep_minutes": 30,
       "exit_trigger_sec": 5,
       "end_next_day": false,
       "weekdays": [
         0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
+        1
       ]
     },
     "group2": {
-      "name": "Group2",
+      "name": "2TV",
       "enter_roi": {
         "video_label": ""
       },
       "suppressed_labels": [],
-      "start_time": "00:30",
+      "start_time": "02:00",
       "end_time": "05:00",
-      "prep_minutes": 30,
-      "exit_prep_minutes": 0,
+      "prep_minutes": 90,
+      "exit_prep_minutes": 30,
       "exit_trigger_sec": 5,
       "end_next_day": false,
       "weekdays": [

@@ -559,8 +559,6 @@ class MainWindow(QMainWindow):
         """AudioMonitorThread.silence_detected 수신 — 임베디드 오디오 무음 업데이트"""
         if not self._detection_enabled or not self._embedded_detect_enabled:
             return
-        if self._signoff_manager.is_any_signoff():
-            return
         self._last_silence_seconds = silence_seconds
         alerting = self._detector.update_embedded_silence(silence_seconds)
         if alerting and not self._embedded_log_sent:
@@ -576,8 +574,6 @@ class MainWindow(QMainWindow):
         """level_updated 수신 — 정상 오디오 수신 시 임베디드 감지 리셋"""
         avg_db = (l_db + r_db) / 2.0
         if not self._detection_enabled or not self._embedded_detect_enabled:
-            return
-        if self._signoff_manager.is_any_signoff():
             return
         if avg_db > self._detector.embedded_silence_threshold:
             if self._detector.embedded_alerting or self._embedded_log_sent:

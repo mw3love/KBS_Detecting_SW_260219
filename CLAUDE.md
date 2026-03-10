@@ -44,6 +44,12 @@ psutil==7.2.2
 gputil==1.4.0  (NVIDIA GPU 없으면 N/A 표시)
 ```
 
+## 외부 도구: ffmpeg (자동 녹화 오디오 합성)
+- 용도: 자동 녹화 MP4에 임베디드 오디오 트랙 합성 (`auto_recorder.py`)
+- **설치 방법: `winget install ffmpeg`** (권장, 한 번 설치 후 프로그램 업데이트와 무관하게 유지)
+- 미설치 시: 비디오 전용 MP4로 폴백 (소리 없음, 에러 아님)
+- `_find_ffmpeg()` 탐색 우선순위: PATH(winget) → C:\KBS_Tools\ffmpeg.exe → resources/bin/ffmpeg.exe
+
 ## 아키텍처 개요
 
 ### 파일 구조

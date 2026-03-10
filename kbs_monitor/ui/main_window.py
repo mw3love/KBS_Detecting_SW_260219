@@ -39,7 +39,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.4.2")
+        self.setWindowTitle("KBS Peacock v1.5.1")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -195,6 +195,11 @@ class MainWindow(QMainWindow):
         self._audio_thread.silence_detected.connect(self._on_embedded_silence)
         self._audio_thread.status_changed.connect(
             lambda msg: self._logger.info(f"AUDIO - {msg}")
+        )
+        # 녹화용 raw 오디오 → AutoRecorder (DirectConnection: 이벤트 루프 우회, 스레드 안전)
+        self._audio_thread.audio_chunk.connect(
+            lambda tup: self._recorder.push_audio(tup[0], tup[1]),
+            Qt.DirectConnection,
         )
         # 초기 볼륨을 패스스루 출력에도 적용
         init_vol = self._config.get("alarm", {}).get("volume", 80) / 100.0

@@ -1786,7 +1786,7 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.4.2")
+        lbl_version = QLabel("KBS Peacock v1.5.1")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)
@@ -2498,7 +2498,7 @@ class SettingsDialog(QDialog):
                 "end_time":          "05:00",
                 "prep_minutes":      150,
                 "exit_prep_minutes": 30,
-                "weekdays":          [6, 0],
+                "weekdays":          [0, 1],
             },
             "group2": {
                 "name":              "2TV",
@@ -2667,7 +2667,7 @@ class SettingsDialog(QDialog):
             chk.setChecked(True)
             day_row.addWidget(chk)
             day_chks.append(chk)
-        hint_lbl = QLabel("(시작 시간 기준 요일)")
+        hint_lbl = QLabel("(정파준비 시작 시각이 속한 날의 요일 기준 · 준비가 전날 밤이면 전날 요일 선택)")
         hint_lbl.setStyleSheet("color: gray; font-size: 11px;")
         day_row.addSpacing(8)
         day_row.addWidget(hint_lbl)

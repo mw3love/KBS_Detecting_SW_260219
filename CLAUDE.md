@@ -26,7 +26,7 @@
 - 체크포인트 파일(PHASE*_COMPLETE.md)을 확인하여 현재 진행 상황 파악
 - 체크포인트가 없으면 Phase 1부터 시작
 - 각 Phase 완료 시 PHASE{N}_COMPLETE.md 파일 생성
-- **현재: Phase 5 완료 (코드 최적화 완료)**
+- **현재: Phase 5 완료 (코드 최적화 완료) + v1.5.2 버그 수정 (감지 중단 silent failure 방지)**
 
 ## 주의사항
 - 스냅샷 탭 없음, 비히스토리 탭 없음 (2차 개발)
@@ -186,6 +186,71 @@ group_row = QHBoxLayout(group)   # ← 별도 변수명 사용
 - sounddevice: `sd.play()` + `sd.wait()` 쌍, winsound가 없을 때만 사용
 - `_stop_playback()`에서 `_stop_sound.set()` + `sd.stop()`으로 즉시 중단 가능
 - 파일 경로는 `os.path.abspath()`로 절대경로 변환 후 사용
+
+## 감지 루프 안정성 원칙 (수정 시 반드시 준수)
+
+> 현장 운용 중 장기 실행 후 감지가 조용히 멈추는 버그(silent failure) 발생 이력이 있음.
+> 아래 try-except 구조는 이를 방지하기 위한 것으로 **절대 삭제하지 않는다.**
+
+### `MainWindow._run_detection()` — 전체 try-except 보호
+
+```python
+def _run_detection(self):
+    if self._latest_frame is None:
+        return
+    if self._roi_overlay is not None:
+        return
+
+    self._detection_count += 1
+    if self._detection_count % 1500 == 0:          # 200ms × 1500 ≈ 5분
+        elapsed_min = self._detection_count // 1500 * 5
+        self._logger.info(f"SYSTEM - 감지 정상 실행 중 ({elapsed_min}분 경과)")
+
+    try:
+        # ... 감지 로직 전체 ...
+    except Exception as e:
+        self._logger.error(f"SYSTEM - 감지 루프 오류 (silent fail 방지): {e}")
+```
+
+- **이유**: 예외 발생 시 타이머는 살아있어 겉으론 정상처럼 보이지만 매 주기 fail → 감지 완전 중단
+- **`_detection_count`**: `__init__`에서 `self._detection_count: int = 0`으로 초기화
+- **5분 로그**: 로그 파일에서 이 줄이 끊기는 시점이 곧 silent failure 발생 시점
+
+### `VideoCaptureThread.run()` — while 루프 try-except 보호
+
+```python
+while self._running:
+    try:
+        # ... 연결/캡처 로직 전체 ...
+    except Exception as e:
+        self.status_changed.emit(f"캡처 스레드 오류: {e}")
+        if cap is not None:
+            cap.release()
+            cap = None
+        if was_connected:
+            was_connected = False
+            self.disconnected.emit()
+        consecutive_failures = 0
+        self.msleep(1000)
+        continue
+    self.msleep(33)
+```
+
+- **이유**: OpenCV `cap.read()` 예외 시 스레드 크래시 → `frame_ready` 신호 없음 → `_latest_frame = None` → 감지 중단
+
+### `Detector.detect_frame()` / `detect_audio_roi()` — ROI별 try-except
+
+```python
+for roi in rois:
+    label = roi.label
+    try:
+        # ... ROI 처리 로직 ...
+    except Exception as e:
+        _log.error("detect_frame ROI[%s] 오류: %s", label, e)
+```
+
+- **이유**: 특정 ROI 예외가 전체 감지를 멈추지 않도록 격리
+- `_log = logging.getLogger(__name__)` — 파일 상단에 선언
 
 ## 탭별 구현 현황
 

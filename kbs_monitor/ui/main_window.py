@@ -39,7 +39,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.5.1")
+        self.setWindowTitle("KBS Peacock v1.5.3")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -85,6 +85,10 @@ class MainWindow(QMainWindow):
         self._black_logged: set = set()
         self._still_logged: set = set()
         self._audio_level_logged: set = set()
+
+        # 감지 주기 카운터 (silent failure 감지 / 주기적 정상 작동 로그용)
+        # 타이머 200ms 기준: 1500회 ≈ 5분
+        self._detection_count: int = 0
 
         # UI 구성
         self._setup_ui()
@@ -233,160 +237,170 @@ class MainWindow(QMainWindow):
         if self._roi_overlay is not None:
             return  # 편집 중 감지 중단
 
-        video_rois = self._roi_manager.video_rois
-        audio_rois = self._roi_manager.audio_rois
+        # 주기적 정상 작동 로그 (200ms × 1500 ≈ 5분)
+        self._detection_count += 1
+        if self._detection_count % 1500 == 0:
+            elapsed_min = self._detection_count // 1500 * 5
+            self._logger.info(f"SYSTEM - 감지 정상 실행 중 ({elapsed_min}분 경과)")
 
-        # ── 오디오 ROI 사전 계산 (SignoffManager + 알림 처리 공유) ──
-        audio_results = {}
-        if audio_rois and self._audio_detect_enabled:
-            audio_results = self._detector.detect_audio_roi(self._latest_frame, audio_rois)
+        try:
+            video_rois = self._roi_manager.video_rois
+            audio_rois = self._roi_manager.audio_rois
 
-        # ── 비디오 ROI 블랙/스틸 감지 ──
-        # (정파 still 결과도 여기서 추출하므로 SignoffManager 업데이트보다 먼저 실행)
-        need_still_for_signoff = bool(video_rois and any(
-            bool(group.enter_roi.get("video_label"))
-            for group in self._signoff_manager.get_groups().values()
-        ))
-        video_results = {}
-        if video_rois and (self._detector.black_detection_enabled
-                           or self._detector.still_detection_enabled
-                           or need_still_for_signoff):
-            video_results = self._detector.detect_frame(self._latest_frame, video_rois)
+            # ── 오디오 ROI 사전 계산 (SignoffManager + 알림 처리 공유) ──
+            audio_results = {}
+            if audio_rois and self._audio_detect_enabled:
+                audio_results = self._detector.detect_audio_roi(self._latest_frame, audio_rois)
 
-        # ── SignoffManager 업데이트 (스틸 감지 결과 전달) ──
-        # still_detection_enabled=False 시 detect_frame이 is_still=False 고정 반환 →
-        # _latest_video[label]=False 가 되어 정파해제준비 구간 즉시 정파해제되는 버그 방지.
-        # 스틸 감지 비활성 시 빈 딕셔너리를 전달하면 SignoffManager는 기본값(True=스틸 상태)을
-        # 유지하여 정파해제를 발생시키지 않는다.
-        if self._detector.still_detection_enabled:
-            still_results = {
-                label: state.get("still", False)
-                for label, state in video_results.items()
-            }
-        else:
-            still_results = {}
+            # ── 비디오 ROI 블랙/스틸 감지 ──
+            # (정파 still 결과도 여기서 추출하므로 SignoffManager 업데이트보다 먼저 실행)
+            need_still_for_signoff = bool(video_rois and any(
+                bool(group.enter_roi.get("video_label"))
+                for group in self._signoff_manager.get_groups().values()
+            ))
+            video_results = {}
+            if video_rois and (self._detector.black_detection_enabled
+                               or self._detector.still_detection_enabled
+                               or need_still_for_signoff):
+                video_results = self._detector.detect_frame(self._latest_frame, video_rois)
 
-        self._signoff_manager.update_detection(still_results=still_results)
+            # ── SignoffManager 업데이트 (스틸 감지 결과 전달) ──
+            # still_detection_enabled=False 시 detect_frame이 is_still=False 고정 반환 →
+            # _latest_video[label]=False 가 되어 정파해제준비 구간 즉시 정파해제되는 버그 방지.
+            # 스틸 감지 비활성 시 빈 딕셔너리를 전달하면 SignoffManager는 기본값(True=스틸 상태)을
+            # 유지하여 정파해제를 발생시키지 않는다.
+            if self._detector.still_detection_enabled:
+                still_results = {
+                    label: state.get("still", False)
+                    for label, state in video_results.items()
+                }
+            else:
+                still_results = {}
 
-        # ── 비디오 ROI 알림 처리 ──
-        if video_results:
-            # label → media_name 매핑 캐시
-            video_name_map = {r.label: r.media_name for r in video_rois}
-            results = video_results
+            self._signoff_manager.update_detection(still_results=still_results)
 
-            for label, state in results.items():
-                # SIGNOFF 중인 그룹 소속 → 알림/로그 억제
-                if self._signoff_manager.is_signoff_label(label):
-                    self._alarm.resolve("블랙", label)
-                    self._alarm.resolve("스틸", label)
-                    self._black_logged.discard(label)
-                    self._still_logged.discard(label)
-                    self._video_widget.set_alert_state(label, False)
-                    continue
+            # ── 비디오 ROI 알림 처리 ──
+            if video_results:
+                # label → media_name 매핑 캐시
+                video_name_map = {r.label: r.media_name for r in video_rois}
+                results = video_results
 
-                black_alert    = state.get("black_alerting", False)
-                still_alert    = state.get("still_alerting", False)
-                black_resolved = state.get("black_resolved", False)
-                still_resolved = state.get("still_resolved", False)
-                media = video_name_map.get(label, "")
-                name = media or label                          # 텔레그램/알람용
-                log_prefix = f"{label}. {media}" if media else label  # 로그용
+                for label, state in results.items():
+                    # SIGNOFF 중인 그룹 소속 → 알림/로그 억제
+                    if self._signoff_manager.is_signoff_label(label):
+                        self._alarm.resolve("블랙", label)
+                        self._alarm.resolve("스틸", label)
+                        self._black_logged.discard(label)
+                        self._still_logged.discard(label)
+                        self._video_widget.set_alert_state(label, False)
+                        continue
 
-                # PREPARATION 상태: 스틸 알림만 억제 (블랙 알림은 계속)
-                is_in_prep = self._signoff_manager.is_prep_label(label)
-                if is_in_prep:
-                    self._alarm.resolve("스틸", label)
-                    self._still_logged.discard(label)
+                    black_alert    = state.get("black_alerting", False)
+                    still_alert    = state.get("still_alerting", False)
+                    black_resolved = state.get("black_resolved", False)
+                    still_resolved = state.get("still_resolved", False)
+                    media = video_name_map.get(label, "")
+                    name = media or label                          # 텔레그램/알람용
+                    log_prefix = f"{label}. {media}" if media else label  # 로그용
 
-                # ── 블랙 ──
-                if black_alert:
-                    if label not in self._black_logged:
-                        self._logger.error(f"{log_prefix} - 블랙 감지")
-                        tg = self._config.get("telegram", {})
-                        if tg.get("notify_black", True):
-                            self._telegram.notify("블랙", label, name, self._latest_frame)
-                        self._recorder.trigger("블랙", label, media)
-                    self._alarm.trigger("블랙", label, self._detector.black_alarm_duration)
-                    self._black_logged.add(label)
-                else:
-                    if black_resolved and label in self._black_logged:
-                        last_dur = state.get("black_last_duration", 0)
-                        self._logger.error(f"{log_prefix} - 블랙 {last_dur:.0f}초")
-                        self._logger.info(f"{log_prefix} - 블랙 정상 복구")
-                        tg = self._config.get("telegram", {})
-                        if tg.get("notify_black", True):
-                            self._telegram.notify("블랙", label, name, self._latest_frame, is_recovery=True)
-                    self._alarm.resolve("블랙", label)
-                    self._black_logged.discard(label)
-
-                # ── 스틸 (PREPARATION 상태에서는 억제) ──
-                if not is_in_prep:
-                    if still_alert:
-                        if label not in self._still_logged:
-                            self._logger.still_error(f"{log_prefix} - 스틸 감지")
-                            tg = self._config.get("telegram", {})
-                            if tg.get("notify_still", True):
-                                self._telegram.notify("스틸", label, name, self._latest_frame)
-                            self._recorder.trigger("스틸", label, media)
-                        self._alarm.trigger("스틸", label, self._detector.still_alarm_duration)
-                        self._still_logged.add(label)
-                    else:
-                        if still_resolved and label in self._still_logged:
-                            last_dur = state.get("still_last_duration", 0)
-                            self._logger.still_error(f"{log_prefix} - 스틸 {last_dur:.0f}초")
-                            self._logger.info(f"{log_prefix} - 스틸 정상 복구")
-                            tg = self._config.get("telegram", {})
-                            if tg.get("notify_still", True):
-                                self._telegram.notify("스틸", label, name, self._latest_frame, is_recovery=True)
+                    # PREPARATION 상태: 스틸 알림만 억제 (블랙 알림은 계속)
+                    is_in_prep = self._signoff_manager.is_prep_label(label)
+                    if is_in_prep:
                         self._alarm.resolve("스틸", label)
                         self._still_logged.discard(label)
 
-                self._video_widget.set_alert_state(label, black_alert or (still_alert and not is_in_prep))
+                    # ── 블랙 ──
+                    if black_alert:
+                        if label not in self._black_logged:
+                            self._logger.error(f"{log_prefix} - 블랙 감지")
+                            tg = self._config.get("telegram", {})
+                            if tg.get("notify_black", True):
+                                self._telegram.notify("블랙", label, name, self._latest_frame)
+                            self._recorder.trigger("블랙", label, media)
+                        self._alarm.trigger("블랙", label, self._detector.black_alarm_duration)
+                        self._black_logged.add(label)
+                    else:
+                        if black_resolved and label in self._black_logged:
+                            last_dur = state.get("black_last_duration", 0)
+                            self._logger.error(f"{log_prefix} - 블랙 {last_dur:.0f}초")
+                            self._logger.info(f"{log_prefix} - 블랙 정상 복구")
+                            tg = self._config.get("telegram", {})
+                            if tg.get("notify_black", True):
+                                self._telegram.notify("블랙", label, name, self._latest_frame, is_recovery=True)
+                        self._alarm.resolve("블랙", label)
+                        self._black_logged.discard(label)
 
-        # ── 오디오 ROI 레벨미터 처리 (사전 계산된 audio_results 재사용) ──
-        if audio_rois and self._audio_detect_enabled and audio_results:
-            # label → media_name 매핑 캐시
-            audio_name_map = {r.label: r.media_name for r in audio_rois}
+                    # ── 스틸 (PREPARATION 상태에서는 억제) ──
+                    if not is_in_prep:
+                        if still_alert:
+                            if label not in self._still_logged:
+                                self._logger.still_error(f"{log_prefix} - 스틸 감지")
+                                tg = self._config.get("telegram", {})
+                                if tg.get("notify_still", True):
+                                    self._telegram.notify("스틸", label, name, self._latest_frame)
+                                self._recorder.trigger("스틸", label, media)
+                            self._alarm.trigger("스틸", label, self._detector.still_alarm_duration)
+                            self._still_logged.add(label)
+                        else:
+                            if still_resolved and label in self._still_logged:
+                                last_dur = state.get("still_last_duration", 0)
+                                self._logger.still_error(f"{log_prefix} - 스틸 {last_dur:.0f}초")
+                                self._logger.info(f"{log_prefix} - 스틸 정상 복구")
+                                tg = self._config.get("telegram", {})
+                                if tg.get("notify_still", True):
+                                    self._telegram.notify("스틸", label, name, self._latest_frame, is_recovery=True)
+                            self._alarm.resolve("스틸", label)
+                            self._still_logged.discard(label)
 
-            for label, state in audio_results.items():
-                # SIGNOFF 중인 그룹 소속 → 알림/로그 억제
-                if self._signoff_manager.is_signoff_label(label):
-                    self._alarm.resolve("오디오", label)
-                    self._audio_level_logged.discard(label)
-                    self._video_widget.set_alert_state(label, False)
-                    continue
+                    self._video_widget.set_alert_state(label, black_alert or (still_alert and not is_in_prep))
 
-                alerting = state.get("alerting", False)
-                resolved = state.get("resolved", False)
-                media = audio_name_map.get(label, "")
-                name = media or label                              # 텔레그램/알람용
-                log_prefix = f"{label}. {media}" if media else label  # 로그용
+            # ── 오디오 ROI 레벨미터 처리 (사전 계산된 audio_results 재사용) ──
+            if audio_rois and self._audio_detect_enabled and audio_results:
+                # label → media_name 매핑 캐시
+                audio_name_map = {r.label: r.media_name for r in audio_rois}
 
-                if alerting:
-                    if label not in self._audio_level_logged:
-                        self._logger.audio_error(f"{log_prefix} - 무음 감지")
-                        tg = self._config.get("telegram", {})
-                        if tg.get("notify_audio_level", True):
-                            self._telegram.notify("오디오", label, name, self._latest_frame)
-                        self._recorder.trigger("오디오", label, media)
-                    self._alarm.trigger(
-                        "오디오", label, self._detector.audio_level_alarm_duration
-                    )
-                    self._audio_level_logged.add(label)
-                else:
-                    if resolved and label in self._audio_level_logged:
-                        last_dur = state.get("last_duration", 0)
-                        self._logger.audio_error(
-                            f"{log_prefix} - 무음 {last_dur:.0f}초"
+                for label, state in audio_results.items():
+                    # SIGNOFF 중인 그룹 소속 → 알림/로그 억제
+                    if self._signoff_manager.is_signoff_label(label):
+                        self._alarm.resolve("오디오", label)
+                        self._audio_level_logged.discard(label)
+                        self._video_widget.set_alert_state(label, False)
+                        continue
+
+                    alerting = state.get("alerting", False)
+                    resolved = state.get("resolved", False)
+                    media = audio_name_map.get(label, "")
+                    name = media or label                              # 텔레그램/알람용
+                    log_prefix = f"{label}. {media}" if media else label  # 로그용
+
+                    if alerting:
+                        if label not in self._audio_level_logged:
+                            self._logger.audio_error(f"{log_prefix} - 무음 감지")
+                            tg = self._config.get("telegram", {})
+                            if tg.get("notify_audio_level", True):
+                                self._telegram.notify("오디오", label, name, self._latest_frame)
+                            self._recorder.trigger("오디오", label, media)
+                        self._alarm.trigger(
+                            "오디오", label, self._detector.audio_level_alarm_duration
                         )
-                        self._logger.info(f"{log_prefix} - 무음 정상 복구")
-                        tg = self._config.get("telegram", {})
-                        if tg.get("notify_audio_level", True):
-                            self._telegram.notify("오디오", label, name, self._latest_frame, is_recovery=True)
-                    self._alarm.resolve("오디오", label)
-                    self._audio_level_logged.discard(label)
+                        self._audio_level_logged.add(label)
+                    else:
+                        if resolved and label in self._audio_level_logged:
+                            last_dur = state.get("last_duration", 0)
+                            self._logger.audio_error(
+                                f"{log_prefix} - 무음 {last_dur:.0f}초"
+                            )
+                            self._logger.info(f"{log_prefix} - 무음 정상 복구")
+                            tg = self._config.get("telegram", {})
+                            if tg.get("notify_audio_level", True):
+                                self._telegram.notify("오디오", label, name, self._latest_frame, is_recovery=True)
+                        self._alarm.resolve("오디오", label)
+                        self._audio_level_logged.discard(label)
 
-                self._video_widget.set_alert_state(label, alerting)
+                    self._video_widget.set_alert_state(label, alerting)
+
+        except Exception as e:
+            self._logger.error(f"SYSTEM - 감지 루프 오류 (silent fail 방지): {e}")
 
     def _update_summary(self):
         v_count = len(self._roi_manager.video_rois)

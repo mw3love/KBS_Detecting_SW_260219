@@ -52,67 +52,84 @@ class VideoCaptureThread(QThread):
         max_failures = 30  # 30프레임 연속 실패 시 재연결 시도
 
         while self._running:
-            with QMutexLocker(self._mutex):
-                current_port = self._port
-                current_file = self._video_file
-                reconnect = self._reconnect
-                if reconnect:
-                    self._reconnect = False
+            try:
+                with QMutexLocker(self._mutex):
+                    current_port = self._port
+                    current_file = self._video_file
+                    reconnect = self._reconnect
+                    if reconnect:
+                        self._reconnect = False
 
-            # 소스 변경 시 현재 캡처 강제 종료
-            if reconnect and cap is not None:
-                cap.release()
-                cap = None
-                was_connected = False
-                consecutive_failures = 0
-
-            # 연결이 없는 경우 새 소스 열기
-            if cap is None:
-                if current_file:
-                    cap = cv2.VideoCapture(current_file)
-                    source_name = f"파일: {current_file}"
-                else:
-                    cap = cv2.VideoCapture(current_port, cv2.CAP_DSHOW)
-                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-                    cap.set(cv2.CAP_PROP_FPS, self._target_fps)
-                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                    source_name = f"포트 {current_port}"
-
-                if cap.isOpened():
-                    was_connected = True
-                    consecutive_failures = 0
-                    self.connected.emit()
-                    self.status_changed.emit(f"{source_name} 연결 성공")
-                else:
-                    if was_connected:
-                        was_connected = False
-                        self.disconnected.emit()
-                        self.status_changed.emit(f"{source_name} 연결 실패")
+                # 소스 변경 시 현재 캡처 강제 종료
+                if reconnect and cap is not None:
                     cap.release()
                     cap = None
-                    self.msleep(1000)
-                    continue
+                    was_connected = False
+                    consecutive_failures = 0
 
-            # 프레임 읽기
-            ret, frame = cap.read()
-            if ret and frame is not None:
-                consecutive_failures = 0
-                self.frame_ready.emit(frame)
-            else:
-                if current_file and cap is not None:
-                    # 파일 끝 → 처음으로 되감기 (루프 재생)
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                else:
-                    consecutive_failures += 1
-                    if consecutive_failures >= max_failures:
-                        # 연결 끊김으로 판단
-                        cap.release()
-                        cap = None
+                # 연결이 없는 경우 새 소스 열기
+                if cap is None:
+                    if current_file:
+                        cap = cv2.VideoCapture(current_file)
+                        source_name = f"파일: {current_file}"
+                    else:
+                        cap = cv2.VideoCapture(current_port, cv2.CAP_DSHOW)
+                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+                        cap.set(cv2.CAP_PROP_FPS, self._target_fps)
+                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                        source_name = f"포트 {current_port}"
+
+                    if cap.isOpened():
+                        was_connected = True
+                        consecutive_failures = 0
+                        self.connected.emit()
+                        self.status_changed.emit(f"{source_name} 연결 성공")
+                    else:
                         if was_connected:
                             was_connected = False
                             self.disconnected.emit()
-                            self.status_changed.emit(f"포트 {current_port} 신호 없음")
+                            self.status_changed.emit(f"{source_name} 연결 실패")
+                        cap.release()
+                        cap = None
+                        self.msleep(1000)
+                        continue
+
+                # 프레임 읽기
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    consecutive_failures = 0
+                    self.frame_ready.emit(frame)
+                else:
+                    if current_file and cap is not None:
+                        # 파일 끝 → 처음으로 되감기 (루프 재생)
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    else:
+                        consecutive_failures += 1
+                        if consecutive_failures >= max_failures:
+                            # 연결 끊김으로 판단
+                            cap.release()
+                            cap = None
+                            if was_connected:
+                                was_connected = False
+                                self.disconnected.emit()
+                                self.status_changed.emit(f"포트 {current_port} 신호 없음")
+
+            except Exception as e:
+                # 예외 발생 시 스레드 크래시 방지 — cap 상태 초기화 후 재연결 시도
+                self.status_changed.emit(f"캡처 스레드 오류: {e}")
+                if cap is not None:
+                    try:
+                        cap.release()
+                    except Exception:
+                        pass
+                    cap = None
+                if was_connected:
+                    was_connected = False
+                    self.disconnected.emit()
+                consecutive_failures = 0
+                self.msleep(1000)
+                continue
 
             # FPS 제어 (대략 30fps)
             self.msleep(33)

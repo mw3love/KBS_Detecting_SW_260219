@@ -2,12 +2,15 @@
 영상/오디오 감지 엔진
 블랙/스틸/레벨미터/임베디드오디오 감지 로직
 """
+import logging
 import time
 import cv2
 import numpy as np
 from collections import deque
 from typing import Dict, List, Optional
 from core.roi_manager import ROI
+
+_log = logging.getLogger(__name__)
 
 
 class DetectionState:
@@ -205,64 +208,66 @@ class Detector:
         h, w = frame.shape[:2]
         for roi in rois:
             label = roi.label
+            try:
+                # scale_factor 보정된 ROI 좌표 (공통 메서드)
+                x1, y1, x2, y2 = self._get_scaled_bounds(roi, h, w)
 
-            # scale_factor 보정된 ROI 좌표 (공통 메서드)
-            x1, y1, x2, y2 = self._get_scaled_bounds(roi, h, w)
+                if x2 <= x1 or y2 <= y1:
+                    continue
 
-            if x2 <= x1 or y2 <= y1:
-                continue
+                crop = frame[y1:y2, x1:x2]
 
-            crop = frame[y1:y2, x1:x2]
+                # 블랙 감지 (어두운 픽셀 비율 방식 — 비활성화 시 계산 생략)
+                is_black = False
+                if self.black_detection_enabled:
+                    gray = crop if len(crop.shape) == 2 else crop.mean(axis=2)
+                    dark_ratio = float(np.mean(gray < self.black_threshold)) * 100.0
+                    is_black = dark_ratio >= self.black_dark_ratio
 
-            # 블랙 감지 (어두운 픽셀 비율 방식 — 비활성화 시 계산 생략)
-            is_black = False
-            if self.black_detection_enabled:
-                gray = crop if len(crop.shape) == 2 else crop.mean(axis=2)
-                dark_ratio = float(np.mean(gray < self.black_threshold)) * 100.0
-                is_black = dark_ratio >= self.black_dark_ratio
+                # 스틸 감지 (변화 픽셀 비율 방식 — 비활성화 시 float32 변환 및 복사 생략)
+                is_still = False
+                if self.still_detection_enabled:
+                    if label in self._prev_frames:
+                        prev = self._prev_frames[label]
+                        crop_f = crop.astype(np.float32)
+                        if prev.shape == crop_f.shape:
+                            diff = np.abs(crop_f - prev)
+                            # 변화한 픽셀 비율 계산: diff > threshold인 픽셀 비율(%)
+                            changed_ratio = float(np.mean(diff > self.still_threshold)) * 100.0
+                            is_still = changed_ratio < self.still_changed_ratio
+                        else:
+                            is_still = False
+                    # float32로 저장하여 다음 사이클의 재변환 비용 제거
+                    self._prev_frames[label] = crop.astype(np.float32)
+                else:
+                    # 스틸 감지 비활성 → 이전 프레임 버퍼 불필요
+                    self._prev_frames.pop(label, None)
 
-            # 스틸 감지 (변화 픽셀 비율 방식 — 비활성화 시 float32 변환 및 복사 생략)
-            is_still = False
-            if self.still_detection_enabled:
-                if label in self._prev_frames:
-                    prev = self._prev_frames[label]
-                    crop_f = crop.astype(np.float32)
-                    if prev.shape == crop_f.shape:
-                        diff = np.abs(crop_f - prev)
-                        # 변화한 픽셀 비율 계산: diff > threshold인 픽셀 비율(%)
-                        changed_ratio = float(np.mean(diff > self.still_threshold)) * 100.0
-                        is_still = changed_ratio < self.still_changed_ratio
-                    else:
-                        is_still = False
-                # float32로 저장하여 다음 사이클의 재변환 비용 제거
-                self._prev_frames[label] = crop.astype(np.float32)
-            else:
-                # 스틸 감지 비활성 → 이전 프레임 버퍼 불필요
-                self._prev_frames.pop(label, None)
+                # 상태 업데이트
+                if label not in self._black_states:
+                    self._black_states[label] = DetectionState(roi)
+                black_state = self._black_states[label]
+                if label not in self._still_states:
+                    self._still_states[label] = DetectionState(roi)
+                still_state = self._still_states[label]
 
-            # 상태 업데이트
-            if label not in self._black_states:
-                self._black_states[label] = DetectionState(roi)
-            black_state = self._black_states[label]
-            if label not in self._still_states:
-                self._still_states[label] = DetectionState(roi)
-            still_state = self._still_states[label]
+                black_alerting = black_state.update(is_black, self.black_duration)
+                still_alerting = still_state.update(is_still, self.still_duration)
 
-            black_alerting = black_state.update(is_black, self.black_duration)
-            still_alerting = still_state.update(is_still, self.still_duration)
-
-            results[label] = {
-                "black": is_black,
-                "still": is_still,
-                "black_alerting": black_alerting,
-                "still_alerting": still_alerting,
-                "black_duration": black_state.alert_duration,
-                "still_duration": still_state.alert_duration,
-                "black_resolved": black_state.just_resolved,
-                "black_last_duration": black_state.last_alert_duration,
-                "still_resolved": still_state.just_resolved,
-                "still_last_duration": still_state.last_alert_duration,
-            }
+                results[label] = {
+                    "black": is_black,
+                    "still": is_still,
+                    "black_alerting": black_alerting,
+                    "still_alerting": still_alerting,
+                    "black_duration": black_state.alert_duration,
+                    "still_duration": still_state.alert_duration,
+                    "black_resolved": black_state.just_resolved,
+                    "black_last_duration": black_state.last_alert_duration,
+                    "still_resolved": still_state.just_resolved,
+                    "still_last_duration": still_state.last_alert_duration,
+                }
+            except Exception as e:
+                _log.error("detect_frame ROI[%s] 오류: %s", label, e)
 
         return results
 
@@ -284,48 +289,51 @@ class Detector:
 
         for roi in audio_rois:
             label = roi.label
-            # scale_factor 보정된 ROI 좌표 (공통 메서드)
-            x1, y1, x2, y2 = self._get_scaled_bounds(roi, fh, fw)
+            try:
+                # scale_factor 보정된 ROI 좌표 (공통 메서드)
+                x1, y1, x2, y2 = self._get_scaled_bounds(roi, fh, fw)
 
-            if x2 <= x1 or y2 <= y1:
-                continue
+                if x2 <= x1 or y2 <= y1:
+                    continue
 
-            # BGR crop 후 HSV 변환 (전체 프레임 변환 제거)
-            crop_bgr = frame[y1:y2, x1:x2]
-            crop = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2HSV)
-            mask = cv2.inRange(crop, lower, upper)
-            total_pixels = crop.shape[0] * crop.shape[1]
-            if total_pixels == 0:
-                continue
+                # BGR crop 후 HSV 변환 (전체 프레임 변환 제거)
+                crop_bgr = frame[y1:y2, x1:x2]
+                crop = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2HSV)
+                mask = cv2.inRange(crop, lower, upper)
+                total_pixels = crop.shape[0] * crop.shape[1]
+                if total_pixels == 0:
+                    continue
 
-            active_pixels = int(np.sum(mask > 0))
-            ratio = active_pixels / total_pixels * 100.0
+                active_pixels = int(np.sum(mask > 0))
+                ratio = active_pixels / total_pixels * 100.0
 
-            # 이동 평균 버퍼: 최근 5프레임 ratio 평균으로 판단 (일시적 노이즈 평활화)
-            if label not in self._audio_ratio_buffer:
-                self._audio_ratio_buffer[label] = deque(maxlen=5)
-            self._audio_ratio_buffer[label].append(ratio)
-            avg_ratio = sum(self._audio_ratio_buffer[label]) / len(self._audio_ratio_buffer[label])
-            is_active = avg_ratio >= self.audio_pixel_ratio
+                # 이동 평균 버퍼: 최근 5프레임 ratio 평균으로 판단 (일시적 노이즈 평활화)
+                if label not in self._audio_ratio_buffer:
+                    self._audio_ratio_buffer[label] = deque(maxlen=5)
+                self._audio_ratio_buffer[label].append(ratio)
+                avg_ratio = sum(self._audio_ratio_buffer[label]) / len(self._audio_ratio_buffer[label])
+                is_active = avg_ratio >= self.audio_pixel_ratio
 
-            # 레벨미터 비활성 = 이상 상태 (무음 또는 신호 없음)
-            is_abnormal = not is_active
+                # 레벨미터 비활성 = 이상 상태 (무음 또는 신호 없음)
+                is_abnormal = not is_active
 
-            if label not in self._audio_level_states:
-                self._audio_level_states[label] = DetectionState(roi)
-            state = self._audio_level_states[label]
-            state.roi = roi
+                if label not in self._audio_level_states:
+                    self._audio_level_states[label] = DetectionState(roi)
+                state = self._audio_level_states[label]
+                state.roi = roi
 
-            alerting = state.update(is_abnormal, self.audio_level_duration, self.audio_level_recovery_seconds)
+                alerting = state.update(is_abnormal, self.audio_level_duration, self.audio_level_recovery_seconds)
 
-            results[label] = {
-                "active": is_active,
-                "ratio": avg_ratio,
-                "alerting": alerting,
-                "duration": state.alert_duration,
-                "resolved": state.just_resolved,
-                "last_duration": state.last_alert_duration,
-            }
+                results[label] = {
+                    "active": is_active,
+                    "ratio": avg_ratio,
+                    "alerting": alerting,
+                    "duration": state.alert_duration,
+                    "resolved": state.just_resolved,
+                    "last_duration": state.last_alert_duration,
+                }
+            except Exception as e:
+                _log.error("detect_audio_roi ROI[%s] 오류: %s", label, e)
 
         return results
 

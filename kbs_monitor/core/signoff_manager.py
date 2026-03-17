@@ -26,11 +26,14 @@ enter_roi 형식 (정파준비 → 정파모드):
 """
 import time
 import datetime
+import logging
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from PySide6.QtCore import QObject, QTimer, Signal
+
+_log = logging.getLogger("kbs_monitor")
 
 
 class SignoffState(Enum):
@@ -173,6 +176,12 @@ class SignoffManager(QObject):
 
         # 최신 감지 결과 캐시
         self._latest_video: Dict[str, bool] = {}   # label → still 감지 여부
+
+        # 디버그 로그용: 이전 스틸 상태 추적 (변화 시 로그, 10초마다 진행상황 로그)
+        self._dbg_prev_still: Dict[int, Optional[bool]] = {}   # PREP: 이전 스틸 값
+        self._dbg_last_prep_log: Dict[int, float] = {}         # PREP: 마지막 진행상황 로그 시각
+        self._dbg_prev_exit_still: Dict[int, Optional[bool]] = {}  # EXIT: 이전 비스틸 값
+        self._dbg_last_exit_log: Dict[int, float] = {}             # EXIT: 마지막 진행상황 로그 시각
 
         self._auto_preparation: bool = True  # 자동 정파 준비 모드
 
@@ -516,13 +525,43 @@ class SignoffManager(QObject):
             return  # video_label 미설정 — 감지 기반 조기 전환 없음
 
         now = time.time()
+        is_still = self._latest_video.get(v_label, False)
+        prev_still = self._dbg_prev_still.get(gid)
 
         # ── 스틸 타이머 갱신 ──
-        if self._latest_video.get(v_label, False):
+        if is_still:
             if self._video_enter_start[gid] is None:
                 self._video_enter_start[gid] = now
         else:
             self._video_enter_start[gid] = None
+
+        # ── 디버그 로그: 스틸 값 변화 시 즉시 기록 ──
+        if is_still != prev_still:
+            self._dbg_prev_still[gid] = is_still
+            if is_still:
+                _log.debug(
+                    "PREP-DBG [%s] %s 스틸 감지 시작 (기준: %.0fs)",
+                    group.name, v_label, group.still_trigger_sec,
+                )
+            else:
+                elapsed = (now - self._video_enter_start[gid]) if self._video_enter_start[gid] is not None else 0.0
+                _log.debug(
+                    "PREP-DBG [%s] %s 스틸 중단→리셋 (직전 경과: %.1fs / 기준: %.0fs)",
+                    group.name, v_label, elapsed, group.still_trigger_sec,
+                )
+
+        # ── 디버그 로그: 스틸 타이머 진행 중 10초마다 진행상황 ──
+        if self._video_enter_start[gid] is not None:
+            v_elapsed = now - self._video_enter_start[gid]
+            last_log = self._dbg_last_prep_log.get(gid, 0.0)
+            if now - last_log >= 10.0:
+                self._dbg_last_prep_log[gid] = now
+                _log.debug(
+                    "PREP-DBG [%s] %s 스틸 지속 중 %.1fs / %.0fs",
+                    group.name, v_label, v_elapsed, group.still_trigger_sec,
+                )
+        else:
+            self._dbg_last_prep_log[gid] = 0.0  # 리셋 시 타이머 초기화
 
         # ── 판단: still_trigger_sec 이상 지속 시 SIGNOFF 전환 ──
         v_elapsed = (now - self._video_enter_start[gid]) if self._video_enter_start[gid] is not None else 0.0
@@ -588,12 +627,40 @@ class SignoffManager(QObject):
             return  # video_label 미설정 — 감지 기반 조기 해제 없음
 
         now = time.time()
+        is_still = self._latest_video.get(v_label, True)  # 기본값 True=스틸 상태
+        is_not_still = not is_still
+        prev_exit_still = self._dbg_prev_exit_still.get(gid)
+
+        # ── 디버그 로그: 비스틸 값 변화 시 즉시 기록 ──
+        if is_not_still != prev_exit_still:
+            self._dbg_prev_exit_still[gid] = is_not_still
+            if is_not_still:
+                _log.debug(
+                    "EXIT-DBG [%s] %s 비스틸 감지 시작 (기준: %.0fs)",
+                    group.name, v_label, group.exit_trigger_sec,
+                )
+            else:
+                elapsed = (now - self._video_exit_start[gid]) if self._video_exit_start[gid] is not None else 0.0
+                _log.debug(
+                    "EXIT-DBG [%s] %s 스틸 복귀→리셋 (직전 경과: %.1fs / 기준: %.0fs)",
+                    group.name, v_label, elapsed, group.exit_trigger_sec,
+                )
 
         # 비-스틸 상태이면 타이머 갱신, 스틸 상태이면 리셋
-        if not self._latest_video.get(v_label, True):  # 스틸 아님 (기본값 True=스틸 상태)
+        if is_not_still:
             if self._video_exit_start[gid] is None:
                 self._video_exit_start[gid] = now
             v_elapsed = now - self._video_exit_start[gid]
+
+            # ── 디버그 로그: 비스틸 타이머 진행 중 10초마다 진행상황 ──
+            last_log = self._dbg_last_exit_log.get(gid, 0.0)
+            if now - last_log >= 10.0:
+                self._dbg_last_exit_log[gid] = now
+                _log.debug(
+                    "EXIT-DBG [%s] %s 비스틸 지속 중 %.1fs / %.0fs",
+                    group.name, v_label, v_elapsed, group.exit_trigger_sec,
+                )
+
             if v_elapsed >= group.exit_trigger_sec:
                 self._video_exit_start[gid] = None
                 self._signoff_entered_at[gid] = None
@@ -603,6 +670,7 @@ class SignoffManager(QObject):
         else:
             # 스틸 상태 복귀 → 해제 타이머 리셋
             self._video_exit_start[gid] = None
+            self._dbg_last_exit_log[gid] = 0.0  # 리셋 시 타이머 초기화
 
     def _is_in_time_range(self, group: SignoffGroup,
                            current_time: str, weekday: int,

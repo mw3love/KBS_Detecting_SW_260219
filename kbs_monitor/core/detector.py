@@ -194,11 +194,15 @@ class Detector:
             else:
                 self._still_states[roi.label].roi = roi
 
-    def detect_frame(self, frame: np.ndarray, rois: List[ROI]) -> Dict[str, dict]:
+    def detect_frame(self, frame: np.ndarray, rois: List[ROI],
+                     force_still_labels: Optional[set] = None) -> Dict[str, dict]:
         """
         프레임을 분석하여 각 감지영역의 블랙/스틸 상태 반환.
         반환값: {label: {"black": bool, "still": bool, "black_alerting": bool, "still_alerting": bool}}
         scale_factor 적용 시 감지용 프레임 축소 후 ROI 좌표 보정.
+
+        force_still_labels: still_detection_enabled=False이어도 스틸 계산을 강제할 label 집합.
+                            SignoffManager의 enter_roi label에 대해 정파 감지 목적으로 사용.
         """
         results = {}
 
@@ -225,8 +229,12 @@ class Detector:
                     is_black = dark_ratio >= self.black_dark_ratio
 
                 # 스틸 감지 (변화 픽셀 비율 방식 — 비활성화 시 float32 변환 및 복사 생략)
+                # force_still_labels에 포함된 label은 still_detection_enabled와 무관하게 계산
                 is_still = False
-                if self.still_detection_enabled:
+                should_calc_still = self.still_detection_enabled or (
+                    force_still_labels is not None and label in force_still_labels
+                )
+                if should_calc_still:
                     if label in self._prev_frames:
                         prev = self._prev_frames[label]
                         crop_f = crop.astype(np.float32)
@@ -240,7 +248,7 @@ class Detector:
                     # float32로 저장하여 다음 사이클의 재변환 비용 제거
                     self._prev_frames[label] = crop.astype(np.float32)
                 else:
-                    # 스틸 감지 비활성 → 이전 프레임 버퍼 불필요
+                    # 스틸 감지 비활성 + force 대상 아님 → 이전 프레임 버퍼 불필요
                     self._prev_frames.pop(label, None)
 
                 # 상태 업데이트

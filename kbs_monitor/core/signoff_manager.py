@@ -494,8 +494,9 @@ class SignoffManager(QObject):
                     self._tick_preparation(gid, group)
 
             elif current_state == SignoffState.SIGNOFF:
-                if not in_prep_window:
-                    # end_time 도달 → IDLE로 전환
+                is_manual = self._manual_override.get(gid, False)
+                if not in_prep_window and not is_manual:
+                    # end_time 도달 → IDLE로 전환 (수동 오버라이드 상태에서는 유지)
                     self._signoff_entered_at[gid] = None
                     self._manual_override[gid] = False
                     self._transition_to(gid, SignoffState.IDLE)

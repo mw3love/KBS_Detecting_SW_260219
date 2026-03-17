@@ -39,7 +39,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.5.3")
+        self.setWindowTitle("KBS Peacock v1.5.4")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -253,26 +253,37 @@ class MainWindow(QMainWindow):
                 audio_results = self._detector.detect_audio_roi(self._latest_frame, audio_rois)
 
             # ── 비디오 ROI 블랙/스틸 감지 ──
-            # (정파 still 결과도 여기서 추출하므로 SignoffManager 업데이트보다 먼저 실행)
-            need_still_for_signoff = bool(video_rois and any(
-                bool(group.enter_roi.get("video_label"))
+            # SignoffManager enter_roi label은 still_detection_enabled와 무관하게 스틸 계산 필요.
+            # force_still_labels로 전달하면 detector가 해당 label만 강제 계산한다.
+            signoff_enter_labels: set = {
+                group.enter_roi.get("video_label", "")
                 for group in self._signoff_manager.get_groups().values()
-            ))
+                if group.enter_roi.get("video_label")
+            }
+            need_still_for_signoff = bool(video_rois and signoff_enter_labels)
             video_results = {}
             if video_rois and (self._detector.black_detection_enabled
                                or self._detector.still_detection_enabled
                                or need_still_for_signoff):
-                video_results = self._detector.detect_frame(self._latest_frame, video_rois)
+                video_results = self._detector.detect_frame(
+                    self._latest_frame, video_rois,
+                    force_still_labels=signoff_enter_labels if need_still_for_signoff else None,
+                )
 
             # ── SignoffManager 업데이트 (스틸 감지 결과 전달) ──
-            # still_detection_enabled=False 시 detect_frame이 is_still=False 고정 반환 →
-            # _latest_video[label]=False 가 되어 정파해제준비 구간 즉시 정파해제되는 버그 방지.
-            # 스틸 감지 비활성 시 빈 딕셔너리를 전달하면 SignoffManager는 기본값(True=스틸 상태)을
-            # 유지하여 정파해제를 발생시키지 않는다.
+            # still_detection_enabled=True : 전체 ROI 스틸 결과 전달
+            # still_detection_enabled=False: SignoffManager enter_roi label만 전달
+            #   (force_still_labels로 강제 계산됨 → 정파 진입/해제 감지 정상 동작)
             if self._detector.still_detection_enabled:
                 still_results = {
                     label: state.get("still", False)
                     for label, state in video_results.items()
+                }
+            elif signoff_enter_labels:
+                still_results = {
+                    label: state.get("still", False)
+                    for label, state in video_results.items()
+                    if label in signoff_enter_labels
                 }
             else:
                 still_results = {}

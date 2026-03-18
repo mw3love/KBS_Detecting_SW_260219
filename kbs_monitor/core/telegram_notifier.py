@@ -192,11 +192,20 @@ class TelegramNotifier:
                 timeout=10.0,
             )
             if resp.status_code == 200:
+                self._log("연결 테스트 성공")
                 return True, "연결 테스트 성공"
             else:
-                return False, f"오류 {resp.status_code}: {resp.text[:120]}"
+                msg = f"오류 {resp.status_code}: {resp.text[:120]}"
+                self._log(f"연결 테스트 실패 — {msg}", error=True)
+                return False, msg
+        except _requests.exceptions.Timeout:
+            msg = "타임아웃 (10초 초과) — 네트워크 또는 Bot Token 확인"
+            self._log(f"연결 테스트 실패 — {msg}", error=True)
+            return False, msg
         except Exception as exc:
-            return False, f"{type(exc).__name__}: {exc}"
+            msg = f"{type(exc).__name__}: {exc}"
+            self._log(f"연결 테스트 실패 — {msg}", error=True)
+            return False, msg
 
     # ── 워커 스레드 ───────────────────────────────────────────────────────────
 

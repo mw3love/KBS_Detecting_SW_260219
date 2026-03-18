@@ -3,8 +3,12 @@
 3분할 레이아웃: 상단 바 + 비디오 영역(~75%) + 로그 영역(~25%)
 """
 import copy
+import logging
 import os
+import time
 from typing import Optional
+
+_log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -39,7 +43,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.5.4")
+        self.setWindowTitle("KBS Peacock v1.5.5")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -85,6 +89,9 @@ class MainWindow(QMainWindow):
         self._black_logged: set = set()
         self._still_logged: set = set()
         self._audio_level_logged: set = set()
+
+        # SIGNOFF 억제 첫 1회 로그 중복 방지
+        self._signoff_suppressed_logged: set = set()
 
         # 감지 주기 카운터 (silent failure 감지 / 주기적 정상 작동 로그용)
         # 타이머 200ms 기준: 1500회 ≈ 5분
@@ -237,11 +244,31 @@ class MainWindow(QMainWindow):
         if self._roi_overlay is not None:
             return  # 편집 중 감지 중단
 
-        # 주기적 정상 작동 로그 (200ms × 1500 ≈ 5분)
+        # 주기적 정상 작동 로그 (200ms × 1500 ≈ 5분) — 파일 로그 전용 (UI 미출력)
         self._detection_count += 1
         if self._detection_count % 1500 == 0:
             elapsed_min = self._detection_count // 1500 * 5
-            self._logger.info(f"SYSTEM - 감지 정상 실행 중 ({elapsed_min}분 경과)")
+            _log.info("SYSTEM - 감지 정상 실행 중 (%d분 경과)", elapsed_min)
+            now_hb = time.time()
+            for lbl, raw in self._detector._last_raw.items():
+                still_state = self._detector._still_states.get(lbl)
+                dark_r = raw.get("dark_ratio", -1.0)
+                changed_r = raw.get("changed_ratio", -1.0)
+                still_timer = still_state.alert_duration if still_state else 0.0
+                if still_state and still_state._last_reset_time:
+                    reset_ago_str = f"직전리셋={now_hb - still_state._last_reset_time:.1f}s전"
+                else:
+                    reset_ago_str = "리셋없음"
+                changed_str = (
+                    f" changed={changed_r:.1f}%[기준{self._detector.still_changed_ratio}%]"
+                    if changed_r >= 0 else ""
+                )
+                _log.info(
+                    "DIAG - %s: black=%.1f%%[기준%.0f%%] still_timer=%.1fs[기준%.0fs]%s %s",
+                    lbl, dark_r, self._detector.black_dark_ratio,
+                    still_timer, self._detector.still_duration,
+                    changed_str, reset_ago_str,
+                )
 
         try:
             video_rois = self._roi_manager.video_rois
@@ -299,6 +326,9 @@ class MainWindow(QMainWindow):
                 for label, state in results.items():
                     # SIGNOFF 중인 그룹 소속 → 알림/로그 억제
                     if self._signoff_manager.is_signoff_label(label):
+                        if label not in self._signoff_suppressed_logged:
+                            _log.debug("SIGNOFF - %s 알림 억제 시작 (정파 중)", label)
+                            self._signoff_suppressed_logged.add(label)
                         self._alarm.resolve("블랙", label)
                         self._alarm.resolve("스틸", label)
                         self._black_logged.discard(label)
@@ -373,6 +403,9 @@ class MainWindow(QMainWindow):
                 for label, state in audio_results.items():
                     # SIGNOFF 중인 그룹 소속 → 알림/로그 억제
                     if self._signoff_manager.is_signoff_label(label):
+                        if label not in self._signoff_suppressed_logged:
+                            _log.debug("SIGNOFF - %s 오디오 알림 억제 시작 (정파 중)", label)
+                            self._signoff_suppressed_logged.add(label)
                         self._alarm.resolve("오디오", label)
                         self._audio_level_logged.discard(label)
                         self._video_widget.set_alert_state(label, False)
@@ -554,10 +587,12 @@ class MainWindow(QMainWindow):
         self._detector.black_dark_ratio = det.get("black_dark_ratio", 95.0)
         self._detector.black_duration = det.get("black_duration", 10.0)
         self._detector.black_alarm_duration = det.get("black_alarm_duration", 10.0)
+        self._detector.black_motion_suppress_ratio = det.get("black_motion_suppress_ratio", 0.5)
         self._detector.still_threshold = det.get("still_threshold", 8)
         self._detector.still_changed_ratio = det.get("still_changed_ratio", 2.0)
         self._detector.still_duration = det.get("still_duration", 60.0)
         self._detector.still_alarm_duration = det.get("still_alarm_duration", 10.0)
+        self._detector.still_reset_frames = int(det.get("still_reset_frames", 3))
         # 오디오 레벨미터 HSV
         self._detector.audio_hsv_h_min = det.get("audio_hsv_h_min", 40)
         self._detector.audio_hsv_h_max = det.get("audio_hsv_h_max", 80)
@@ -905,6 +940,8 @@ class MainWindow(QMainWindow):
             sound = signoff_cfg.get("enter_alarm_sound", "")
         else:
             sound = signoff_cfg.get("release_alarm_sound", "")
+            # IDLE(정파 해제) → 억제 로그 기록 초기화
+            self._signoff_suppressed_logged.clear()
         if sound:
             self._alarm.play_test_sound(sound)
 

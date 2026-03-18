@@ -1068,6 +1068,19 @@ class SettingsDialog(QDialog):
         grid_b.addWidget(self._edit_black_alarm_duration, 3, 1)
         grid_b.addWidget(desc_bad,                       3, 2)
 
+        lbl_bmsr = QLabel("▪  모션 억제 비율(%):")
+        lbl_bmsr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._edit_black_motion_suppress_ratio = _NumEdit(0.5, 0.0, 5.0, is_float=True)
+        self._edit_black_motion_suppress_ratio.editingFinished.connect(self._save_detection_params)
+        desc_bmsr = QLabel(
+            "• 0.0~5.0% / 블랙 판정 시 움직임(changed)이 이 비율 이상이면 블랙 취소  (기본값: 0.5%)<br>"
+            "• 스크롤 자막 등 미세 움직임 있는 화면의 오감지 방지 / 0.0 = 억제 비활성"
+        )
+        desc_bmsr.setObjectName("paramDescLabel")
+        grid_b.addWidget(lbl_bmsr,                                4, 0)
+        grid_b.addWidget(self._edit_black_motion_suppress_ratio,  4, 1)
+        grid_b.addWidget(desc_bmsr,                               4, 2)
+
         layout.addWidget(group_black)
 
         # ── 스틸 감지 그룹 ──
@@ -1122,6 +1135,19 @@ class SettingsDialog(QDialog):
         grid_s.addWidget(lbl_sad,                        3, 0)
         grid_s.addWidget(self._edit_still_alarm_duration, 3, 1)
         grid_s.addWidget(desc_sad,                       3, 2)
+
+        lbl_srf = QLabel("▪  타이머 리셋 프레임 수:")
+        lbl_srf.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._edit_still_reset_frames = _NumEdit(3, 1, 10)
+        self._edit_still_reset_frames.editingFinished.connect(self._save_detection_params)
+        desc_srf = QLabel(
+            "• 1~10프레임 / 이 프레임 수만큼 연속으로 정상이어야 스틸 타이머 리셋  (기본값: 3)<br>"
+            "• 높을수록 MPEG 아티팩트 1프레임에도 타이머 유지 / 1 = 기존 동작 (즉시 리셋)"
+        )
+        desc_srf.setObjectName("paramDescLabel")
+        grid_s.addWidget(lbl_srf,                        4, 0)
+        grid_s.addWidget(self._edit_still_reset_frames,  4, 1)
+        grid_s.addWidget(desc_srf,                       4, 2)
 
         layout.addWidget(group_still)
 
@@ -1860,10 +1886,12 @@ class SettingsDialog(QDialog):
         self._edit_black_dark_ratio.setText(str(float(det.get("black_dark_ratio", 95.0))))
         self._edit_black_duration.setText(str(int(det.get("black_duration", 20))))
         self._edit_black_alarm_duration.setText(str(int(det.get("black_alarm_duration", 10))))
+        self._edit_black_motion_suppress_ratio.setText(str(float(det.get("black_motion_suppress_ratio", 0.5))))
         self._edit_still_threshold.setText(str(int(det.get("still_threshold", 8))))
         self._edit_still_changed_ratio.setText(str(float(det.get("still_changed_ratio", 2.0))))
         self._edit_still_duration.setText(str(int(det.get("still_duration", 60))))
         self._edit_still_alarm_duration.setText(str(int(det.get("still_alarm_duration", 10))))
+        self._edit_still_reset_frames.setText(str(int(det.get("still_reset_frames", 3))))
 
         # 오디오 레벨미터 HSV 설정
         h_min = int(det.get("audio_hsv_h_min", 40))
@@ -1946,14 +1974,16 @@ class SettingsDialog(QDialog):
         s_min, s_max = self._slider_hsv_s.get_range()
         v_min, v_max = self._slider_hsv_v.get_range()
         return {
-            "black_threshold":      self._edit_black_threshold.get_value(),
-            "black_dark_ratio":     self._edit_black_dark_ratio.get_value(),
-            "black_duration":       self._edit_black_duration.get_value(),
-            "black_alarm_duration": self._edit_black_alarm_duration.get_value(),
-            "still_threshold":      self._edit_still_threshold.get_value(),
-            "still_changed_ratio":  self._edit_still_changed_ratio.get_value(),
-            "still_duration":       self._edit_still_duration.get_value(),
-            "still_alarm_duration": self._edit_still_alarm_duration.get_value(),
+            "black_threshold":               self._edit_black_threshold.get_value(),
+            "black_dark_ratio":              self._edit_black_dark_ratio.get_value(),
+            "black_duration":                self._edit_black_duration.get_value(),
+            "black_alarm_duration":          self._edit_black_alarm_duration.get_value(),
+            "black_motion_suppress_ratio":   self._edit_black_motion_suppress_ratio.get_value(),
+            "still_threshold":               self._edit_still_threshold.get_value(),
+            "still_changed_ratio":           self._edit_still_changed_ratio.get_value(),
+            "still_duration":                self._edit_still_duration.get_value(),
+            "still_alarm_duration":          self._edit_still_alarm_duration.get_value(),
+            "still_reset_frames":            self._edit_still_reset_frames.get_value(),
             # 오디오 레벨미터 HSV
             "audio_hsv_h_min": h_min,
             "audio_hsv_h_max": h_max,

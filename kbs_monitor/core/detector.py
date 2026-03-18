@@ -25,8 +25,13 @@ class DetectionState:
         self.just_resolved = False      # 이번 업데이트에서 정상 복구됨
         self.recovery_start_time: Optional[float] = None  # 복구 대기 시작 시간
         self.last_check_time = time.time()
+        # 히스테리시스: 연속 N프레임 정상이어야 타이머 리셋
+        self._not_still_count: int = 0
+        self._last_reset_time: float = 0.0   # 타이머 리셋 발생 시각
+        self._last_reset_from: float = 0.0   # 리셋 직전 누적 시간(진단용)
 
-    def update(self, is_abnormal: bool, threshold_seconds: float, recovery_seconds: float = 0.0) -> bool:
+    def update(self, is_abnormal: bool, threshold_seconds: float,
+               recovery_seconds: float = 0.0, reset_frames: int = 1) -> bool:
         """
         상태 업데이트. 알림 발생 여부 반환.
         is_abnormal: 현재 이상 상태 여부
@@ -40,6 +45,7 @@ class DetectionState:
         if is_abnormal:
             self.just_resolved = False
             self.recovery_start_time = None  # 복구 타이머 리셋
+            self._not_still_count = 0        # 히스테리시스 카운터 리셋
             if self.alert_start_time is None:
                 self.alert_start_time = now
             self.alert_duration = now - self.alert_start_time
@@ -67,10 +73,17 @@ class DetectionState:
                     self.just_resolved = True
                     self._do_resolve()
             else:
+                # 히스테리시스: reset_frames 연속 프레임 정상이어야 타이머 리셋
                 self.just_resolved = False
-                self.alert_start_time = None
-                self.alert_duration = 0.0
-                self.recovery_start_time = None
+                self._not_still_count += 1
+                if self._not_still_count >= reset_frames:
+                    self._last_reset_from = self.alert_duration
+                    self._last_reset_time = now
+                    self.alert_start_time = None
+                    self.alert_duration = 0.0
+                    self.recovery_start_time = None
+                    self._not_still_count = 0
+                # 카운터 미충족 → 타이머 유지 (alert_start_time, alert_duration 유지)
 
         self.last_check_time = now
         return self.is_alerting
@@ -88,6 +101,9 @@ class DetectionState:
         self.alert_duration = 0.0
         self.just_resolved = False
         self.recovery_start_time = None
+        self._not_still_count = 0
+        self._last_reset_time = 0.0
+        self._last_reset_from = 0.0
 
 
 class Detector:
@@ -107,12 +123,14 @@ class Detector:
         self.black_dark_ratio = 95.0       # 어두운 픽셀 비율 임계값 (%): 이 비율 이상이면 블랙으로 판단
         self.black_duration = 10.0         # 몇 초 이상 지속 시 알림 발생
         self.black_alarm_duration = 10.0   # 알림 지속 시간(초)
+        self.black_motion_suppress_ratio = 0.5  # 블랙 판정 시 움직임(changed_ratio)이 이 값 이상이면 블랙 취소 (0=비활성)
 
         # 스틸 감지 설정
         self.still_threshold = 8           # 픽셀당 변화 기준값 (0~255): 이 값 이상 차이나면 '변화한 픽셀'로 분류
         self.still_changed_ratio = 2.0     # 변화 픽셀 비율 임계값 (%): 이 비율 미만이면 정지로 판단
         self.still_duration = 10.0         # 몇 초 이상 지속 시 알림 발생
         self.still_alarm_duration = 10.0   # 알림 지속 시간(초)
+        self.still_reset_frames = 3        # 타이머 리셋에 필요한 연속 정상 프레임 수 (히스테리시스)
 
         # 오디오 레벨미터 감지 설정 (HSV)
         self.audio_hsv_h_min = 40    # H 최소값 (0~179)
@@ -147,6 +165,11 @@ class Detector:
         self.embedded_alerting = False
         self._embedded_alert_start: Optional[float] = None
         self._tone_states: Dict[str, DetectionState] = {}
+
+        # 진단용 raw 수치 (마지막 계산값 — heartbeat 로그 덤프용)
+        self._last_raw: Dict[str, dict] = {}
+        # near-miss 추적 (임계값 근접 상태 지속 시간)
+        self._near_miss_start: Dict[str, float] = {}
 
     def _apply_scale_factor(self, frame: np.ndarray) -> np.ndarray:
         """해상도 스케일 적용 (scale_factor < 1.0 인 경우에만 축소)"""
@@ -222,6 +245,7 @@ class Detector:
                 crop = frame[y1:y2, x1:x2]
 
                 # 블랙 감지 (어두운 픽셀 비율 방식 — 비활성화 시 계산 생략)
+                dark_ratio = -1.0
                 is_black = False
                 if self.black_detection_enabled:
                     gray = crop if len(crop.shape) == 2 else crop.mean(axis=2)
@@ -230,6 +254,7 @@ class Detector:
 
                 # 스틸 감지 (변화 픽셀 비율 방식 — 비활성화 시 float32 변환 및 복사 생략)
                 # force_still_labels에 포함된 label은 still_detection_enabled와 무관하게 계산
+                changed_ratio = -1.0
                 is_still = False
                 should_calc_still = self.still_detection_enabled or (
                     force_still_labels is not None and label in force_still_labels
@@ -251,6 +276,17 @@ class Detector:
                     # 스틸 감지 비활성 + force 대상 아님 → 이전 프레임 버퍼 불필요
                     self._prev_frames.pop(label, None)
 
+                # 블랙+모션 억제: 움직임이 있으면 블랙 오감지 취소 (스크롤 자막 등)
+                if is_black and self.black_motion_suppress_ratio > 0 and changed_ratio >= 0:
+                    if changed_ratio >= self.black_motion_suppress_ratio:
+                        is_black = False
+
+                # 진단용 raw 수치 저장 (heartbeat 덤프용)
+                self._last_raw[label] = {
+                    "dark_ratio": dark_ratio,
+                    "changed_ratio": changed_ratio,
+                }
+
                 # 상태 업데이트
                 if label not in self._black_states:
                     self._black_states[label] = DetectionState(roi)
@@ -260,7 +296,31 @@ class Detector:
                 still_state = self._still_states[label]
 
                 black_alerting = black_state.update(is_black, self.black_duration)
-                still_alerting = still_state.update(is_still, self.still_duration)
+                prev_reset_time = still_state._last_reset_time
+                still_alerting = still_state.update(is_still, self.still_duration,
+                                                     reset_frames=self.still_reset_frames)
+                # 스틸 타이머 리셋 진단 경고 (5초 이상 누적 중 아티팩트로 리셋 시)
+                if (still_state._last_reset_from >= 5.0
+                        and still_state._last_reset_time != prev_reset_time):
+                    _log.warning(
+                        "DIAG - ROI[%s] 스틸 타이머 리셋 (누적 %.1f초 → 0, %d프레임 연속 모션)",
+                        label, still_state._last_reset_from, self.still_reset_frames,
+                    )
+
+                # near-miss 추적: 임계값에 근접한 상태가 30초 이상 지속 시 진단 로그
+                now_nm = time.time()
+                is_near_miss = (dark_ratio > 50.0) or (changed_ratio >= 0 and changed_ratio < 3.0)
+                if is_near_miss:
+                    if label not in self._near_miss_start:
+                        self._near_miss_start[label] = now_nm
+                    elif now_nm - self._near_miss_start[label] >= 30.0:
+                        _log.info(
+                            "NEAR-MISS - ROI[%s]: dark=%.1f%% changed=%.2f%% (30초 지속)",
+                            label, dark_ratio, changed_ratio,
+                        )
+                        self._near_miss_start[label] = now_nm
+                else:
+                    self._near_miss_start.pop(label, None)
 
                 results[label] = {
                     "black": is_black,

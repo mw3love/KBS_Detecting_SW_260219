@@ -9,6 +9,8 @@
     "still_changed_ratio": 2.0,
     "still_duration": 60,
     "still_alarm_duration": 10,
+    "still_reset_frames": 3,
+    "black_motion_suppress_ratio": 0.5,
     "audio_hsv_h_min": 40,
     "audio_hsv_h_max": 95,
     "audio_hsv_s_min": 80,

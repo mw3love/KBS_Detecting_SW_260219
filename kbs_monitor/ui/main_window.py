@@ -8,7 +8,7 @@ import os
 import time
 from typing import Optional
 
-_log = logging.getLogger(__name__)
+_log = logging.getLogger("kbs_monitor")
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.5.5")
+        self.setWindowTitle("KBS Peacock v1.5.6")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 

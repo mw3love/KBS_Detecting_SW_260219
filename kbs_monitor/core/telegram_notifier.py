@@ -265,11 +265,25 @@ class TelegramNotifier:
                 if resp.status_code == 200:
                     kind = "복구" if is_recovery else "알림"
                     self._log(f"{alarm_type} {kind} 전송 완료 ({channel_str})")
+                    return
+                elif resp.status_code == 429:
+                    # Rate Limit — 응답의 retry_after만큼 대기 후 재시도
+                    try:
+                        retry_after = resp.json()["parameters"]["retry_after"]
+                    except Exception:
+                        retry_after = 10
+                    self._log(
+                        f"전송 실패 429 (Rate Limit, {retry_after}초 후 재시도): "
+                        f"{resp.text[:80]}",
+                        error=True,
+                    )
+                    time.sleep(retry_after + 1)
+                    # attempt 루프를 계속 진행하여 재시도
                 else:
                     self._log(
                         f"전송 실패 {resp.status_code}: {resp.text[:120]}", error=True
                     )
-                return  # 성공 또는 HTTP 오류 모두 재시도 없이 종료
+                    return  # 그 외 HTTP 오류는 재시도 없이 종료
             except Exception as exc:
                 if attempt < _SEND_RETRY_COUNT:
                     self._log(

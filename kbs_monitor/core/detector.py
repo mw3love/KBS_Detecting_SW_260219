@@ -119,15 +119,15 @@ class Detector:
         self.still_detection_enabled = True  # 스틸 감지 활성화 여부
 
         # 블랙 감지 설정
-        self.black_threshold = 10          # 픽셀당 어두움 기준 (0~255): 이 값 미만이면 '어두운 픽셀'로 분류
-        self.black_dark_ratio = 95.0       # 어두운 픽셀 비율 임계값 (%): 이 비율 이상이면 블랙으로 판단
+        self.black_threshold = 5           # 픽셀당 어두움 기준 (0~255): 이 값 미만이면 '어두운 픽셀'로 분류
+        self.black_dark_ratio = 98.0       # 어두운 픽셀 비율 임계값 (%): 이 비율 이상이면 블랙으로 판단
         self.black_duration = 10.0         # 몇 초 이상 지속 시 알림 발생
         self.black_alarm_duration = 10.0   # 알림 지속 시간(초)
-        self.black_motion_suppress_ratio = 0.5  # 블랙 판정 시 움직임(changed_ratio)이 이 값 이상이면 블랙 취소 (0=비활성)
+        self.black_motion_suppress_ratio = 0.2  # 블랙 판정 시 움직임(changed_ratio)이 이 값 이상이면 블랙 취소 (0=비활성)
 
         # 스틸 감지 설정
-        self.still_threshold = 8           # 픽셀당 변화 기준값 (0~255): 이 값 이상 차이나면 '변화한 픽셀'로 분류
-        self.still_changed_ratio = 2.0     # 변화 픽셀 비율 임계값 (%): 이 비율 미만이면 정지로 판단
+        self.still_threshold = 4           # 픽셀당 변화 기준값 (0~255): 이 값 이상 차이나면 '변화한 픽셀'로 분류
+        self.still_changed_ratio = 4.0     # 변화 픽셀 비율 임계값 (%): 이 비율 미만이면 정지로 판단
         self.still_duration = 10.0         # 몇 초 이상 지속 시 알림 발생
         self.still_alarm_duration = 10.0   # 알림 지속 시간(초)
         self.still_reset_frames = 3        # 타이머 리셋에 필요한 연속 정상 프레임 수 (히스테리시스)

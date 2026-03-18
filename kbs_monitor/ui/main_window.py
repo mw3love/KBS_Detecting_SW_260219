@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.5.7")
+        self.setWindowTitle("KBS Peacock v1.5.8")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -269,6 +269,64 @@ class MainWindow(QMainWindow):
                     still_timer, self._detector.still_duration,
                     changed_str, reset_ago_str,
                 )
+
+            # ── DIAG-ALARM: 알람 활성 상태 + 억제 여부 ──
+            active_alarms = self._alarm._active_alarms
+            if active_alarms:
+                alarm_parts = []
+                for key in sorted(active_alarms):
+                    label = key.split("_", 1)[1] if "_" in key else key
+                    suppressed = (
+                        self._signoff_manager.is_signoff_label(label)
+                        or self._signoff_manager.is_prep_label(label)
+                    )
+                    alarm_parts.append(f"{key}{'(억제중)' if suppressed else ''}")
+                _log.info("DIAG-ALARM - 활성: [%s]", ", ".join(alarm_parts))
+            else:
+                _log.info("DIAG-ALARM - 활성알람 없음")
+
+            # ── DIAG-SIGNOFF: 정파 그룹별 상태 ──
+            signoff_parts = []
+            for gid, group in self._signoff_manager.get_groups().items():
+                state = self._signoff_manager.get_state(gid)
+                enter_lbl = group.enter_roi.get("video_label", "-")
+                sup_labels = ",".join(group.suppressed_labels) if group.suppressed_labels else "-"
+                signoff_parts.append(
+                    f"그룹{gid}=[{group.name}/{state.value}/진입:{enter_lbl}/억제:{sup_labels}]"
+                )
+            _log.info("DIAG-SIGNOFF - %s", " ".join(signoff_parts) if signoff_parts else "그룹없음")
+
+            # ── DIAG-AUDIO: 오디오레벨미터 ROI + 임베디드 오디오 상태 ──
+            audio_diag_parts = []
+            if self._audio_detect_enabled:
+                for lbl, a_state in self._detector._audio_level_states.items():
+                    buf = self._detector._audio_ratio_buffer.get(lbl)
+                    avg_r = (sum(buf) / len(buf)) if buf else -1.0
+                    a_alert_str = "알람" if a_state.is_alerting else "정상"
+                    audio_diag_parts.append(
+                        f"{lbl}:ratio={avg_r:.1f}%[기준{self._detector.audio_pixel_ratio:.0f}%]"
+                        f" timer={a_state.alert_duration:.1f}s[기준{self._detector.audio_level_duration:.0f}s]"
+                        f" {a_alert_str}"
+                    )
+                if not self._detector._audio_level_states:
+                    audio_diag_parts.append("오디오ROI없음")
+            else:
+                audio_diag_parts.append("오디오레벨미터감지 비활성")
+
+            if self._embedded_detect_enabled:
+                emb_alert_str = "알람중" if self._detector.embedded_alerting else "정상"
+                silence_elapsed = (
+                    (time.time() - self._detector._embedded_alert_start)
+                    if self._detector._embedded_alert_start is not None
+                    else 0.0
+                )
+                audio_diag_parts.append(
+                    f"임베디드:{emb_alert_str}"
+                    f"[무음{silence_elapsed:.1f}s/기준{self._detector.embedded_silence_duration:.0f}s]"
+                )
+            else:
+                audio_diag_parts.append("임베디드감지 비활성")
+            _log.info("DIAG-AUDIO - %s", " | ".join(audio_diag_parts))
 
         try:
             video_rois = self._roi_manager.video_rois

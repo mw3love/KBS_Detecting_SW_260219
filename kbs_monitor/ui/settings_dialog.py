@@ -1029,7 +1029,7 @@ class SettingsDialog(QDialog):
         lbl_bt.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._edit_black_threshold = _NumEdit(10, 0, 255)
         self._edit_black_threshold.editingFinished.connect(self._save_detection_params)
-        desc_bt = QLabel("0~255 / 값이 낮을수록 더 어두운 영상만 감지  (기본값: 10)")
+        desc_bt = QLabel("0~255 / 값이 낮을수록 더 어두운 영상만 감지  (기본값: 5)")
         desc_bt.setObjectName("paramDescLabel")
         grid_b.addWidget(lbl_bt,                    0, 0)
         grid_b.addWidget(self._edit_black_threshold, 0, 1)
@@ -1040,7 +1040,7 @@ class SettingsDialog(QDialog):
         self._edit_black_dark_ratio = _NumEdit(95.0, 50.0, 100.0, is_float=True)
         self._edit_black_dark_ratio.editingFinished.connect(self._save_detection_params)
         desc_bdr = QLabel(
-            "• 50~100% / 감지영역 픽셀 중 이 비율 이상이 어두우면 블랙으로 판단  (기본값: 95%)<br>"
+            "• 50~100% / 감지영역 픽셀 중 이 비율 이상이 어두우면 블랙으로 판단  (기본값: 98%)<br>"
             "• 높일수록 엄격 (자막 등 밝은 요소 허용 줄임)  /  낮출수록 느슨 (자막 있어도 블랙 감지)"
         )
         desc_bdr.setObjectName("paramDescLabel")
@@ -1073,7 +1073,7 @@ class SettingsDialog(QDialog):
         self._edit_black_motion_suppress_ratio = _NumEdit(0.5, 0.0, 5.0, is_float=True)
         self._edit_black_motion_suppress_ratio.editingFinished.connect(self._save_detection_params)
         desc_bmsr = QLabel(
-            "• 0.0~5.0% / 블랙 판정 시 움직임(changed)이 이 비율 이상이면 블랙 취소  (기본값: 0.5%)<br>"
+            "• 0.0~5.0% / 블랙 판정 시 움직임(changed)이 이 비율 이상이면 블랙 취소  (기본값: 0.2%)<br>"
             "• 스크롤 자막 등 미세 움직임 있는 화면의 오감지 방지 / 0.0 = 억제 비활성"
         )
         desc_bmsr.setObjectName("paramDescLabel")
@@ -1095,7 +1095,7 @@ class SettingsDialog(QDialog):
         self._edit_still_threshold = _NumEdit(8, 0, 255)
         self._edit_still_threshold.editingFinished.connect(self._save_detection_params)
         desc_st = QLabel(
-            "• 0~255 / 각 픽셀의 밝기 차이가 이 값 이상이면 '변화한 픽셀'로 분류  (기본값: 8)<br>"
+            "• 0~255 / 각 픽셀의 밝기 차이가 이 값 이상이면 '변화한 픽셀'로 분류  (기본값: 4)<br>"
             "• 높을수록 인코더 압축 노이즈를 무시  /  낮을수록 미세한 변화도 움직임으로 감지"
         )
         desc_st.setObjectName("paramDescLabel")
@@ -1108,7 +1108,7 @@ class SettingsDialog(QDialog):
         self._edit_still_changed_ratio = _NumEdit(2.0, 0.1, 10.0, is_float=True)
         self._edit_still_changed_ratio.editingFinished.connect(self._save_detection_params)
         desc_scr = QLabel(
-            "• 0.1~10.0% / 변화한 픽셀이 이 비율 미만이면 정지로 판단  (기본값: 2.0%)<br>"
+            "• 0.1~10.0% / 변화한 픽셀이 이 비율 미만이면 정지로 판단  (기본값: 4.0%)<br>"
             "• 낮출수록 엄격 (조금만 변해도 정지 아님)  /  높일수록 느슨 (오감지 위험)"
         )
         desc_scr.setObjectName("paramDescLabel")
@@ -1812,7 +1812,7 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.5.7")
+        lbl_version = QLabel("KBS Peacock v1.5.8")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)
@@ -1882,13 +1882,13 @@ class SettingsDialog(QDialog):
 
     def _apply_detection_params_to_ui(self, det: dict):
         """감지 파라미터 dict를 UI 위젯에 적용 (신호 없이 조용히 갱신)"""
-        self._edit_black_threshold.setText(str(int(det.get("black_threshold", 10))))
-        self._edit_black_dark_ratio.setText(str(float(det.get("black_dark_ratio", 95.0))))
+        self._edit_black_threshold.setText(str(int(det.get("black_threshold", 5))))
+        self._edit_black_dark_ratio.setText(str(float(det.get("black_dark_ratio", 98.0))))
         self._edit_black_duration.setText(str(int(det.get("black_duration", 20))))
         self._edit_black_alarm_duration.setText(str(int(det.get("black_alarm_duration", 10))))
-        self._edit_black_motion_suppress_ratio.setText(str(float(det.get("black_motion_suppress_ratio", 0.5))))
-        self._edit_still_threshold.setText(str(int(det.get("still_threshold", 8))))
-        self._edit_still_changed_ratio.setText(str(float(det.get("still_changed_ratio", 2.0))))
+        self._edit_black_motion_suppress_ratio.setText(str(float(det.get("black_motion_suppress_ratio", 0.2))))
+        self._edit_still_threshold.setText(str(int(det.get("still_threshold", 4))))
+        self._edit_still_changed_ratio.setText(str(float(det.get("still_changed_ratio", 4.0))))
         self._edit_still_duration.setText(str(int(det.get("still_duration", 60))))
         self._edit_still_alarm_duration.setText(str(int(det.get("still_alarm_duration", 10))))
         self._edit_still_reset_frames.setText(str(int(det.get("still_reset_frames", 3))))

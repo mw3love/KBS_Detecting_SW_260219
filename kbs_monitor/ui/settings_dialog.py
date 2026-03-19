@@ -2517,9 +2517,9 @@ class SettingsDialog(QDialog):
         """정파 설정 전체 초기화."""
         defaults = {
             "auto_preparation":    True,
-            "prep_alarm_sound":    "",
-            "enter_alarm_sound":   "",
-            "release_alarm_sound": "",
+            "prep_alarm_sound":    "resources/sounds/sign_off.wav",
+            "enter_alarm_sound":   "resources/sounds/sign_off.wav",
+            "release_alarm_sound": "resources/sounds/sign_off.wav",
             "group1": {
                 "name":              "1TV",
                 "enter_roi":         {"video_label": ""},
@@ -3011,7 +3011,11 @@ class SettingsDialog(QDialog):
 
     def _clear_sound_file(self, alarm_type: str):
         """알림음 파일 초기화 (기본값 사용)"""
-        self._alarm_file_edits[alarm_type].clear()
+        _DEFAULT_SOUNDS = {
+            "default": "resources/sounds/alarm.wav",
+        }
+        default_path = _DEFAULT_SOUNDS.get(alarm_type, "")
+        self._alarm_file_edits[alarm_type].setText(default_path)
         self._emit_alarm_settings()
 
     def _emit_alarm_settings(self):

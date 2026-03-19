@@ -11,14 +11,16 @@ from typing import Any
 DEFAULT_CONFIG = {
     "port": 0,
     "detection": {
-        "black_threshold": 10,
-        "black_dark_ratio": 95.0,
+        "black_threshold": 5,
+        "black_dark_ratio": 98.0,
         "black_duration": 20,
         "black_alarm_duration": 60,
-        "still_threshold": 8,
-        "still_changed_ratio": 2.0,
+        "black_motion_suppress_ratio": 0.2,
+        "still_threshold": 4,
+        "still_changed_ratio": 4.0,
         "still_duration": 60,
         "still_alarm_duration": 60,
+        "still_reset_frames": 3,
         "audio_hsv_h_min": 40,
         "audio_hsv_h_max": 95,
         "audio_hsv_s_min": 80,
@@ -44,7 +46,7 @@ DEFAULT_CONFIG = {
             "black": "",
             "still": "",
             "audio": "",
-            "default": "",
+            "default": "resources/sounds/alarm.wav",
         },
     },
     "rois": {
@@ -86,9 +88,9 @@ DEFAULT_CONFIG = {
     },
     "signoff": {
         "auto_preparation":    True,   # 자동 정파 준비 활성화
-        "prep_alarm_sound":    "",     # 정파준비 시작 알림음 WAV 경로
-        "enter_alarm_sound":   "",     # 정파모드 진입 알림음 WAV 경로
-        "release_alarm_sound": "",     # 정파 해제 알림음 WAV 경로
+        "prep_alarm_sound":    "resources/sounds/sign_off.wav",   # 정파준비 시작 알림음 WAV 경로
+        "enter_alarm_sound":   "resources/sounds/sign_off.wav",   # 정파모드 진입 알림음 WAV 경로
+        "release_alarm_sound": "resources/sounds/sign_off.wav",   # 정파 해제 알림음 WAV 경로
         "group1": {
             "name":              "1TV",
             "enter_roi":         {"video_label": ""},

@@ -1,10 +1,10 @@
 {
   "port": 0,
   "detection": {
-    "black_threshold": 10,
+    "black_threshold": 5,
     "black_duration": 10,
     "black_alarm_duration": 10,
-    "still_threshold": 2,
+    "still_threshold": 4,
     "still_duration": 30,
     "still_alarm_duration": 10,
     "audio_hsv_h_min": 40,

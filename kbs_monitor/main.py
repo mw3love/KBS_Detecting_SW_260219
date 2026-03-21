@@ -14,14 +14,13 @@ if sys.platform == "win32":
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import Qt
 
 from ui.main_window import MainWindow
 
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("KBS Peacock v1.5.8")
+    app.setApplicationName("KBS Peacock v1.6.0")
     app.setOrganizationName("KBS")
 
     # 다크 테마 QSS 로드

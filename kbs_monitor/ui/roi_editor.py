@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QDialog,
     QPushButton, QLabel, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QFrame, QSizePolicy,
-    QLineEdit, QScrollArea,
+    QScrollArea,
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QSizeF, QTimer
 from PySide6.QtGui import (

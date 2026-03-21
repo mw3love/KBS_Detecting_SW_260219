@@ -244,15 +244,15 @@ class AutoRecorder:
         if not writer.isOpened():
             return
 
-        # ── 오디오 WAV Writer ──────────────────────────────────────────────
-        wav_file = wave.open(atmp, "wb")
-        wav_file.setnchannels(_AUDIO_CH)
-        wav_file.setsampwidth(2)          # int16 = 2바이트
-        wav_file.setframerate(_AUDIO_SR)
-
         has_audio = False
+        wav_file = None
 
         try:
+            # ── 오디오 WAV Writer ─────────────────────────────────────────
+            wav_file = wave.open(atmp, "wb")
+            wav_file.setnchannels(_AUDIO_CH)
+            wav_file.setsampwidth(2)          # int16 = 2바이트
+            wav_file.setframerate(_AUDIO_SR)
             # 1) 사고 전 비디오 버퍼 기록
             for _ts, jpeg_bytes in pre_frames:
                 arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
@@ -290,7 +290,8 @@ class AutoRecorder:
                     time.sleep(0.02)
         finally:
             writer.release()
-            wav_file.close()
+            if wav_file is not None:
+                wav_file.close()
 
         # 4) ffmpeg 합성 (오디오가 있을 때만 시도)
         if has_audio:

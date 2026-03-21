@@ -252,6 +252,32 @@ for roi in rois:
 - **이유**: 특정 ROI 예외가 전체 감지를 멈추지 않도록 격리
 - `_log = logging.getLogger(__name__)` — 파일 상단에 선언
 
+### `DetectionState.update()` — 히스테리시스 대칭 원칙 (절대 변경 금지)
+
+> 경보 전/후 히스테리시스 비대칭으로 인해 장기 실행 후 스틸 감지가 작동하지 않는 버그 발생 이력이 있음.
+> 캡처 카드 인코딩 노이즈로 인한 단일 프레임 `is_still=False` 글리치가 원인.
+
+- **경보 전 (not alerting)**: `reset_frames` 연속 정상 프레임이어야 타이머 리셋
+- **경보 후 (alerting, recovery_seconds=0)**: **동일하게** `reset_frames` 연속 정상이어야 복구
+- `_do_resolve()` 호출 시 반드시 `_last_reset_time`, `_last_reset_from` 업데이트 (DIAG 추적)
+- `_not_still_count`는 `is_abnormal=True` 시 0으로 리셋, `is_abnormal=False` 시 경보 전/후 공통 증가
+
+**절대 하지 말 것**: 경보 상태에서 단일 프레임으로 즉시 `_do_resolve()` 호출 (히스테리시스 우회)
+
+### SignoffManager 타이머 — 히스테리시스 원칙
+
+- `_tick_preparation()`: `_video_enter_not_still` 카운터로 3틱 연속 비-스틸이어야 `_video_enter_start` 리셋
+- `_tick_exit_preparation()`: `_video_exit_still` 카운터로 3틱 연속 스틸이어야 `_video_exit_start` 리셋
+- 단일 틱의 `is_still` 값 변동으로 타이머를 즉시 리셋하면 안 됨
+
+### `_on_frame_ready()` — 프레임 복사
+
+```python
+self._latest_frame = frame.copy()  # 캡처 스레드 버퍼 공유 방지
+```
+
+- **이유**: `cap.read()`가 반환하는 numpy 배열이 캡처 스레드에서 재사용될 수 있음 → 감지 루프에서 처리 중 데이터 변조 방지
+
 ## 탭별 구현 현황
 
 | 탭 | 이름 | 구현 상태 |

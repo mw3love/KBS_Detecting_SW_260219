@@ -166,8 +166,10 @@ class SignoffManager(QObject):
 
         # 정파준비→정파 진입 타이머
         self._video_enter_start: Dict[int, Optional[float]] = {}   # 스틸 감지 시작 시각
+        self._video_enter_not_still: Dict[int, int] = {}           # 비-스틸 연속 틱 카운터 (히스테리시스)
         # 정파해제준비 구간: 비-스틸 지속 타이머
         self._video_exit_start: Dict[int, Optional[float]] = {}    # 비-스틸 감지 시작 시각
+        self._video_exit_still: Dict[int, int] = {}                # 스틸 연속 틱 카운터 (히스테리시스)
 
         self._signoff_entered_at: Dict[int, Optional[float]] = {}    # SIGNOFF 진입 시각
         self._preparation_entered_at: Dict[int, Optional[float]] = {}  # PREPARATION 진입 시각
@@ -200,7 +202,9 @@ class SignoffManager(QObject):
         if gid not in self._states:
             self._states[gid] = SignoffState.IDLE
             self._video_enter_start[gid] = None
+            self._video_enter_not_still[gid] = 0
             self._video_exit_start[gid] = None
+            self._video_exit_still[gid] = 0
             self._signoff_entered_at[gid] = None
             self._preparation_entered_at[gid] = None
             self._manual_override[gid] = False
@@ -462,11 +466,19 @@ class SignoffManager(QObject):
     def _reset_enter_timers(self, gid: int):
         """정파 진입 타이머 초기화."""
         self._video_enter_start[gid] = None
+        self._video_enter_not_still[gid] = 0
 
     # ── 1초 주기 상태 점검 ────────────────────────────────────────────────
 
     def _tick(self):
         """매 1초 호출: 시간 기반 + 감지 결과 기반 상태 전환."""
+        try:
+            self._tick_impl()
+        except Exception as e:
+            _log.error("SignoffManager._tick() 오류 (타이머 유지): %s", e)
+
+    def _tick_impl(self):
+        """_tick() 실제 구현 — try-except로 분리하여 QTimer 안정성 보장."""
         now = datetime.datetime.now()
         weekday = now.weekday()
         current_time = now.strftime("%H:%M")
@@ -528,12 +540,15 @@ class SignoffManager(QObject):
         is_still = self._latest_video.get(v_label, False)
         prev_still = self._dbg_prev_still.get(gid)
 
-        # ── 스틸 타이머 갱신 ──
+        # ── 스틸 타이머 갱신 (히스테리시스: 3틱 연속 비-스틸이어야 리셋) ──
         if is_still:
+            self._video_enter_not_still[gid] = 0  # 히스테리시스 카운터 리셋
             if self._video_enter_start[gid] is None:
                 self._video_enter_start[gid] = now
         else:
-            self._video_enter_start[gid] = None
+            self._video_enter_not_still[gid] = self._video_enter_not_still.get(gid, 0) + 1
+            if self._video_enter_not_still[gid] >= 3:
+                self._video_enter_start[gid] = None
 
         # ── 디버그 로그: 스틸 값 변화 시 즉시 기록 ──
         if is_still != prev_still:
@@ -646,8 +661,9 @@ class SignoffManager(QObject):
                     group.name, v_label, elapsed, group.exit_trigger_sec,
                 )
 
-        # 비-스틸 상태이면 타이머 갱신, 스틸 상태이면 리셋
+        # 비-스틸 상태이면 타이머 갱신, 스틸 상태이면 리셋 (히스테리시스: 3틱 연속 스틸이어야 리셋)
         if is_not_still:
+            self._video_exit_still[gid] = 0  # 히스테리시스 카운터 리셋
             if self._video_exit_start[gid] is None:
                 self._video_exit_start[gid] = now
             v_elapsed = now - self._video_exit_start[gid]
@@ -668,9 +684,11 @@ class SignoffManager(QObject):
                 self._exit_released[gid] = True  # 조기 해제 후 자동 재진입 차단
                 self._transition_to(gid, SignoffState.IDLE)
         else:
-            # 스틸 상태 복귀 → 해제 타이머 리셋
-            self._video_exit_start[gid] = None
-            self._dbg_last_exit_log[gid] = 0.0  # 리셋 시 타이머 초기화
+            # 스틸 상태 복귀 → 히스테리시스: 3틱 연속 스틸이어야 해제 타이머 리셋
+            self._video_exit_still[gid] = self._video_exit_still.get(gid, 0) + 1
+            if self._video_exit_still[gid] >= 3:
+                self._video_exit_start[gid] = None
+                self._dbg_last_exit_log[gid] = 0.0  # 리셋 시 타이머 초기화
 
     def _is_in_time_range(self, group: SignoffGroup,
                            current_time: str, weekday: int,

@@ -1013,6 +1013,7 @@ class SettingsDialog(QDialog):
         scroll.setFrameShape(QFrame.NoFrame)
 
         inner = QWidget()
+        scroll.setWidget(inner)          # Qt 소유권 즉시 이전 → Python GC 삭제 방지
         layout = QVBoxLayout(inner)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
@@ -1418,7 +1419,6 @@ class SettingsDialog(QDialog):
         btn_reset_all.clicked.connect(self._reset_detection_params_to_default)
         layout.addWidget(btn_reset_all)
 
-        scroll.setWidget(inner)
         return scroll
 
     # ── 탭 5: 알림설정 ───────────────────────────────
@@ -1430,6 +1430,7 @@ class SettingsDialog(QDialog):
         scroll.setFrameShape(QFrame.NoFrame)
 
         inner = QWidget()
+        scroll.setWidget(inner)          # Qt 소유권 즉시 이전 → Python GC 삭제 방지
         layout = QVBoxLayout(inner)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
@@ -1545,7 +1546,6 @@ class SettingsDialog(QDialog):
         layout.addWidget(group_tg_opt)
         layout.addStretch()
 
-        scroll.setWidget(inner)
         return scroll
 
     def _on_telegram_test_clicked(self):
@@ -1812,7 +1812,7 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.5.8")
+        lbl_version = QLabel("KBS Peacock v1.6.0")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)

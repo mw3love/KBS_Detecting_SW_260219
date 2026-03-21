@@ -71,6 +71,7 @@ DEFAULT_CONFIG = {
         "notify_still": True,
         "notify_audio_level": True,
         "notify_embedded": True,
+        "notify_signoff": True,
     },
     "recording": {
         "enabled": True,

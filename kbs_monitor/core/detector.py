@@ -29,6 +29,7 @@ class DetectionState:
         self._not_still_count: int = 0
         self._last_reset_time: float = 0.0   # 타이머 리셋 발생 시각
         self._last_reset_from: float = 0.0   # 리셋 직전 누적 시간(진단용)
+        self._resolve_count: int = 0         # resolve 발생 횟수(DIAG용)
 
     def update(self, is_abnormal: bool, threshold_seconds: float,
                recovery_seconds: float = 0.0, reset_frames: int = 1) -> bool:
@@ -37,7 +38,8 @@ class DetectionState:
         is_abnormal: 현재 이상 상태 여부
         threshold_seconds: 몇 초 이상 지속 시 알림 발생
         recovery_seconds: 알림 상태에서 정상으로 복구되기 위한 최소 정상 지속 시간(초)
-                          0이면 즉시 복구 (기존 동작)
+                          0이면 reset_frames 히스테리시스 적용
+        reset_frames: 연속 정상 프레임 수 임계값 (경보 전/후 동일 적용)
         """
         now = time.time()
         was_alerting = self.is_alerting
@@ -53,6 +55,9 @@ class DetectionState:
             if self.alert_duration >= threshold_seconds and not self.is_alerting:
                 self.is_alerting = True
         else:
+            # 정상 프레임 카운터 — 경보 전/후 동일하게 적용
+            self._not_still_count += 1
+
             if was_alerting:
                 if recovery_seconds > 0:
                     # 복구 딜레이 적용: recovery_seconds 이상 정상 지속 시에만 복구
@@ -61,21 +66,25 @@ class DetectionState:
                     if now - self.recovery_start_time >= recovery_seconds:
                         self.last_alert_duration = self.alert_duration
                         self.just_resolved = True
-                        self._do_resolve()
+                        self._do_resolve(now)
                     else:
                         # 복구 딜레이 미충족 → 알림 상태 유지
                         self.just_resolved = False
                         self.last_check_time = now
                         return self.is_alerting
-                else:
-                    # 즉시 복구 (기존 동작)
+                elif self._not_still_count >= reset_frames:
+                    # 히스테리시스 충족 → 복구 (단일 프레임 글리치 방지)
                     self.last_alert_duration = self.alert_duration
                     self.just_resolved = True
-                    self._do_resolve()
+                    self._do_resolve(now)
+                else:
+                    # 히스테리시스 미충족 → 알림 상태 유지 (타이머도 유지)
+                    self.just_resolved = False
+                    self.last_check_time = now
+                    return self.is_alerting
             else:
-                # 히스테리시스: reset_frames 연속 프레임 정상이어야 타이머 리셋
+                # 비경보 상태: reset_frames 연속 프레임 정상이어야 타이머 리셋
                 self.just_resolved = False
-                self._not_still_count += 1
                 if self._not_still_count >= reset_frames:
                     self._last_reset_from = self.alert_duration
                     self._last_reset_time = now
@@ -88,12 +97,18 @@ class DetectionState:
         self.last_check_time = now
         return self.is_alerting
 
-    def _do_resolve(self):
+    def _do_resolve(self, now: float = None):
         """알림 → 정상 전환 처리"""
+        if now is None:
+            now = time.time()
+        self._resolve_count += 1
+        self._last_reset_from = self.alert_duration
+        self._last_reset_time = now
         self.alert_start_time = None
         self.alert_duration = 0.0
         self.is_alerting = False
         self.recovery_start_time = None
+        self._not_still_count = 0
 
     def reset(self):
         self.is_alerting = False
@@ -104,6 +119,7 @@ class DetectionState:
         self._not_still_count = 0
         self._last_reset_time = 0.0
         self._last_reset_from = 0.0
+        self._resolve_count = 0
 
 
 class Detector:
@@ -148,9 +164,6 @@ class Detector:
         self.embedded_silence_threshold = -50  # 무음 판단 dB (-60~0)
         self.embedded_silence_duration = 10.0  # 무음 지속 시간(초) → 알림
         self.embedded_alarm_duration = 10.0    # 알림 지속 시간(초)
-
-        # 정파준비모드 화이트 감지 설정
-        self.white_threshold = 200             # 화이트 판단 밝기 임계값 (0~255)
 
         # 비디오 감지 상태
         self._black_states: Dict[str, DetectionState] = {}
@@ -403,25 +416,6 @@ class Detector:
             except Exception as e:
                 _log.error("detect_audio_roi ROI[%s] 오류: %s", label, e)
 
-        return results
-
-    def detect_white_roi(self, frame: np.ndarray, rois: List[ROI]) -> Dict[str, bool]:
-        """
-        비디오 ROI에서 화이트(밝기 > white_threshold) 여부 감지.
-        정파준비모드 조건 판단용. DetectionState 누적 없이 즉시 결과 반환.
-        반환: {label: bool}  True=화이트 감지됨
-        """
-        results = {}
-        frame_s = self._apply_scale_factor(frame)
-        h, w = frame_s.shape[:2]
-        for roi in rois:
-            label = roi.label
-            x1, y1, x2, y2 = self._get_scaled_bounds(roi, h, w)
-            if x2 <= x1 or y2 <= y1:
-                continue
-            crop = frame_s[y1:y2, x1:x2]
-            gray = crop if len(crop.shape) == 2 else crop.mean(axis=2)
-            results[label] = float(np.mean(gray)) > self.white_threshold
         return results
 
     def update_embedded_silence(self, silence_seconds: float) -> bool:

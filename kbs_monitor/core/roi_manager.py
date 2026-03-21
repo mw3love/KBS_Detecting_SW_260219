@@ -77,6 +77,8 @@ class ROIManager:
     def add_audio_roi(self, x: int, y: int, w: int, h: int, media_name: str = "") -> ROI:
         """오디오 레벨미터 감지영역 추가"""
         idx = len(self._audio_rois) + 1
+        w = min(w, self.MAX_SIZE[0])
+        h = min(h, self.MAX_SIZE[1])
         roi = ROI(label=f"A{idx}", media_name=media_name, x=x, y=y, w=w, h=h, roi_type="audio")
         self._audio_rois.append(roi)
         self._relabel_audio()

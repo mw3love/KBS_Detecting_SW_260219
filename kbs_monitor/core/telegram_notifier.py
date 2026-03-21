@@ -129,6 +129,13 @@ class TelegramNotifier:
             return
         if not self._enabled:
             return  # 비활성 상태 — 로그 없이 종료
+        # 워커 스레드 사망 감지 → 자동 재시작 (장기 실행 안정성)
+        if self._running and not self._worker_thread.is_alive():
+            self._log("워커 스레드 비정상 종료 감지 — 재시작", error=True)
+            self._worker_thread = threading.Thread(
+                target=self._worker_loop, daemon=True, name="TelegramWorker"
+            )
+            self._worker_thread.start()
         if not self._bot_token or not self._chat_id:
             self._log("Bot Token 또는 Chat ID가 설정되지 않았습니다.", error=True)
             return
@@ -189,7 +196,7 @@ class TelegramNotifier:
                     "chat_id": chat_id,
                     "text": "[KBS Peacock] 텔레그램 연결 테스트 성공",
                 },
-                timeout=10.0,
+                timeout=(5.0, 10.0),  # (connect_timeout, read_timeout)
             )
             if resp.status_code == 200:
                 self._log("연결 테스트 성공")
@@ -218,7 +225,11 @@ class TelegramNotifier:
                 continue
             if item is None:    # 종료 센티널
                 break
-            self._send(item)
+            try:
+                self._send(item)
+            except Exception as exc:
+                # _send() 내부 try-except가 놓친 예외 → 스레드 사망 방지
+                self._log(f"전송 처리 중 예외 (스레드 유지): {type(exc).__name__}: {exc}", error=True)
 
     def _send(self, item: dict):
         """실제 HTTP 전송 (워커 스레드에서 실행)"""
@@ -252,7 +263,7 @@ class TelegramNotifier:
             )
 
         base = self._API_BASE.format(token=self._bot_token)
-        timeout = 15.0
+        timeout = (5.0, 15.0)  # (connect_timeout, read_timeout) — DNS는 별도 적용 안됨
 
         for attempt in range(1 + _SEND_RETRY_COUNT):
             try:

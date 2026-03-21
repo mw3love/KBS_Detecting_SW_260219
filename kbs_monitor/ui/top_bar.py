@@ -399,6 +399,15 @@ class TopBar(QWidget):
         self._btn_ack.clicked.connect(self.alarm_acknowledged)
         layout.addWidget(self._btn_ack)
 
+        # 7-1. 알림 초기화 버튼 (감지기 상태 + 로그 집합 + 알람 전체 리셋)
+        self._btn_clear = QPushButton("알림 초기화")
+        self._btn_clear.setObjectName("btnAlarmClear")
+        self._btn_clear.setFixedSize(96, 36)
+        self._btn_clear.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self._btn_clear.setToolTip("알림 초기화 — 감지 상태·로그·알람 전체 리셋")
+        self._btn_clear.clicked.connect(self.clear_alarm_requested)
+        layout.addWidget(self._btn_clear)
+
         layout.addWidget(self._make_separator())
 
         # 9. 정파 버튼 (Group1, Group2) — 클릭 가능한 버튼 + 시간 레이블 세트

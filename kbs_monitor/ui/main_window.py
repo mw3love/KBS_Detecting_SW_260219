@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.5.8")
+        self.setWindowTitle("KBS Peacock v1.6.0")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -233,7 +233,7 @@ class MainWindow(QMainWindow):
     # ── 프레임/감지 ────────────────────────────────────
 
     def _on_frame_ready(self, frame):
-        self._latest_frame = frame
+        self._latest_frame = frame.copy()  # 캡처 스레드 버퍼 공유 방지
         if self._roi_overlay is None:
             self._video_widget.update_frame(frame)
         self._recorder.push_frame(frame)
@@ -263,11 +263,17 @@ class MainWindow(QMainWindow):
                     f" changed={changed_r:.1f}%[기준{self._detector.still_changed_ratio}%]"
                     if changed_r >= 0 else ""
                 )
+                # resolve 횟수 + alert_start_time 존재 여부 (진단 강화)
+                resolve_cnt = still_state._resolve_count if still_state else 0
+                has_start = still_state.alert_start_time is not None if still_state else False
+                alerting_str = "경보중" if (still_state and still_state.is_alerting) else "정상"
                 _log.info(
-                    "DIAG - %s: black=%.1f%%[기준%.0f%%] still_timer=%.1fs[기준%.0fs]%s %s",
+                    "DIAG - %s: black=%.1f%%[기준%.0f%%] still_timer=%.1fs[기준%.0fs]%s %s"
+                    " [%s/resolve=%d/start=%s]",
                     lbl, dark_r, self._detector.black_dark_ratio,
                     still_timer, self._detector.still_duration,
                     changed_str, reset_ago_str,
+                    alerting_str, resolve_cnt, "Y" if has_start else "N",
                 )
 
             # ── DIAG-ALARM: 알람 활성 상태 + 억제 여부 ──
@@ -327,6 +333,17 @@ class MainWindow(QMainWindow):
             else:
                 audio_diag_parts.append("임베디드감지 비활성")
             _log.info("DIAG-AUDIO - %s", " | ".join(audio_diag_parts))
+
+            # ── DIAG-TELEGRAM: 텔레그램 상태 ──
+            tg_enabled = self._telegram._enabled
+            tg_worker_alive = self._telegram._worker_thread.is_alive()
+            tg_queue_size = self._telegram._queue.qsize()
+            _log.info(
+                "DIAG-TELEGRAM - enabled=%s worker=%s queue=%d",
+                tg_enabled,
+                "alive" if tg_worker_alive else "DEAD",
+                tg_queue_size,
+            )
 
         try:
             video_rois = self._roi_manager.video_rois
@@ -641,31 +658,31 @@ class MainWindow(QMainWindow):
 
     def _apply_detection_config(self, det: dict):
         """config dict에서 감지 파라미터 적용"""
-        self._detector.black_threshold = det.get("black_threshold", 10)
-        self._detector.black_dark_ratio = det.get("black_dark_ratio", 95.0)
-        self._detector.black_duration = det.get("black_duration", 10.0)
-        self._detector.black_alarm_duration = det.get("black_alarm_duration", 10.0)
-        self._detector.black_motion_suppress_ratio = det.get("black_motion_suppress_ratio", 0.5)
-        self._detector.still_threshold = det.get("still_threshold", 8)
-        self._detector.still_changed_ratio = det.get("still_changed_ratio", 2.0)
+        self._detector.black_threshold = det.get("black_threshold", 5)
+        self._detector.black_dark_ratio = det.get("black_dark_ratio", 98.0)
+        self._detector.black_duration = det.get("black_duration", 20)
+        self._detector.black_alarm_duration = det.get("black_alarm_duration", 60)
+        self._detector.black_motion_suppress_ratio = det.get("black_motion_suppress_ratio", 0.2)
+        self._detector.still_threshold = det.get("still_threshold", 4)
+        self._detector.still_changed_ratio = det.get("still_changed_ratio", 4.0)
         self._detector.still_duration = det.get("still_duration", 60.0)
-        self._detector.still_alarm_duration = det.get("still_alarm_duration", 10.0)
+        self._detector.still_alarm_duration = det.get("still_alarm_duration", 60)
         self._detector.still_reset_frames = int(det.get("still_reset_frames", 3))
         # 오디오 레벨미터 HSV
         self._detector.audio_hsv_h_min = det.get("audio_hsv_h_min", 40)
-        self._detector.audio_hsv_h_max = det.get("audio_hsv_h_max", 80)
-        self._detector.audio_hsv_s_min = det.get("audio_hsv_s_min", 30)
+        self._detector.audio_hsv_h_max = det.get("audio_hsv_h_max", 95)
+        self._detector.audio_hsv_s_min = det.get("audio_hsv_s_min", 80)
         self._detector.audio_hsv_s_max = det.get("audio_hsv_s_max", 255)
-        self._detector.audio_hsv_v_min = det.get("audio_hsv_v_min", 30)
+        self._detector.audio_hsv_v_min = det.get("audio_hsv_v_min", 60)
         self._detector.audio_hsv_v_max = det.get("audio_hsv_v_max", 255)
         self._detector.audio_pixel_ratio = det.get("audio_pixel_ratio", 5.0)
         self._detector.audio_level_duration = det.get("audio_level_duration", 20.0)
-        self._detector.audio_level_alarm_duration = det.get("audio_level_alarm_duration", 10.0)
+        self._detector.audio_level_alarm_duration = det.get("audio_level_alarm_duration", 60)
         self._detector.audio_level_recovery_seconds = det.get("audio_level_recovery_seconds", 2.0)
         # 임베디드 오디오
         self._detector.embedded_silence_threshold = det.get("embedded_silence_threshold", -50)
         self._detector.embedded_silence_duration = det.get("embedded_silence_duration", 20.0)
-        self._detector.embedded_alarm_duration = det.get("embedded_alarm_duration", 10.0)
+        self._detector.embedded_alarm_duration = det.get("embedded_alarm_duration", 60)
         # 정파용 오디오 톤 감지
         self._detector.audio_tone_std_threshold = det.get("audio_tone_std_threshold", 3.0)
         self._detector.audio_tone_duration      = det.get("audio_tone_duration", 60.0)
@@ -825,11 +842,38 @@ class MainWindow(QMainWindow):
 
     def _on_telegram_test(self, token: str, chat_id: str):
         """연결 테스트를 백그라운드 스레드에서 실행 (메인 스레드 블로킹 방지)"""
-        def _run():
-            ok, msg = self._telegram.test_connection(token, chat_id)
-            self._telegram_test_done.emit(ok, msg)
+        # 결과를 스레드-안전 변수에 저장 → QTimer 폴링으로 메인 스레드에서 UI 업데이트
+        # (daemon 스레드에서 Signal.emit()하면 PySide6 이벤트 루프 전달 미보장)
+        self._tg_test_result: list = []          # [(ok, msg)] — 완료 시 append
+        self._tg_test_start = time.time()
 
-        threading.Thread(target=_run, daemon=True, name="TelegramTestThread").start()
+        def _run():
+            try:
+                ok, msg = self._telegram.test_connection(token, chat_id)
+            except Exception as exc:
+                ok, msg = False, f"예외: {type(exc).__name__}: {exc}"
+            self._tg_test_result.append((ok, msg))
+
+        _t = threading.Thread(target=_run, daemon=True, name="TelegramTestThread")
+        _t.start()
+
+        # 메인 스레드 QTimer로 결과 폴링 (500ms 간격, 최대 30초)
+        if not hasattr(self, "_tg_test_timer"):
+            self._tg_test_timer = QTimer(self)
+            self._tg_test_timer.timeout.connect(self._poll_telegram_test)
+        self._tg_test_timer.start(500)
+
+    def _poll_telegram_test(self):
+        """QTimer 콜백 — 메인 스레드에서 테스트 결과 확인"""
+        if self._tg_test_result:
+            ok, msg = self._tg_test_result[0]
+            self._tg_test_timer.stop()
+            self._on_telegram_test_done(ok, msg)
+        elif time.time() - self._tg_test_start > 30.0:
+            self._tg_test_timer.stop()
+            self._on_telegram_test_done(
+                False, "연결 시간 초과 (30초) — 네트워크/DNS 문제 확인"
+            )
 
     def _on_telegram_test_done(self, ok: bool, msg: str):
         """테스트 결과 수신 — 메인 스레드에서 UI 업데이트"""

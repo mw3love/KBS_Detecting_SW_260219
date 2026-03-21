@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KBS 16채널 방송 모니터링 시스템</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #1c2128;
+    --accent: #e6303a;
+    --accent2: #ff6b6b;
+    --gold: #f0c040;
+    --blue: #4a9eff;
+    --purple: #a371f7;
+    --green: #56d364;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --border: #30363d;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* 슬라이드 컨테이너 */
+  .slide-container {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* 슬라이드 트랙: 모든 슬라이드를 가로로 나란히 배치 */
+  .slide-track {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    will-change: transform;
+    transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  .slide {
+    min-width: 100%;
+    width: 100%;
+    height: 100%;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 48px 80px;
+    overflow: hidden;
+  }
+
+  /* 슬라이드 번호 표시 */
+  .slide-num {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: background 0.3s;
+    cursor: pointer;
+  }
+  .dot.active { background: var(--accent); }
+
+  /* 네비게이션 버튼 */
+  .nav-btn {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 44px; height: 80px;
+    border-radius: 8px;
+    font-size: 22px;
+    cursor: pointer;
+    transition: background 0.2s;
+    z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.15); }
+  #prev { left: 12px; }
+  #next { right: 12px; }
+
+  /* 슬라이드 헤더 */
+  .slide-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 36px;
+  }
+
+  .badge {
+    background: var(--accent);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 1px;
+  }
+
+  .slide-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .slide-subtitle {
+    font-size: 14px;
+    color: var(--text2);
+    margin-top: 4px;
+  }
+
+  /* ───────── 공통 카드 ───────── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .card.highlight {
+    border-color: var(--accent);
+    box-shadow: 0 0 24px rgba(230,48,58,0.15);
+  }
+
+  /* ───────── SLIDE 1: 표지 ───────── */
+  #s1 {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: radial-gradient(ellipse at center, #1a0a0d 0%, var(--bg) 70%);
+  }
+
+  .cover-logo {
+    font-size: 80px;
+    margin-bottom: 24px;
+    filter: drop-shadow(0 0 30px rgba(230,48,58,0.5));
+  }
+
+  .cover-title {
+    font-size: 42px;
+    font-weight: 800;
+    line-height: 1.3;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #fff 0%, var(--accent2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .cover-sub {
+    font-size: 18px;
+    color: var(--text2);
+    margin-bottom: 40px;
+  }
+
+  .cover-tags {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .tag {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .cover-version {
+    margin-top: 48px;
+    font-size: 12px;
+    color: var(--text2);
+    opacity: 0.6;
+  }
+
+  /* ───────── SLIDE 2: 문제 ───────── */
+  .problem-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    flex: 1;
+  }
+
+  .problem-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  .problem-icon {
+    font-size: 40px;
+    flex-shrink: 0;
+  }
+
+  .problem-card h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--accent2);
+  }
+
+  .problem-card p {
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.7;
+  }
+
+  .problem-center {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, rgba(230,48,58,0.12), rgba(230,48,58,0.04));
+    border-color: var(--accent);
+    text-align: center;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 12px;
+    border: 1px solid var(--accent);
+  }
+
+  /* ───────── SLIDE 3: 솔루션 개요 ───────── */
+  .solution-layout {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 28px;
+    flex: 1;
+  }
+
+  .solution-left {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .solution-right {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .big-stat {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .big-stat .num {
+    font-size: 52px;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  .big-stat .label {
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .flow-row {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .flow-icon { font-size: 28px; flex-shrink: 0; }
+
+  .flow-row h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .flow-row p { font-size: 13px; color: var(--text2); }
+
+  .arrow-right {
+    color: var(--text2);
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  /* ───────── SLIDE 4: 4가지 감지 ───────── */
+  .detect-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    flex: 1;
+  }
+
+  .detect-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .detect-card .d-icon {
+    font-size: 36px;
+  }
+
+  .detect-card .d-name {
+    font-size: 19px;
+    font-weight: 800;
+  }
+
+  .detect-card .d-trigger {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    display: inline-block;
+    width: fit-content;
+  }
+
+  .detect-card .d-desc {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.7;
+  }
+
+  .detect-card .d-example {
+    background: rgba(255,255,255,0.04);
+    border-left: 3px solid;
+    border-radius: 0 6px 6px 0;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  .detect-card .d-time {
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: auto;
+  }
+
+  /* 감지 카드 색상 */
+  .dc-black { border-color: #555; }
+  .dc-black .d-name { color: #aaa; }
+  .dc-black .d-trigger { background: rgba(150,150,150,0.15); color: #aaa; }
+  .dc-black .d-example { border-color: #555; }
+  .dc-black .d-time { color: #aaa; }
+
+  .dc-still { border-color: var(--purple); }
+  .dc-still .d-name { color: var(--purple); }
+  .dc-still .d-trigger { background: rgba(163,113,247,0.15); color: var(--purple); }
+  .dc-still .d-example { border-color: var(--purple); }
+  .dc-still .d-time { color: var(--purple); }
+
+  .dc-audio { border-color: var(--green); }
+  .dc-audio .d-name { color: var(--green); }
+  .dc-audio .d-trigger { background: rgba(86,211,100,0.12); color: var(--green); }
+  .dc-audio .d-example { border-color: var(--green); }
+  .dc-audio .d-time { color: var(--green); }
+
+  .dc-embed { border-color: var(--blue); }
+  .dc-embed .d-name { color: var(--blue); }
+  .dc-embed .d-trigger { background: rgba(74,158,255,0.12); color: var(--blue); }
+  .dc-embed .d-example { border-color: var(--blue); }
+  .dc-embed .d-time { color: var(--blue); }
+
+  /* ───────── SLIDE 5: 알림 시스템 ───────── */
+  .alert-layout {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    flex: 1;
+    align-items: stretch;
+  }
+
+  .alert-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .alert-card .a-icon { font-size: 52px; }
+  .alert-card .a-name { font-size: 20px; font-weight: 800; }
+  .alert-card .a-desc { font-size: 13px; color: var(--text2); line-height: 1.8; }
+
+  .alert-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .alert-step {
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    text-align: left;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .step-num {
+    background: var(--border);
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    font-size: 10px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-weight: 700;
+  }
+
+  .alert-timeline {
+    grid-column: 1 / -1;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .tl-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+  }
+
+  .tl-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 16px;
+    width: 50%;
+    height: 2px;
+    background: linear-gradient(to right, var(--accent), var(--border));
+  }
+
+  .tl-item:not(:first-child)::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 16px;
+    width: 50%;
+    height: 2px;
+    background: linear-gradient(to right, var(--border), var(--accent));
+  }
+
+  .tl-dot {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    z-index: 1;
+  }
+
+  .tl-label {
+    font-size: 12px;
+    color: var(--text2);
+    text-align: center;
+  }
+
+  .tl-time {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  /* ───────── SLIDE 6: 자동 녹화 ───────── */
+  .rec-layout {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 24px;
+    flex: 1;
+  }
+
+  .rec-timeline-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .rec-bar {
+    position: relative;
+    height: 56px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg3);
+    display: flex;
+  }
+
+  .rec-before {
+    background: linear-gradient(135deg, #2a3a2a, #1e2e1e);
+    width: 25%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green);
+    border-right: 2px dashed rgba(255,255,255,0.2);
+  }
+
+  .rec-event {
+    background: linear-gradient(135deg, #3a1a1a, #2a0a0a);
+    width: 10%;
+    display: flex; align-items: center; justify-content: center;
+    border-right: 2px solid var(--accent);
+    border-left: 2px solid var(--accent);
+  }
+
+  .rec-after {
+    background: linear-gradient(135deg, #2a1a1a, #1a0a0a);
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent2);
+  }
+
+  .rec-marker {
+    position: absolute;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: translateX(-50%);
+  }
+
+  .rec-label {
+    font-size: 11px;
+    color: var(--text2);
+    white-space: nowrap;
+  }
+
+  .rec-details {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .rec-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+  }
+
+  .rec-row .rr-label {
+    font-size: 13px;
+    color: var(--text2);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .rec-row .rr-val {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .filename-demo {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    font-family: 'Consolas', monospace;
+    font-size: 14px;
+    color: var(--text2);
+  }
+
+  .fn-part { display: inline; }
+  .fn-date { color: var(--gold); }
+  .fn-label { color: var(--blue); }
+  .fn-roi { color: var(--green); }
+  .fn-type { color: var(--accent2); }
+  .fn-ext { color: var(--text2); }
+
+  .fn-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+
+  .fn-leg-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  .fn-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+
+  /* ───────── SLIDE 7: 운영 편의성 ───────── */
+  .ops-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    flex: 1;
+  }
+
+  .ops-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .ops-card .o-icon { font-size: 36px; }
+  .ops-card .o-name { font-size: 17px; font-weight: 800; }
+  .ops-card .o-desc { font-size: 13px; color: var(--text2); line-height: 1.7; flex: 1; }
+
+  .ops-card .o-highlight {
+    background: rgba(255,255,255,0.05);
+    border-left: 3px solid var(--accent);
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text2);
+    border-radius: 0 6px 6px 0;
+  }
+
+  /* ───────── SLIDE 8: 도입 효과 ───────── */
+  .effect-layout {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    flex: 1;
+  }
+
+  .effect-before {
+    background: rgba(150,50,50,0.1);
+    border: 1px solid rgba(200,50,50,0.3);
+    border-radius: 14px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .effect-after {
+    background: rgba(30,60,30,0.2);
+    border: 1px solid rgba(50,150,50,0.3);
+    border-radius: 14px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .effect-header {
+    font-size: 18px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .effect-before .effect-header { color: #ff8888; }
+  .effect-after .effect-header { color: var(--green); }
+
+  .effect-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text2);
+  }
+
+  .effect-bullet {
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .kpi-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+
+  .kpi-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .kpi-card .kpi-num {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .kpi-card .kpi-label {
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  /* ───────── SLIDE 9: 기술 기반 ───────── */
+  /* (인라인 스타일 사용, 별도 CSS 불필요) */
+
+  /* ───────── SLIDE 10: 마무리 ───────── */
+  #s10 {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: radial-gradient(ellipse at center, #0d1a0d 0%, var(--bg) 70%);
+  }
+
+  .summary-icon { font-size: 60px; margin-bottom: 20px; }
+
+  .summary-title {
+    font-size: 32px;
+    font-weight: 800;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  .summary-desc {
+    font-size: 16px;
+    color: var(--text2);
+    max-width: 600px;
+    line-height: 1.8;
+    margin-bottom: 40px;
+  }
+
+  .summary-pillars {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 40px;
+  }
+
+  .pillar {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 140px;
+  }
+
+  .pillar-icon { font-size: 32px; }
+  .pillar-name { font-size: 14px; font-weight: 700; }
+  .pillar-sub { font-size: 12px; color: var(--text2); }
+
+  .summary-footer {
+    font-size: 13px;
+    color: var(--text2);
+    opacity: 0.5;
+  }
+
+  /* 키보드 힌트 */
+  .key-hint {
+    position: fixed;
+    bottom: 52px;
+    right: 20px;
+    font-size: 11px;
+    color: var(--text2);
+    opacity: 0.4;
+  }
+
+  /* PDF 저장 버튼 */
+  .print-btn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    z-index: 200;
+    transition: background 0.2s;
+    font-family: inherit;
+  }
+  .print-btn:hover { background: rgba(255,255,255,0.18); color: var(--text); }
+
+  /* ───────── 인쇄/PDF 전용 스타일 ───────── */
+  @media print {
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    body {
+      overflow: visible;
+      height: auto;
+      width: auto;
+      background: #0d1117;
+    }
+
+    /* 네비게이션 요소 모두 숨김 */
+    .nav-btn,
+    .slide-num,
+    .key-hint,
+    .print-btn {
+      display: none !important;
+    }
+
+    /* 컨테이너를 세로 스택으로 전환 */
+    .slide-container {
+      overflow: visible;
+      height: auto;
+      width: 100%;
+    }
+
+    .slide-track {
+      flex-direction: column;
+      height: auto;
+      width: 100%;
+      transform: none !important;
+      transition: none !important;
+    }
+
+    /* 슬라이드 1장 = 1페이지 */
+    .slide {
+      min-width: 100%;
+      width: 100%;
+      height: 100vh;
+      page-break-after: always;
+      break-after: page;
+      overflow: hidden;
+      padding: 36px 60px;
+      box-sizing: border-box;
+    }
+
+    .slide:last-child {
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+
+    /* 표지 배경 강제 출력 */
+    #s1 {
+      background: radial-gradient(ellipse at center, #1a0a0d 0%, #0d1117 70%) !important;
+    }
+
+    /* 마무리 배경 강제 출력 */
+    #s10 {
+      background: radial-gradient(ellipse at center, #0d1a0d 0%, #0d1117 70%) !important;
+    }
+
+    /* 카드 배경 강제 출력 */
+    .problem-card, .flow-row, .big-stat,
+    .detect-card, .alert-card, .ops-card,
+    .rec-timeline-card, .kpi-card,
+    .effect-before, .effect-after {
+      background: #161b22 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  }
+
+  /* 인쇄 페이지 크기 (A4 가로) */
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="slide-container">
+<div class="slide-track">
+
+  <!-- ═══════════════ SLIDE 1: 표지 ═══════════════ -->
+  <div class="slide" id="s1">
+    <div class="cover-logo">📡</div>
+    <div class="cover-title">KBS 16채널<br>방송 모니터링 시스템</div>
+    <div class="cover-sub">방송 사고를 놓치지 않는 24시간 자동 감시 솔루션</div>
+    <div class="cover-tags">
+      <span class="tag">🎬 영상 감지</span>
+      <span class="tag">🔊 오디오 감지</span>
+      <span class="tag">🚨 실시간 알림</span>
+      <span class="tag">📹 자동 녹화</span>
+      <span class="tag">24시간 무인 운용</span>
+    </div>
+    <div class="cover-version">KBS Peacock v1.5.1 &nbsp;|&nbsp; 2026</div>
+  </div>
+
+  <!-- ═══════════════ SLIDE 2: 왜 필요한가 ═══════════════ -->
+  <div class="slide" id="s2">
+    <div class="slide-header">
+      <span class="badge">BACKGROUND</span>
+      <div>
+        <div class="slide-title">왜 이 시스템이 필요한가?</div>
+        <div class="slide-subtitle">방송 현장에서 실제로 발생하는 문제들</div>
+      </div>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="problem-icon">😰</div>
+        <div>
+          <h3>사람이 놓치는 사고</h3>
+          <p>모니터 요원이 16개 채널을 동시에 주시하는 것은 불가능합니다. 잠깐 자리를 비운 사이 화면이 검어지거나, 음성이 끊겨도 알아차리기 어렵습니다.</p>
+        </div>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">⏰</div>
+        <div>
+          <h3>사고 인지까지 걸리는 시간</h3>
+          <p>화면 이상을 발견하더라도 어느 채널인지, 언제부터인지 파악하는 데 수 분이 소요됩니다. 이 시간 동안 시청자는 불량 방송을 보고 있습니다.</p>
+        </div>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">📂</div>
+        <div>
+          <h3>사고 증거 기록 부재</h3>
+          <p>사고가 발생했을 때 언제, 어떤 상태였는지 정확히 기록하기 어렵습니다. 사후 원인 분석과 책임 소재 확인이 불명확해집니다.</p>
+        </div>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">🌙</div>
+        <div>
+          <h3>심야·새벽 시간대 취약</h3>
+          <p>인력이 부족한 심야·정파 시간대에 방송 이상이 발생해도 대응이 늦어집니다. 특히 방송 종료 후 신호 확인이 중요한 시점에 사각지대가 생깁니다.</p>
+        </div>
+      </div>
+      <div class="problem-center">
+        <span style="font-size:28px;">⚡</span>
+        <span>"16개 채널, 24시간, 4가지 이상 신호 — 사람이 모두 감시하는 것은 불가능합니다"</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ SLIDE 3: 시스템 개요 ═══════════════ -->
+  <div class="slide" id="s3">
+    <div class="slide-header">
+      <span class="badge">OVERVIEW</span>
+      <div>
+        <div class="slide-title">시스템 한눈에 보기</div>
+        <div class="slide-subtitle">자동 감시, 즉각 알림, 증거 기록까지 하나의 소프트웨어로</div>
+      </div>
+    </div>
+    <div class="solution-layout">
+      <div class="solution-left">
+        <div class="big-stat">
+          <div class="num">16</div>
+          <div class="label">동시 모니터링 채널</div>
+        </div>
+        <div class="big-stat">
+          <div class="num">4</div>
+          <div class="label">독립 감지 항목<br><span style="font-size:11px;">(영상·정지·오디오신호·임베디드)</span></div>
+        </div>
+        <div class="big-stat">
+          <div class="num" style="color:var(--gold);">24h</div>
+          <div class="label">무인 자동 운용</div>
+        </div>
+      </div>
+      <div class="solution-right">
+        <div class="flow-row">
+          <div class="flow-icon">📡</div>
+          <div>
+            <h3>입력 신호 수신</h3>
+            <p>카메라/방송 신호를 포트로 수신 (포트 0~5번, 최대 16채널 설정 가능)</p>
+          </div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-icon">🔍</div>
+          <div>
+            <h3>자동 분석 (0.1초 주기)</h3>
+            <p>화면 밝기, 움직임, 오디오 신호 수준을 0.1초마다 자동 분석</p>
+          </div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-icon">⚠️</div>
+          <div>
+            <h3>이상 감지 시 즉각 알림</h3>
+            <p>화면 깜박임 + 경보음 + (선택) 텔레그램 메시지 자동 발송</p>
+          </div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-icon">💾</div>
+          <div>
+            <h3>사고 전후 자동 녹화</h3>
+            <p>이상 발생 전 5초 + 발생 후 15초를 MP4로 자동 저장 (7일 보관)</p>
+          </div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-icon">📋</div>
+          <div>
+            <h3>이력 로그 기록</h3>
+            <p>모든 감지 이벤트를 타임스탬프와 함께 화면 및 파일로 기록</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ SLIDE 4: 4가지 감지 ═══════════════ -->
+  <div class="slide" id="s4">
+    <div class="slide-header">
+      <span class="badge">DETECTION</span>
+      <div>
+        <div class="slide-title">4가지 자동 감지 항목</div>
+        <div class="slide-subtitle">모든 항목이 동시에, 독립적으로 작동합니다</div>
+      </div>
+    </div>
+    <div class="detect-grid">
+
+      <div class="detect-card dc-black">
+        <div class="d-icon">⬛</div>
+        <div class="d-name">블랙 감지</div>
+        <div class="d-trigger">검은 화면 자동 탐지</div>
+        <div class="d-desc">
+          화면이 완전히 검게 변했을 때 감지합니다.<br>
+          마치 <b style="color:#ccc;">극장 조명이 갑자기 꺼진 것</b>처럼 화면 픽셀의 95% 이상이 어두워지면 이상으로 판단합니다.
+        </div>
+        <div class="d-example">
+          💡 예시: 카메라 전원 차단, 신호 케이블 단선, 장비 오동작으로 화면이 검게 됨
+        </div>
+        <div class="d-time">⏱ 10초 지속 → 알림 발생</div>
+      </div>
+
+      <div class="detect-card dc-still">
+        <div class="d-icon">🖼️</div>
+        <div class="d-name">정지화면 감지</div>
+        <div class="d-trigger">프리즈·신호 멈춤 탐지</div>
+        <div class="d-desc">
+          화면이 멈춰서 움직임이 없을 때 감지합니다.<br>
+          마치 <b style="color:#c9a0ff;">영상이 일시정지된 것</b>처럼 연속 프레임 간 변화가 2% 미만이면 정지 상태로 판단합니다.
+        </div>
+        <div class="d-example">
+          💡 예시: 인코더 프리징, 네트워크 지연으로 영상이 멈춰있는 상태
+        </div>
+        <div class="d-time">⏱ 30초 지속 → 알림 발생</div>
+      </div>
+
+      <div class="detect-card dc-audio">
+        <div class="d-icon">📊</div>
+        <div class="d-name">오디오 레벨미터 감지</div>
+        <div class="d-trigger">음성 신호 표시 탐지</div>
+        <div class="d-desc">
+          화면 속 오디오 미터 표시등의 색상을 보고 음성 신호 유무를 판단합니다.<br>
+          마치 <b style="color:#56d364;">계기판의 바늘이 움직이지 않으면</b> 이상으로 판단하는 것과 같습니다.
+        </div>
+        <div class="d-example">
+          💡 예시: 음성 신호 인입 중단, 마이크 연결 불량으로 레벨미터가 반응 없음
+        </div>
+        <div class="d-time">⏱ 20초 지속 → 알림 발생</div>
+      </div>
+
+      <div class="detect-card dc-embed">
+        <div class="d-icon">🎵</div>
+        <div class="d-name">임베디드 오디오 감지</div>
+        <div class="d-trigger">실제 음성 신호 탐지</div>
+        <div class="d-desc">
+          영상 신호에 포함된 실제 소리의 크기(dB)를 직접 측정합니다.<br>
+          마치 <b style="color:#4a9eff;">소음 측정기</b>처럼 소리가 -50dB 미만으로 떨어지면 무음 상태로 판단합니다.
+        </div>
+        <div class="d-example">
+          💡 예시: 방송 중 갑자기 소리가 사라진 경우, 오디오 임베딩 장비 오류
+        </div>
+        <div class="d-time">⏱ 20초 지속 → 알림 발생</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════ SLIDE 5: 알림 시스템 ═══════════════ -->
+  <div class="slide" id="s5">
+    <div class="slide-header">
+      <span class="badge">ALERT</span>
+      <div>
+        <div class="slide-title">3단계 알림 시스템</div>
+        <div class="slide-subtitle">이상 감지 즉시 — 보고, 듣고, 받습니다</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:20px; flex:1; flex-direction:column;">
+      <div class="alert-layout" style="flex:1;">
+        <div class="alert-card" style="border-color:var(--accent);">
+          <div class="a-icon">🔴</div>
+          <div class="a-name" style="color:var(--accent);">시각 알림</div>
+          <div class="a-desc">
+            이상이 발생한 감지 영역의 테두리가<br>
+            <b style="color:var(--accent);">빨간색으로 깜박입니다</b><br><br>
+            어두운 모니터실에서도 즉시 어느 채널에 문제가 생겼는지 알 수 있습니다.
+          </div>
+          <div class="alert-steps">
+            <div class="alert-step"><span class="step-num">1</span>이상 채널 테두리 빨간 점멸</div>
+            <div class="alert-step"><span class="step-num">2</span>상단 감지 현황 카운터 증가</div>
+            <div class="alert-step"><span class="step-num">3</span>로그창에 시간·종류 기록</div>
+          </div>
+        </div>
+
+        <div class="alert-card" style="border-color:var(--gold);">
+          <div class="a-icon">🔔</div>
+          <div class="a-name" style="color:var(--gold);">청각 알림</div>
+          <div class="a-desc">
+            사용자가 지정한 <b style="color:var(--gold);">경보음 WAV 파일</b>이 반복 재생됩니다<br><br>
+            볼륨 조절 가능 (0~100%), 음소거 버튼으로 즉시 중지할 수 있습니다.
+          </div>
+          <div class="alert-steps">
+            <div class="alert-step"><span class="step-num">1</span>이상 감지 즉시 경보음 재생</div>
+            <div class="alert-step"><span class="step-num">2</span>해소될 때까지 반복 재생</div>
+            <div class="alert-step"><span class="step-num">3</span>음소거/확인 버튼으로 제어</div>
+          </div>
+        </div>
+
+        <div class="alert-card" style="border-color:var(--blue);">
+          <div class="a-icon">📱</div>
+          <div class="a-name" style="color:var(--blue);">텔레그램 알림</div>
+          <div class="a-desc">
+            담당자 휴대폰으로 <b style="color:var(--blue);">텔레그램 메시지</b>가 전송됩니다<br><br>
+            이상 발생 시점의 화면 캡처 이미지도 함께 첨부되어, 현장에 없어도 즉시 상황 파악이 가능합니다.
+          </div>
+          <div class="alert-steps">
+            <div class="alert-step"><span class="step-num">1</span>텔레그램 채널로 메시지 발송</div>
+            <div class="alert-step"><span class="step-num">2</span>화면 스크린샷 이미지 첨부</div>
+            <div class="alert-step"><span class="step-num">3</span>60초 내 중복 발송 자동 방지</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 알림 해제 흐름 -->
+      <div style="background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:18px 28px;">
+        <div style="font-size:13px; font-weight:700; color:var(--text2); margin-bottom:12px;">알림 제어 옵션</div>
+        <div style="display:flex; gap:20px;">
+          <div style="flex:1; background:rgba(255,255,255,0.04); border-radius:8px; padding:12px 16px; font-size:13px;">
+            <b>🔇 음소거</b> <span style="color:var(--text2);">— 소리만 끔, 화면 깜박임은 유지 (감시 계속)</span>
+          </div>
+          <div style="flex:1; background:rgba(255,255,255,0.04); border-radius:8px; padding:12px 16px; font-size:13px;">
+            <b>✅ 알림 확인</b> <span style="color:var(--text2);">— 소리·깜박임 중지, 단 감시는 계속됨</span>
+          </div>
+          <div style="flex:1; background:rgba(255,255,255,0.04); border-radius:8px; padding:12px 16px; font-size:13px;">
+            <b>🔄 자동 해제</b> <span style="color:var(--text2);">— 이상 상태 복구 시 알림 자동으로 사라짐</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ SLIDE 6: 자동 녹화 ═══════════════ -->
+  <div class="slide" id="s6">
+    <div class="slide-header">
+      <span class="badge">RECORDING</span>
+      <div>
+        <div class="slide-title">자동 사고 기록 시스템</div>
+        <div class="slide-subtitle">이상 발생 전후 영상을 자동으로 저장 — 증거는 항상 남습니다</div>
+      </div>
+    </div>
+    <div class="rec-layout">
+      <div class="rec-timeline-card">
+        <div style="font-size:15px; font-weight:700; margin-bottom:4px;">타임라인: 사고 전후 자동 녹화 범위</div>
+        <div style="font-size:12px; color:var(--text2); margin-bottom:12px;">마치 블랙박스처럼, 항상 이전 5초를 메모리에 보관하다가 이상 발생 시 자동 저장합니다</div>
+
+        <!-- 타임라인 바 -->
+        <div style="position:relative; padding:0 0 24px 0;">
+          <div class="rec-bar">
+            <div class="rec-before">사고 전 5초<br><span style="font-size:10px; font-weight:400;">정상 영상</span></div>
+            <div class="rec-event" style="display:flex; align-items:center; justify-content:center;">⚡</div>
+            <div class="rec-after">사고 후 15초<br><span style="font-size:10px; font-weight:400;">이상 영상</span></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:11px; color:var(--text2);">
+            <span>↑ 녹화 시작</span>
+            <span style="color:var(--accent); font-weight:700;">↑ 이상 감지</span>
+            <span>↑ 녹화 종료</span>
+          </div>
+          <div style="text-align:center; margin-top:4px; font-size:13px; font-weight:700; color:var(--gold);">총 20초 분량 MP4 자동 저장</div>
+        </div>
+
+        <!-- 파일명 예시 -->
+        <div style="font-size:13px; font-weight:700; margin-bottom:8px; color:var(--text2);">저장 파일명 예시</div>
+        <div class="filename-demo">
+          <span class="fn-date">20260310_143025</span>_<span class="fn-label">CH1</span>_<span class="fn-roi">ROI_A</span>_<span class="fn-type">black</span><span class="fn-ext">.mp4</span>
+        </div>
+        <div class="fn-legend">
+          <div class="fn-leg-item"><div class="fn-dot" style="background:var(--gold);"></div><span class="fn-date" style="color:var(--gold);">날짜·시각</span></div>
+          <div class="fn-leg-item"><div class="fn-dot" style="background:var(--blue);"></div><span class="fn-label" style="color:var(--blue);">채널 라벨</span></div>
+          <div class="fn-leg-item"><div class="fn-dot" style="background:var(--green);"></div><span class="fn-roi" style="color:var(--green);">감지영역</span></div>
+          <div class="fn-leg-item"><div class="fn-dot" style="background:var(--accent2);"></div><span class="fn-type" style="color:var(--accent2);">감지 종류</span></div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div style="font-size:15px; font-weight:700;">녹화 사양</div>
+        <div class="rec-details">
+          <div class="rec-row">
+            <div class="rr-label">🎬 저장 형식</div>
+            <div class="rr-val">MP4 (영상+오디오)</div>
+          </div>
+          <div class="rec-row">
+            <div class="rr-label">📐 해상도</div>
+            <div class="rr-val">960 × 540</div>
+          </div>
+          <div class="rec-row">
+            <div class="rr-label">🎞 프레임레이트</div>
+            <div class="rr-val">10 fps</div>
+          </div>
+          <div class="rec-row">
+            <div class="rr-label">🔊 오디오</div>
+            <div class="rr-val">44.1kHz 스테레오</div>
+          </div>
+        </div>
+
+        <div style="height:1px; background:var(--border);"></div>
+
+        <div style="font-size:15px; font-weight:700;">자동 관리</div>
+        <div class="rec-details">
+          <div class="rec-row">
+            <div class="rr-label">📅 보관 기간</div>
+            <div class="rr-val" style="color:var(--gold);">7일</div>
+          </div>
+          <div class="rec-row">
+            <div class="rr-label">🗑 자동 삭제</div>
+            <div class="rr-val">1시간마다 정리</div>
+          </div>
+          <div class="rec-row">
+            <div class="rr-label">📁 저장 위치</div>
+            <div class="rr-val" style="font-size:12px;">recordings/ 폴더</div>
+          </div>
+        </div>
+
+        <div style="background:rgba(74,158,255,0.08); border:1px solid rgba(74,158,255,0.3); border-radius:10px; padding:14px 16px; font-size:13px; color:var(--text2); line-height:1.7;">
+          💡 <b style="color:var(--blue);">블랙박스와 동일한 원리</b><br>
+          항상 최근 영상을 임시 보관하다가 이상이 발생하면 그 전후를 자동으로 저장합니다. 사고 원인 분석과 대외 보고 자료로 즉시 활용 가능합니다.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ SLIDE 7: 운영 편의성 ═══════════════ -->
+  <div class="slide" id="s7">
+    <div class="slide-header">
+      <span class="badge">OPERATION</span>
+      <div>
+        <div class="slide-title">운영 편의성</div>
+        <div class="slide-subtitle">전문 지식 없이도 운용 가능하도록 설계되었습니다</div>
+      </div>
+    </div>
+    <div class="ops-grid">
+
+      <div class="ops-card">
+        <div class="o-icon">🎯</div>
+        <div class="o-name">감지 영역 자유 설정</div>
+        <div class="o-desc">
+          마우스 드래그로 화면에서 원하는 영역만 감시하도록 지정할 수 있습니다.<br><br>
+          예를 들어 오디오 미터가 표시되는 구역, 또는 중요 화면 영역만 집중 감시합니다.
+        </div>
+        <div class="o-highlight">📌 채널별로 여러 영역 동시 지정 가능</div>
+      </div>
+
+      <div class="ops-card">
+        <div class="o-icon">🎚️</div>
+        <div class="o-name">감도 세밀 조정</div>
+        <div class="o-desc">
+          "얼마나 어두워야 블랙인가", "얼마나 오래 멈춰야 이상인가"를 슬라이더로 쉽게 조정합니다.<br><br>
+          오탐(정상인데 알림)과 미탐(이상인데 묵과) 사이의 균형을 현장에 맞게 최적화할 수 있습니다.
+        </div>
+        <div class="o-highlight">⚙️ 감지 민감도를 현장 환경에 맞게 조절</div>
+      </div>
+
+      <div class="ops-card">
+        <div class="o-icon">💾</div>
+        <div class="o-name">설정 저장·불러오기</div>
+        <div class="o-desc">
+          현재의 모든 설정을 파일로 저장해 두고, 언제든 불러와 적용할 수 있습니다.<br><br>
+          여러 운용 시나리오(주간 방송, 심야 방송, 특집 방송 등)에 맞는 프리셋을 만들어 빠르게 전환할 수 있습니다.
+        </div>
+        <div class="o-highlight">📂 JSON 파일로 설정 백업 및 복원</div>
+      </div>
+
+      <div class="ops-card">
+        <div class="o-icon">🌙</div>
+        <div class="o-name">정파 자동 대기 모드</div>
+        <div class="o-desc">
+          방송 종료(정파) 전 자동으로 대기 모드로 전환됩니다.<br><br>
+          1TV·2TV별로 정파 시간을 설정해 두면, 해당 시간에 자동으로 신호 감시를 최적화합니다.
+        </div>
+        <div class="o-highlight">📅 1TV/2TV 별도 스케줄 설정 지원</div>
+      </div>
+
+      <div class="ops-card">
+        <div class="o-icon">📊</div>
+        <div class="o-name">실시간 성능 모니터링</div>
+        <div class="o-desc">
+          CPU, 메모리, GPU 사용률을 화면 상단에서 항상 확인할 수 있습니다.<br><br>
+          시스템 부하가 높을 때는 감지 주기를 늘리거나 분석 해상도를 낮춰 안정적으로 운용할 수 있습니다.
+        </div>
+        <div class="o-highlight">🖥️ CPU·메모리·GPU 실시간 표시</div>
+      </div>
+
+      <div class="ops-card">
+        <div class="o-icon">🔧</div>
+        <div class="o-name">가벼운 설치 환경</div>
+        <div class="o-desc">
+          별도의 서버나 특수 장비 없이 일반 Windows 10/11 PC 한 대로 운용 가능합니다.<br><br>
+          기존 모니터링 PC에 소프트웨어만 설치하면 되어 초기 도입 비용이 최소화됩니다.
+        </div>
+        <div class="o-highlight">💻 Windows PC 1대로 완전 운용 가능</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════ SLIDE 8: 도입 효과 ═══════════════ -->
+  <div class="slide" id="s8">
+    <div class="slide-header">
+      <span class="badge">IMPACT</span>
+      <div>
+        <div class="slide-title">도입 전후 비교</div>
+        <div class="slide-subtitle">자동화로 얻는 실질적인 운영 개선 효과</div>
+      </div>
+    </div>
+    <div class="effect-layout">
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-num">16</div>
+          <div class="kpi-label">채널 동시 감시<br>(1인 불가 → 시스템 자동)</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-num" style="color:var(--green);">0.1s</div>
+          <div class="kpi-label">이상 감지 주기<br>(분 단위 → 0.1초)</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-num" style="color:var(--blue);">24h</div>
+          <div class="kpi-label">무인 자동 운용<br>(심야·새벽 포함)</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-num" style="color:var(--gold);">7일</div>
+          <div class="kpi-label">사고 영상 자동 보관<br>(수동 녹화 불필요)</div>
+        </div>
+      </div>
+
+      <div class="effect-before">
+        <div class="effect-header">😰 도입 전</div>
+        <div class="effect-item">
+          <div class="effect-bullet">✗</div>
+          <div>모니터 요원이 육안으로 16채널을 순서대로 확인해야 함</div>
+        </div>
+        <div class="effect-item">
+          <div class="effect-bullet">✗</div>
+          <div>이상 발견까지 수 분 이상 소요, 그 사이 불량 방송 송출</div>
+        </div>
+        <div class="effect-item">
+          <div class="effect-bullet">✗</div>
+          <div>심야·새벽 시간대 인력 부재로 사각지대 발생</div>
+        </div>
+        <div class="effect-item">
+          <div class="effect-bullet">✗</div>
+          <div>사고 발생 후 증거 영상이 없어 원인 분석 어려움</div>
+        </div>
+        <div class="effect-item">
+          <div class="effect-bullet">✗</div>
+          <div>오디오 이상은 화면만 봐서는 알기 어려움</div>
+        </div>
+      </div>
+
+      <div class="effect-after">
+        <div class="effect-header">✅ 도입 후</div>
+        <div class="effect-item">
+          <div class="effect-bullet">◉</div>
+          <div>16채널 전체를 0.1초 주기로 자동 분석, 사람 개입 불필요</div>
+        </div>
+        <div class="effect-item">
+          <div class="effect-bullet">◉</div>
+          <div>이상 감지 즉시 화면·경보음·텔레그램으로 동시 알림</div>
+        </div>
+        <div class="effect-item">
+          <div class="effect-bullet">◉</div>
+          <div>24시간·365일 무인 자동 감시, 심야·정파 시간 완전 커버</div>
+        </div>
+        <div class="effect-item">
+          <div class="effect-bullet">◉</div>
+          <div>사고 전후 20초 영상 자동 저장, 원인 분석 자료 즉시 확보</div>
+        </div>
+        <div class="effect-item">
+          <div class="effect-bullet">◉</div>
+          <div>영상·오디오 4가지 항목을 동시에 독립 감시</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ SLIDE 9: 기술 기반 ═══════════════ -->
+  <div class="slide" id="s9">
+    <div class="slide-header">
+      <span class="badge">TECHNOLOGY</span>
+      <div>
+        <div class="slide-title">기술 기반: Python과 오픈소스 라이브러리</div>
+        <div class="slide-subtitle">검증된 무료 기술 스택 — 라이선스 비용 없이 구축</div>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; flex:1;">
+
+      <!-- 왼쪽: 핵심 기술 -->
+      <div style="display:flex; flex-direction:column; gap:16px;">
+
+        <div style="background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:22px 24px; display:flex; gap:18px; align-items:flex-start;">
+          <div style="font-size:38px; flex-shrink:0;">🐍</div>
+          <div>
+            <div style="font-size:17px; font-weight:800; color:#4ec9b0; margin-bottom:6px;">Python 3.10</div>
+            <div style="font-size:13px; color:var(--text2); line-height:1.7;">
+              전 세계에서 가장 널리 쓰이는 프로그래밍 언어입니다. 구글, 넷플릭스, NASA에서도 사용하며 안정성이 검증되어 있습니다. 무료 오픈소스이며 방대한 생태계를 보유합니다.
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg2); border:1px solid #3d5a80; border-radius:14px; padding:22px 24px; display:flex; gap:18px; align-items:flex-start;">
+          <div style="font-size:38px; flex-shrink:0;">🖥️</div>
+          <div>
+            <div style="font-size:17px; font-weight:800; color:#7eb3e0; margin-bottom:6px;">PySide6 — 화면 UI 구성</div>
+            <div style="font-size:13px; color:var(--text2); line-height:1.7;">
+              Qt Company가 만든 공식 GUI 프레임워크입니다. Windows·Mac·Linux 어디서든 동일하게 작동하며, VLC·Autodesk Maya 등 전문 소프트웨어에서도 사용하는 검증된 기술입니다.
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg2); border:1px solid #2d6a4f; border-radius:14px; padding:22px 24px; display:flex; gap:18px; align-items:flex-start;">
+          <div style="font-size:38px; flex-shrink:0;">🎞️</div>
+          <div>
+            <div style="font-size:17px; font-weight:800; color:#56d364; margin-bottom:6px;">OpenCV — 영상 분석 엔진</div>
+            <div style="font-size:13px; color:var(--text2); line-height:1.7;">
+              인텔이 개발한 오픈소스 컴퓨터 비전 라이브러리입니다. 전 세계 47,000명 이상이 기여한 세계 최고 수준의 영상처리 도구로, 화면 밝기·움직임 분석에 활용됩니다.
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 오른쪽: 나머지 기술 + 구성도 -->
+      <div style="display:flex; flex-direction:column; gap:16px;">
+
+        <div style="background:var(--bg2); border:1px solid #4a3060; border-radius:14px; padding:22px 24px; display:flex; gap:18px; align-items:flex-start;">
+          <div style="font-size:38px; flex-shrink:0;">🔊</div>
+          <div>
+            <div style="font-size:17px; font-weight:800; color:#a371f7; margin-bottom:6px;">SoundDevice — 오디오 측정</div>
+            <div style="font-size:13px; color:var(--text2); line-height:1.7;">
+              오디오 신호를 실시간으로 수집하고 dB 단위로 측정합니다. 임베디드 오디오 감지에 사용되며, 사운드 장치가 없는 환경에서도 더미 신호로 자동 동작합니다.
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg2); border:1px solid #5a3a1a; border-radius:14px; padding:22px 24px; display:flex; gap:18px; align-items:flex-start;">
+          <div style="font-size:38px; flex-shrink:0;">🎬</div>
+          <div>
+            <div style="font-size:17px; font-weight:800; color:var(--gold); margin-bottom:6px;">ffmpeg — 영상·음성 합성</div>
+            <div style="font-size:13px; color:var(--text2); line-height:1.7;">
+              유튜브·트위터·페이스북이 사용하는 세계 표준 멀티미디어 도구입니다. 녹화된 영상에 오디오를 합성하여 MP4로 저장하는 역할을 합니다. 무료 오픈소스입니다.
+            </div>
+          </div>
+        </div>
+
+        <!-- 비용 요약 -->
+        <div style="background:linear-gradient(135deg, rgba(86,211,100,0.08), rgba(86,211,100,0.03)); border:1px solid rgba(86,211,100,0.3); border-radius:14px; padding:22px 24px;">
+          <div style="font-size:15px; font-weight:800; color:var(--green); margin-bottom:14px;">💰 라이선스 비용 구조</div>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:rgba(255,255,255,0.04); border-radius:8px;">
+              <span style="font-size:13px; color:var(--text2);">🐍 Python + 핵심 라이브러리</span>
+              <span style="font-size:14px; font-weight:800; color:var(--green);">무료</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:rgba(255,255,255,0.04); border-radius:8px;">
+              <span style="font-size:13px; color:var(--text2);">🖥️ PySide6 (Qt 공식)</span>
+              <span style="font-size:14px; font-weight:800; color:var(--green);">무료</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:rgba(255,255,255,0.04); border-radius:8px;">
+              <span style="font-size:13px; color:var(--text2);">🎬 ffmpeg</span>
+              <span style="font-size:14px; font-weight:800; color:var(--green);">무료</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(86,211,100,0.1); border-radius:8px; border:1px solid rgba(86,211,100,0.2);">
+              <span style="font-size:14px; font-weight:700;">외부 라이선스 비용 합계</span>
+              <span style="font-size:18px; font-weight:800; color:var(--green);">₩ 0</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ SLIDE 10: 마무리 ═══════════════ -->
+  <div class="slide" id="s10">
+    <div class="summary-icon">🛡️</div>
+    <div class="summary-title">방송 품질의 마지막 안전망</div>
+    <div class="summary-desc">
+      KBS 16채널 모니터링 시스템은 사람이 놓칠 수 있는 방송 이상을<br>
+      기계가 24시간 쉬지 않고 감시하여 방송 사고를 최소화합니다.
+    </div>
+    <div class="summary-pillars">
+      <div class="pillar">
+        <div class="pillar-icon">⬛</div>
+        <div class="pillar-name">블랙 감지</div>
+        <div class="pillar-sub">검은 화면 탐지</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon">🖼️</div>
+        <div class="pillar-name">정지화면 감지</div>
+        <div class="pillar-sub">프리즈 탐지</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon">📊</div>
+        <div class="pillar-name">오디오레벨 감지</div>
+        <div class="pillar-sub">신호 탐지</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon">🎵</div>
+        <div class="pillar-name">임베디드 감지</div>
+        <div class="pillar-sub">무음 탐지</div>
+      </div>
+      <div class="pillar" style="border-color:var(--accent);">
+        <div class="pillar-icon">🚨</div>
+        <div class="pillar-name">즉각 알림</div>
+        <div class="pillar-sub">화면·음향·텔레그램</div>
+      </div>
+      <div class="pillar" style="border-color:var(--gold);">
+        <div class="pillar-icon">📹</div>
+        <div class="pillar-name">자동 녹화</div>
+        <div class="pillar-sub">사고 전후 기록</div>
+      </div>
+      <div class="pillar" style="border-color:#4ec9b0;">
+        <div class="pillar-icon">🐍</div>
+        <div class="pillar-name">오픈소스 기반</div>
+        <div class="pillar-sub">라이선스 비용 없음</div>
+      </div>
+    </div>
+    <div class="summary-footer">KBS Peacock v1.5.1 &nbsp;|&nbsp; 16채널 방송 모니터링 시스템</div>
+  </div>
+
+</div><!-- slide-track -->
+</div><!-- slide-container -->
+
+<!-- 네비게이션 -->
+<button class="nav-btn" id="prev">&#8249;</button>
+<button class="nav-btn" id="next">&#8250;</button>
+
+<div class="slide-num" id="dots"></div>
+
+<div class="key-hint">← → 키 또는 버튼으로 이동</div>
+
+<button class="print-btn" onclick="window.print()">🖨 PDF 저장</button>
+
+<script>
+  const track = document.querySelector('.slide-track');
+  const slides = document.querySelectorAll('.slide');
+  const dotsContainer = document.getElementById('dots');
+  const total = slides.length;
+  let current = 0;
+
+  // 점 생성
+  for (let i = 0; i < total; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'dot' + (i === 0 ? ' active' : '');
+    dot.addEventListener('click', () => goTo(i));
+    dotsContainer.appendChild(dot);
+  }
+
+  function goTo(n) {
+    current = ((n % total) + total) % total;
+    track.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+    track.style.transform = `translateX(-${current * 100}%)`;
+    document.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i === current);
+    });
+  }
+
+  document.getElementById('prev').addEventListener('click', () => goTo(current - 1));
+  document.getElementById('next').addEventListener('click', () => goTo(current + 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goTo(current + 1);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') goTo(current - 1);
+  });
+
+  // 터치/마우스 스와이프
+  let startX = 0;
+  let startY = 0;
+  let dragging = false;
+  let isHorizontal = null; // 수평/수직 판정 결과 캐시
+
+  function onDragStart(x, y) {
+    startX = x;
+    startY = y;
+    dragging = true;
+    isHorizontal = null;
+    track.style.transition = 'none';
+  }
+
+  function onDragMove(x, y) {
+    if (!dragging) return;
+    const dx = x - startX;
+    const dy = y - startY;
+
+    // 처음 10px 이상 움직였을 때 방향 결정
+    if (isHorizontal === null && Math.max(Math.abs(dx), Math.abs(dy)) > 10) {
+      isHorizontal = Math.abs(dx) > Math.abs(dy);
+    }
+
+    if (isHorizontal) {
+      track.style.transform = `translateX(calc(-${current * 100}% + ${dx}px))`;
+      return true; // 수평 → preventDefault 필요
+    }
+    return false;
+  }
+
+  function onDragEnd(x) {
+    if (!dragging) return;
+    dragging = false;
+    const dx = x - startX;
+    if (isHorizontal && Math.abs(dx) > 50) {
+      goTo(current + (dx < 0 ? 1 : -1));
+    } else {
+      // 제자리 복귀
+      track.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      track.style.transform = `translateX(-${current * 100}%)`;
+    }
+    isHorizontal = null;
+  }
+
+  // 터치
+  track.addEventListener('touchstart', e => {
+    onDragStart(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+
+  track.addEventListener('touchmove', e => {
+    const prevented = onDragMove(e.touches[0].clientX, e.touches[0].clientY);
+    if (prevented) e.preventDefault();
+  }, { passive: false });
+
+  track.addEventListener('touchend', e => {
+    onDragEnd(e.changedTouches[0].clientX);
+  }, { passive: true });
+
+  // 마우스 드래그 (PC)
+  track.addEventListener('mousedown', e => {
+    onDragStart(e.clientX, e.clientY);
+  });
+  document.addEventListener('mousemove', e => {
+    if (dragging) onDragMove(e.clientX, e.clientY);
+  });
+  document.addEventListener('mouseup', e => {
+    if (dragging) onDragEnd(e.clientX);
+  });
+</script>
+</body>
+</html>

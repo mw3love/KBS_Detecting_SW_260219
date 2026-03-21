@@ -2,10 +2,13 @@
 임베디드 오디오 모니터링 모듈
 sounddevice를 사용하여 시스템 오디오(임베디드)를 캡처하고 L/R 레벨을 분석
 """
+import logging
 import time
 import numpy as np
 import math
 from PySide6.QtCore import QThread, Signal
+
+_log = logging.getLogger(__name__)
 
 try:
     import sounddevice as sd
@@ -140,7 +143,8 @@ class AudioMonitorThread(QThread):
 
                     self.level_updated.emit(l_db, r_db)
 
-                except Exception:
+                except Exception as e:
+                    _log.debug("오디오 루프 예외: %s", e)
                     self.level_updated.emit(-60.0, -60.0)
 
         except Exception as e:

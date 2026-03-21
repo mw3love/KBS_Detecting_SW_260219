@@ -1,0 +1,16 @@
+소스 PDF 파일명입니다.
+
+예를 들어 주석 달아놓은 PDF 파일을 바인더1.pdf 대신 캡처본.pdf나 매뉴얼소스.pdf 같은 이름으로 저장해도 아래처럼 실행하면 됩니다:
+
+
+python make_manual_pdf.py 캡처본.pdf
+python make_manual_pdf.py 매뉴얼소스.pdf
+
+# 기본 (바인더1.pdf 사용)
+python make_manual_pdf.py
+
+# 입력 파일명 지정
+python make_manual_pdf.py 캡처본v2.pdf
+
+# 입력 + 출력 파일명 모두 지정
+python make_manual_pdf.py 캡처본v2.pdf 운용매뉴얼_v2.pdf

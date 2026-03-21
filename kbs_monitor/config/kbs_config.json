@@ -33,7 +33,7 @@
     "volume": 0,
     "sounds_dir": "resources/sounds",
     "sound_files": {
-      "default": "resources\\sounds\\alarm.wav"
+      "default": "resources/sounds/alarm.wav"
     }
   },
   "rois": {
@@ -94,9 +94,9 @@
   },
   "signoff": {
     "auto_preparation": true,
-    "prep_alarm_sound": "",
-    "enter_alarm_sound": "",
-    "release_alarm_sound": "",
+    "prep_alarm_sound": "resources/sounds/sign_off.wav",
+    "enter_alarm_sound": "resources/sounds/sign_off.wav",
+    "release_alarm_sound": "resources/sounds/sign_off.wav",
     "group1": {
       "name": "1TV",
       "enter_roi": {

@@ -1,4 +1,18 @@
 {
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"\nimport sys, json\ndata = json.load(sys.stdin)\nfp = data.get('tool_input',{}).get('file_path','') or data.get('tool_response',{}).get('filePath','')\nif fp.endswith('.py'):\n    print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':'[Doc Update Reminder] .py file modified. Check and update: CLAUDE.md, memory/, TODO.md'}}))\n\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(cmd /c:*)",
@@ -12,7 +26,14 @@
       "Bash(powershell -Command \"Get-Item ''kbs_monitor/core/signoff_manager.py'' | Select-Object LastWriteTime, Length; Get-Item ''plan_signoff_ui_update.md'' | Select-Object LastWriteTime, Length; Get-Item ''run.pyw'' | Select-Object LastWriteTime, Length\")",
       "Bash(powershell -Command \"Get-ChildItem ''g:/내 드라이브/A1. 개인 자료/A1. Python/260222 KBS Peacock v1.0 이후/'' -Filter ''*충돌*'' -Recurse 2>$null; Get-ChildItem ''g:/내 드라이브/A1. 개인 자료/A1. Python/260222 KBS Peacock v1.0 이후/'' -Filter ''*conflict*'' -Recurse 2>$null; Get-ChildItem ''g:/내 드라이브/A1. 개인 자료/A1. Python/260222 KBS Peacock v1.0 이후/'' -Filter ''*run*'' 2>$null\")",
       "Bash(git add .claude/settings.local.json kbs_monitor/config/kbs_config.json kbs_monitor/core/detector.py kbs_monitor/resources/styles/dark_theme.qss kbs_monitor/resources/styles/light_theme.qss kbs_monitor/ui/main_window.py kbs_monitor/ui/settings_dialog.py kbs_monitor/ui/top_bar.py kbs_monitor/utils/config_manager.py kbs_monitor/core/signoff_manager.py)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -File \"C:\\\\Users\\\\minwoo\\\\.claude\\\\toast.ps1\")",
+      "Bash(powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\minwoo\\\\.claude\\\\toast.ps1\")",
+      "Bash(powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\minwoo\\\\.claude\\\\toast.ps1\")",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\minwoo\\\\.claude\\\\setup-toast-notification.ps1\")",
+      "Bash(powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\aros\\\\.claude\\\\toast.ps1\")"
     ]
   }
 }

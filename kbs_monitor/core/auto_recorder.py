@@ -77,8 +77,23 @@ class AutoRecorder:
 
     def start(self):
         """자동 삭제 스레드 시작 (프로그램 시작 시 1회 호출)"""
+        self._cleanup_orphan_temp_files()
         self._running = True
         self._cleanup_thread.start()
+
+    def _cleanup_orphan_temp_files(self):
+        """이전 비정상 종료로 남은 임시 파일(*_vtmp.mp4, *_atmp.wav) 삭제"""
+        if not os.path.isdir(self._save_dir):
+            return
+        try:
+            for fname in os.listdir(self._save_dir):
+                if fname.endswith("_vtmp.mp4") or fname.endswith("_atmp.wav"):
+                    try:
+                        os.remove(os.path.join(self._save_dir, fname))
+                    except OSError:
+                        pass
+        except Exception:
+            pass
 
     def stop(self):
         """정지 (프로그램 종료 시 호출)"""
@@ -246,84 +261,92 @@ class AutoRecorder:
 
         has_audio = False
         wav_file = None
+        merged = False
 
         try:
-            # ── 오디오 WAV Writer ─────────────────────────────────────────
-            wav_file = wave.open(atmp, "wb")
-            wav_file.setnchannels(_AUDIO_CH)
-            wav_file.setsampwidth(2)          # int16 = 2바이트
-            wav_file.setframerate(_AUDIO_SR)
-            # 1) 사고 전 비디오 버퍼 기록
-            for _ts, jpeg_bytes in pre_frames:
-                arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
-                frm = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-                if frm is not None:
-                    writer.write(frm)
+            try:
+                # ── 오디오 WAV Writer (실패 시 비디오만 저장) ─────────────
+                try:
+                    wav_file = wave.open(atmp, "wb")
+                    wav_file.setnchannels(_AUDIO_CH)
+                    wav_file.setsampwidth(2)          # int16 = 2바이트
+                    wav_file.setframerate(_AUDIO_SR)
+                except Exception:
+                    wav_file = None                   # 오디오 없이 비디오만 기록
 
-            # 2) 사고 전 오디오 버퍼 기록
-            for _ts, raw in pre_audio:
-                wav_file.writeframes(raw)
-                has_audio = True
+                # 1) 사고 전 비디오 버퍼 기록
+                for _ts, jpeg_bytes in pre_frames:
+                    arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
+                    frm = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                    if frm is not None:
+                        writer.write(frm)
 
-            # 3) 사고 후 실시간 프레임/오디오 기록 (녹화 플래그 해제까지)
-            while True:
-                while self._record_queue:
-                    _ts, frm = self._record_queue.popleft()
-                    writer.write(frm)
+                # 2) 사고 전 오디오 버퍼 기록
+                if wav_file is not None:
+                    for _ts, raw in pre_audio:
+                        wav_file.writeframes(raw)
+                        has_audio = True
 
-                while self._audio_record_queue:
-                    _ts, raw = self._audio_record_queue.popleft()
-                    wav_file.writeframes(raw)
-                    has_audio = True
-
-                if not self._recording:
-                    # 남은 큐 모두 기록 후 종료
+                # 3) 사고 후 실시간 프레임/오디오 기록 (녹화 플래그 해제까지)
+                while True:
                     while self._record_queue:
                         _ts, frm = self._record_queue.popleft()
                         writer.write(frm)
-                    while self._audio_record_queue:
-                        _ts, raw = self._audio_record_queue.popleft()
-                        wav_file.writeframes(raw)
-                        has_audio = True
-                    break
-                else:
-                    time.sleep(0.02)
+
+                    if wav_file is not None:
+                        while self._audio_record_queue:
+                            _ts, raw = self._audio_record_queue.popleft()
+                            wav_file.writeframes(raw)
+                            has_audio = True
+
+                    if not self._recording:
+                        # 남은 큐 모두 기록 후 종료
+                        while self._record_queue:
+                            _ts, frm = self._record_queue.popleft()
+                            writer.write(frm)
+                        if wav_file is not None:
+                            while self._audio_record_queue:
+                                _ts, raw = self._audio_record_queue.popleft()
+                                wav_file.writeframes(raw)
+                                has_audio = True
+                        break
+                    else:
+                        time.sleep(0.02)
+            finally:
+                writer.release()
+                if wav_file is not None:
+                    wav_file.close()
+
+            # 4) ffmpeg 합성 (오디오가 있을 때만 시도)
+            if has_audio:
+                # 비디오/오디오 시작 타임스탬프 기반 싱크 오프셋 계산
+                v_start = pre_frames[0][0] if pre_frames else None
+                a_start = pre_audio[0][0] if pre_audio else None
+                audio_offset = (a_start - v_start) if (v_start and a_start) else 0.0
+
+                merged = self._merge_with_ffmpeg(vtmp, atmp, filepath, audio_offset)
+
         finally:
-            writer.release()
-            if wav_file is not None:
-                wav_file.close()
+            # 5) 정리: 임시 파일 삭제, 폴백 처리 (예외 시에도 반드시 실행)
+            if merged:
+                # 합성 성공 → vtmp 삭제 (atmp는 아래에서 삭제)
+                try:
+                    os.remove(vtmp)
+                except Exception:
+                    pass
+            else:
+                # 합성 실패 또는 오디오 없음 → vtmp를 최종 파일로 사용
+                try:
+                    if os.path.exists(vtmp):
+                        os.rename(vtmp, filepath)
+                except Exception:
+                    pass
 
-        # 4) ffmpeg 합성 (오디오가 있을 때만 시도)
-        if has_audio:
-            # 비디오/오디오 시작 타임스탬프 기반 싱크 오프셋 계산
-            v_start = pre_frames[0][0] if pre_frames else None
-            a_start = pre_audio[0][0] if pre_audio else None
-            audio_offset = (a_start - v_start) if (v_start and a_start) else 0.0
-
-            merged = self._merge_with_ffmpeg(vtmp, atmp, filepath, audio_offset)
-        else:
-            merged = False
-
-        # 5) 정리: 임시 파일 삭제, 폴백 처리
-        if merged:
-            # 합성 성공 → vtmp 삭제 (atmp는 아래에서 삭제)
             try:
-                os.remove(vtmp)
+                if os.path.exists(atmp):
+                    os.remove(atmp)
             except Exception:
                 pass
-        else:
-            # 합성 실패 또는 오디오 없음 → vtmp를 최종 파일로 사용
-            try:
-                if os.path.exists(vtmp):
-                    os.rename(vtmp, filepath)
-            except Exception:
-                pass
-
-        try:
-            if os.path.exists(atmp):
-                os.remove(atmp)
-        except Exception:
-            pass
 
     # ── ffmpeg 합성 ───────────────────────────────────────────────────────────
 

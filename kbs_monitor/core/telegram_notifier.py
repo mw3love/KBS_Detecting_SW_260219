@@ -146,6 +146,12 @@ class TelegramNotifier:
         if not is_recovery:
             key = f"{alarm_type}_{label}"
             now = time.time()
+            # 24시간 이상 된 쿨다운 항목 정리 (메모리 누수 방지)
+            if len(self._last_sent) > 50:
+                cutoff = now - 86400
+                for k in list(self._last_sent.keys()):
+                    if self._last_sent[k] < cutoff:
+                        del self._last_sent[k]
             if now - self._last_sent.get(key, 0.0) < self._cooldown:
                 return
             self._last_sent[key] = now

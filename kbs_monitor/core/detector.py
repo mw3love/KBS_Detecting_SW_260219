@@ -220,6 +220,12 @@ class Detector:
         for label in list(self._audio_level_states.keys()):
             if label not in labels:
                 del self._audio_level_states[label]
+        for label in list(self._last_raw.keys()):
+            if label not in labels:
+                del self._last_raw[label]
+        for label in list(self._tone_states.keys()):
+            if label not in labels:
+                del self._tone_states[label]
         for roi in rois:
             if roi.label not in self._black_states:
                 self._black_states[roi.label] = DetectionState(roi)

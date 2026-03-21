@@ -5,6 +5,7 @@ JSON 파일 기반
 import os
 import sys
 import json
+import tempfile
 from typing import Any
 
 
@@ -193,5 +194,16 @@ class ConfigManager:
             return json.load(f)
 
     def _write_json(self, path: str, data: dict):
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        """atomic write: 임시 파일에 쓴 뒤 os.replace()로 원자적 교체"""
+        dir_name = os.path.dirname(os.path.abspath(path))
+        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise

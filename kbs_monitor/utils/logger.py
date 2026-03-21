@@ -16,6 +16,7 @@ class AppLogger(QObject):
     log_signal = Signal(str, str)
 
     LOG_DIR = "logs"
+    MAX_KEEP_DAYS = 90  # 로그 파일 최대 보관 일수
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -48,6 +49,7 @@ class AppLogger(QObject):
         handler.setFormatter(formatter)
         self._file_logger.addHandler(handler)
         self._current_date = today
+        self._delete_old_logs()
 
     def info(self, message: str):
         self._rotate_if_needed()
@@ -91,3 +93,21 @@ class AppLogger(QObject):
     def debug(self, message: str):
         self._rotate_if_needed()
         self._file_logger.debug(message)
+
+    def _delete_old_logs(self):
+        """MAX_KEEP_DAYS보다 오래된 로그 파일 삭제"""
+        try:
+            cutoff = datetime.date.today() - datetime.timedelta(days=self.MAX_KEEP_DAYS)
+            cutoff_str = cutoff.strftime("%Y%m%d")
+            for fname in os.listdir(self.LOG_DIR):
+                if not fname.endswith(".txt"):
+                    continue
+                # 파일명: YYYYMMDD.txt
+                date_part = fname[:-4]
+                if len(date_part) == 8 and date_part.isdigit() and date_part < cutoff_str:
+                    try:
+                        os.remove(os.path.join(self.LOG_DIR, fname))
+                    except OSError:
+                        pass
+        except Exception:
+            pass

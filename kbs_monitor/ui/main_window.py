@@ -247,8 +247,16 @@ class MainWindow(QMainWindow):
         # 주기적 정상 작동 로그 (200ms × 1500 ≈ 5분) — 파일 로그 전용 (UI 미출력)
         self._detection_count += 1
         if self._detection_count % 1500 == 0:
-            elapsed_min = self._detection_count // 1500 * 5
-            _log.info("SYSTEM - 감지 정상 실행 중 (%d분 경과)", elapsed_min)
+            total_min = self._detection_count // 1500 * 5
+            days, rem = divmod(total_min, 1440)
+            hours, mins = divmod(rem, 60)
+            if days > 0:
+                elapsed_str = f"{days}일 {hours}시간 {mins}분"
+            elif hours > 0:
+                elapsed_str = f"{hours}시간 {mins}분"
+            else:
+                elapsed_str = f"{mins}분"
+            _log.info("SYSTEM - 감지 정상 실행 중 (%s 경과)", elapsed_str)
             now_hb = time.time()
             for lbl, raw in self._detector._last_raw.items():
                 still_state = self._detector._still_states.get(lbl)
@@ -610,6 +618,7 @@ class MainWindow(QMainWindow):
     def _on_settings_closed(self):
         if self._settings_dialog:
             self._config = self._settings_dialog.get_config()
+            self._settings_dialog.deleteLater()
         self._settings_dialog = None
 
     def _on_port_changed(self, port: int):
@@ -1149,6 +1158,8 @@ class MainWindow(QMainWindow):
         # 스레드 종료
         self._detect_timer.stop()
         self._summary_timer.stop()
+        if hasattr(self, "_tg_test_timer"):
+            self._tg_test_timer.stop()
         if hasattr(self, "_capture_thread"):
             self._capture_thread.stop()
         if hasattr(self, "_audio_thread"):

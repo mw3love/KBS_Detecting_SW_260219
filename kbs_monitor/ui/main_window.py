@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.6.1")
+        self.setWindowTitle("KBS Peacock v1.6.2")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -268,7 +268,7 @@ class MainWindow(QMainWindow):
                 else:
                     reset_ago_str = "리셋없음"
                 changed_str = (
-                    f" changed={changed_r:.1f}%[기준{self._detector.still_changed_ratio}%]"
+                    f" changed={changed_r:.1f}%[블록기준{self._detector.still_block_threshold}%]"
                     if changed_r >= 0 else ""
                 )
                 # resolve 횟수 + alert_start_time 존재 여부 (진단 강화)
@@ -673,7 +673,7 @@ class MainWindow(QMainWindow):
         self._detector.black_alarm_duration = det.get("black_alarm_duration", 60)
         self._detector.black_motion_suppress_ratio = det.get("black_motion_suppress_ratio", 0.2)
         self._detector.still_threshold = det.get("still_threshold", 4)
-        self._detector.still_changed_ratio = det.get("still_changed_ratio", 4.0)
+        self._detector.still_block_threshold = det.get("still_block_threshold", 15.0)
         self._detector.still_duration = det.get("still_duration", 60.0)
         self._detector.still_alarm_duration = det.get("still_alarm_duration", 60)
         self._detector.still_reset_frames = int(det.get("still_reset_frames", 3))

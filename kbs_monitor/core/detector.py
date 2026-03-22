@@ -143,7 +143,7 @@ class Detector:
 
         # 스틸 감지 설정
         self.still_threshold = 4           # 픽셀당 변화 기준값 (0~255): 이 값 이상 차이나면 '변화한 픽셀'로 분류
-        self.still_changed_ratio = 4.0     # 변화 픽셀 비율 임계값 (%): 이 비율 미만이면 정지로 판단
+        self.still_block_threshold = 15.0  # 블록 움직임 임계값 (%): 3×3 블록 중 하나라도 이 비율 이상 변화하면 스틸 아님
         self.still_duration = 10.0         # 몇 초 이상 지속 시 알림 발생
         self.still_alarm_duration = 10.0   # 알림 지속 시간(초)
         self.still_reset_frames = 3        # 타이머 리셋에 필요한 연속 정상 프레임 수 (히스테리시스)
@@ -183,6 +183,27 @@ class Detector:
         self._last_raw: Dict[str, dict] = {}
         # near-miss 추적 (임계값 근접 상태 지속 시간)
         self._near_miss_start: Dict[str, float] = {}
+
+    def _check_still_by_blocks(self, changed_mask: np.ndarray) -> bool:
+        """3×3 블록 기반 스틸 판정. 블록 중 하나라도 움직임 임계값 초과 시 False(스틸 아님) 반환."""
+        bh, bw = changed_mask.shape[:2]
+        # 채널 차원이 있으면 any 축으로 2D로 축소 (RGB diff > threshold → 어느 채널이든 변화)
+        if changed_mask.ndim == 3:
+            changed_mask = changed_mask.any(axis=2)
+        rows, cols = 3, 3
+        row_edges = np.linspace(0, bh, rows + 1, dtype=int)
+        col_edges = np.linspace(0, bw, cols + 1, dtype=int)
+        threshold = self.still_block_threshold
+        for r in range(rows):
+            for c in range(cols):
+                block = changed_mask[row_edges[r]:row_edges[r + 1],
+                                     col_edges[c]:col_edges[c + 1]]
+                if block.size == 0:
+                    continue
+                block_ratio = float(np.mean(block)) * 100.0
+                if block_ratio >= threshold:
+                    return False  # 이 블록에 움직임 있음 → 스틸 아님
+        return True  # 모든 블록이 정적 → 스틸
 
     def _apply_scale_factor(self, frame: np.ndarray) -> np.ndarray:
         """해상도 스케일 적용 (scale_factor < 1.0 인 경우에만 축소)"""
@@ -284,9 +305,11 @@ class Detector:
                         crop_f = crop.astype(np.float32)
                         if prev.shape == crop_f.shape:
                             diff = np.abs(crop_f - prev)
-                            # 변화한 픽셀 비율 계산: diff > threshold인 픽셀 비율(%)
-                            changed_ratio = float(np.mean(diff > self.still_threshold)) * 100.0
-                            is_still = changed_ratio < self.still_changed_ratio
+                            changed_mask = diff > self.still_threshold
+                            # 전체 changed_ratio (블랙 모션 억제 + 진단용)
+                            changed_ratio = float(np.mean(changed_mask)) * 100.0
+                            # 블록 기반 스틸 판정: 3×3 격자 중 하나라도 움직임 있으면 스틸 아님
+                            is_still = self._check_still_by_blocks(changed_mask)
                         else:
                             is_still = False
                     # float32로 저장하여 다음 사이클의 재변환 비용 제거

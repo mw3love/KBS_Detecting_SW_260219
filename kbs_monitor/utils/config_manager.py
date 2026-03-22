@@ -18,7 +18,7 @@ DEFAULT_CONFIG = {
         "black_alarm_duration": 60,
         "black_motion_suppress_ratio": 0.2,
         "still_threshold": 4,
-        "still_changed_ratio": 4.0,
+        "still_block_threshold": 15.0,
         "still_duration": 60,
         "still_alarm_duration": 60,
         "still_reset_frames": 3,
@@ -187,6 +187,12 @@ class ConfigManager:
                 result[key] = {**result[key], **value}
             else:
                 result[key] = value
+        # 마이그레이션: still_changed_ratio → still_block_threshold
+        det = result.get("detection", {})
+        if "still_changed_ratio" in det:
+            det.pop("still_changed_ratio")
+            if "still_block_threshold" not in det:
+                det["still_block_threshold"] = 15.0
         return result
 
     def _read_json(self, path: str) -> dict:

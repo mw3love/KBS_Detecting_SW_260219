@@ -19,6 +19,7 @@ import numpy as np
 
 
 _JPEG_QUALITY = 85
+_MAX_RECORD_FRAMES = 3000  # 녹화 큐 최대 프레임 수 (10fps × 300초 = 5분 상한, 메모리 보호)
 
 # AudioMonitorThread 와 동일한 오디오 파라미터
 _AUDIO_SR    = 44100   # 샘플레이트 (Hz)
@@ -163,7 +164,7 @@ class AutoRecorder:
                 pass
 
         if self._recording:
-            if now < self._record_end:
+            if now < self._record_end and len(self._record_queue) < _MAX_RECORD_FRAMES:
                 try:
                     small = cv2.resize(frame, (self._out_w, self._out_h))
                     self._record_queue.append((now, small))

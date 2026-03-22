@@ -98,10 +98,13 @@ class AudioMonitorThread(QThread):
                 self.status_changed.emit(f"오디오 스트림 시작 (출력 오류: {e})")
 
             chunk_duration = self.CHUNK / self.SAMPLE_RATE  # 초 단위
+            consecutive_errors = 0       # 연속 실패 카운터 (장치 제거 감지)
+            _MAX_CONSECUTIVE_ERRORS = 10  # 이 횟수 연속 실패 시 스트림 재연결 시도
 
             while self._running:
                 try:
                     data, overflowed = stream.read(self.CHUNK)
+                    consecutive_errors = 0  # 성공 시 리셋
                     samples = np.frombuffer(data, dtype=np.int16)
 
                     # 녹화용 raw 샘플 emit (복사본, 타임스탬프 포함)
@@ -144,8 +147,61 @@ class AudioMonitorThread(QThread):
                     self.level_updated.emit(l_db, r_db)
 
                 except Exception as e:
-                    _log.debug("오디오 루프 예외: %s", e)
+                    consecutive_errors += 1
+                    _log.debug("오디오 루프 예외 (%d회): %s", consecutive_errors, e)
                     self.level_updated.emit(-60.0, -60.0)
+
+                    if consecutive_errors >= _MAX_CONSECUTIVE_ERRORS:
+                        # 스트림 무효 (장치 제거 등) → 정리 후 재연결 시도
+                        _log.warning("오디오 스트림 연속 실패 %d회 — 재연결 시도", consecutive_errors)
+                        self.status_changed.emit("오디오 장치 오류 — 재연결 시도 중...")
+                        try:
+                            stream.stop()
+                            stream.close()
+                        except Exception:
+                            pass
+                        if output_stream is not None:
+                            try:
+                                output_stream.stop()
+                                output_stream.close()
+                            except Exception:
+                                pass
+                            output_stream = None
+
+                        # 재연결 대기 후 시도
+                        self.msleep(3000)
+                        if not self._running:
+                            return
+                        try:
+                            stream = sd.RawInputStream(
+                                samplerate=self.SAMPLE_RATE,
+                                blocksize=self.CHUNK,
+                                device=self._device_index,
+                                channels=self.CHANNELS,
+                                dtype='int16',
+                            )
+                            stream.start()
+                            try:
+                                output_stream = sd.RawOutputStream(
+                                    samplerate=self.SAMPLE_RATE,
+                                    blocksize=self.CHUNK,
+                                    channels=self.CHANNELS,
+                                    dtype='int16',
+                                )
+                                output_stream.start()
+                            except Exception:
+                                output_stream = None
+                            consecutive_errors = 0
+                            self._silence_duration = 0.0
+                            self.status_changed.emit("오디오 스트림 재연결 성공")
+                            _log.info("오디오 스트림 재연결 성공")
+                        except Exception as re_e:
+                            self.status_changed.emit(f"오디오 재연결 실패: {re_e}")
+                            _log.warning("오디오 스트림 재연결 실패: %s — 5초 후 재시도", re_e)
+                            self.msleep(5000)
+                            if not self._running:
+                                return
+                            consecutive_errors = 0  # 리셋하여 다음 10회 후 재시도
 
         except Exception as e:
             self.status_changed.emit(f"오디오 스트림 오류: {e}")

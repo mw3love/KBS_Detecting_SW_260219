@@ -29,27 +29,43 @@ class AppLogger(QObject):
         self._rotate_if_needed()
 
     def _rotate_if_needed(self):
-        """날짜가 바뀌면 새 로그 파일로 교체"""
+        """날짜가 바뀌면 새 로그 파일로 교체.
+        디스크 풀 등으로 새 파일 생성 실패 시 기존 핸들러로 계속 운영."""
         today = datetime.date.today().strftime("%Y%m%d")
         if today == self._current_date:
             return
 
-        # 기존 핸들러 제거 (close 먼저 → 파일 잠금 해제 후 removeHandler)
-        for h in list(self._file_logger.handlers):
-            h.close()
-            self._file_logger.removeHandler(h)
+        try:
+            # 기존 핸들러 제거 (close 먼저 → 파일 잠금 해제 후 removeHandler)
+            for h in list(self._file_logger.handlers):
+                h.close()
+                self._file_logger.removeHandler(h)
 
-        # 새 핸들러 추가 (일별 파일)
-        log_path = os.path.join(self.LOG_DIR, f"{today}.txt")
-        handler = logging.FileHandler(log_path, encoding="utf-8")
-        formatter = logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-        handler.setFormatter(formatter)
-        self._file_logger.addHandler(handler)
-        self._current_date = today
-        self._delete_old_logs()
+            # 새 핸들러 추가 (일별 파일)
+            log_path = os.path.join(self.LOG_DIR, f"{today}.txt")
+            handler = logging.FileHandler(log_path, encoding="utf-8")
+            formatter = logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+            handler.setFormatter(formatter)
+            self._file_logger.addHandler(handler)
+            self._current_date = today
+            self._delete_old_logs()
+        except Exception:
+            # 디스크 풀 등으로 새 로그 파일 생성 실패 — 핸들러 없는 상태 방지
+            if not self._file_logger.handlers:
+                try:
+                    # 기존 날짜 파일로 폴백 시도
+                    fallback_path = os.path.join(self.LOG_DIR, f"{self._current_date}.txt")
+                    fallback_handler = logging.FileHandler(fallback_path, encoding="utf-8")
+                    fallback_handler.setFormatter(logging.Formatter(
+                        "%(asctime)s [%(levelname)s] %(message)s",
+                        datefmt="%Y-%m-%d %H:%M:%S",
+                    ))
+                    self._file_logger.addHandler(fallback_handler)
+                except Exception:
+                    pass  # 폴백도 실패 — 파일 로깅 불가, UI 로그는 계속 동작
 
     def info(self, message: str):
         self._rotate_if_needed()

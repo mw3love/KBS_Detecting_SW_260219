@@ -1812,11 +1812,11 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.6.0")
+        lbl_version = QLabel("KBS Peacock v1.6.1")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)
-        lbl_date = QLabel("2026-03-19")
+        lbl_date = QLabel("2026-03-22")
         about_layout.addWidget(lbl_date, 1, 1)
 
         about_layout.addWidget(QLabel("GitHub:"), 2, 0)

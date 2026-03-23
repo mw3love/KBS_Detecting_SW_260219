@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.6.2")
+        self.setWindowTitle("KBS Peacock v1.6.3")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 

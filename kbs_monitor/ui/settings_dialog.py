@@ -499,15 +499,17 @@ class _SignoffRoiDialog(QDialog):
 
     상단: 진입 트리거 — 스틸 감지로 정파 진입/해제를 판단할 ROI 1개 선택.
     하단: 알림 억제 대상 — 정파(준비/모드) 중 일반 알림을 끄고 싶은 ROI 다중 선택.
+          비디오 ROI와 오디오 레벨미터 ROI를 구분하여 표시.
           트리거로 선택한 ROI는 자동으로 체크된다.
     """
 
     def __init__(self, enter_label: str, suppressed_labels: list,
-                 video_rois: list, parent=None):
+                 video_rois: list, audio_rois: list = None, parent=None):
         """
         enter_label      : 현재 진입 트리거 label (str)
-        suppressed_labels: 현재 억제 대상 label 목록 (list[str])
+        suppressed_labels: 현재 억제 대상 label 목록 (list[str], 비디오+오디오 통합)
         video_rois       : [(label, media_name), ...] 형식
+        audio_rois       : [(label, media_name), ...] 형식 (없으면 빈 목록)
         """
         super().__init__(parent)
         self.setWindowTitle("감지영역 선택")
@@ -518,6 +520,7 @@ class _SignoffRoiDialog(QDialog):
         self._enter_label: str = enter_label
         self._suppressed_labels: list = list(suppressed_labels)
         self._video_rois_info: list = list(video_rois)
+        self._audio_rois_info: list = list(audio_rois) if audio_rois else []
 
         # 억제 대상 체크박스 목록 {label: QCheckBox}
         self._suppress_chks: dict = {}
@@ -564,6 +567,10 @@ class _SignoffRoiDialog(QDialog):
         suppress_layout.setContentsMargins(8, 6, 8, 6)
         suppress_layout.setSpacing(4)
 
+        # 비디오 ROI 체크박스
+        video_section_lbl = QLabel("▶ 비디오 감지영역")
+        video_section_lbl.setStyleSheet("font-weight: bold; margin-top: 2px;")
+        suppress_layout.addWidget(video_section_lbl)
         if self._video_rois_info:
             for lbl, media in self._video_rois_info:
                 display = f"{lbl}  ({media})" if media else lbl
@@ -572,7 +579,21 @@ class _SignoffRoiDialog(QDialog):
                 self._suppress_chks[lbl] = chk
                 suppress_layout.addWidget(chk)
         else:
-            suppress_layout.addWidget(QLabel("비디오 감지영역 없음"))
+            suppress_layout.addWidget(QLabel("  (비디오 감지영역 없음)"))
+
+        # 오디오 레벨미터 ROI 체크박스
+        audio_section_lbl = QLabel("▶ 오디오 레벨미터 감지영역")
+        audio_section_lbl.setStyleSheet("font-weight: bold; margin-top: 6px;")
+        suppress_layout.addWidget(audio_section_lbl)
+        if self._audio_rois_info:
+            for lbl, media in self._audio_rois_info:
+                display = f"{lbl}  ({media})" if media else lbl
+                chk = QCheckBox(display)
+                chk.setChecked(lbl in self._suppressed_labels)
+                self._suppress_chks[lbl] = chk
+                suppress_layout.addWidget(chk)
+        else:
+            suppress_layout.addWidget(QLabel("  (오디오 레벨미터 감지영역 없음)"))
 
         # 진입 트리거 ROI 자동 체크 (동기화)
         self._sync_trigger_suppress()
@@ -1110,13 +1131,13 @@ class SettingsDialog(QDialog):
         grid_s.addWidget(self._edit_still_threshold, 0, 1)
         grid_s.addWidget(desc_st,                   0, 2)
 
-        # 행 1: 블록 움직임 임계값 (3×3 블록 기반 판정)
+        # 행 1: 블록 움직임 임계값 (5×5 블록 기반 판정)
         lbl_sbt = QLabel("▪  블록 움직임 임계값(%):")
         lbl_sbt.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._edit_still_block_threshold = _NumEdit(15.0, 1.0, 50.0, is_float=True)
+        self._edit_still_block_threshold = _NumEdit(10.0, 1.0, 50.0, is_float=True)
         self._edit_still_block_threshold.editingFinished.connect(self._save_detection_params)
         desc_sbt = QLabel(
-            "• 1.0~50.0% / 화면을 3×3 블록으로 나눠 블록 하나라도 이 비율 이상 변화하면 스틸 아님  (기본값: 15%)<br>"
+            "• 1.0~50.0% / 화면을 5×5 블록으로 나눠 블록 하나라도 이 비율 이상 변화하면 스틸 아님  (기본값: 10%)<br>"
             "• 낮출수록 민감 (작은 움직임도 감지)  /  높일수록 둔감 (큰 움직임만 인정)"
         )
         desc_sbt.setObjectName("paramDescLabel")
@@ -1822,11 +1843,11 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.6.3")
+        lbl_version = QLabel("KBS Peacock v1.6.4")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)
-        lbl_date = QLabel("2026-03-23")
+        lbl_date = QLabel("2026-03-24")
         about_layout.addWidget(lbl_date, 1, 1)
 
         about_layout.addWidget(QLabel("GitHub:"), 2, 0)
@@ -2801,10 +2822,11 @@ class SettingsDialog(QDialog):
     def _open_signoff_roi_dialog(self, gid: int):
         """감지영역 선택 다이얼로그를 열고 결과를 저장한다."""
         video_rois = [(r.label, r.media_name) for r in self._roi_manager.video_rois]
+        audio_rois = [(r.label, r.media_name) for r in self._roi_manager.audio_rois]
         enter_label = self._signoff_enter_label.get(gid, "")
         suppressed_labels = self._signoff_suppressed_labels.get(gid, [])
 
-        dlg = _SignoffRoiDialog(enter_label, suppressed_labels, video_rois, parent=self)
+        dlg = _SignoffRoiDialog(enter_label, suppressed_labels, video_rois, audio_rois, parent=self)
         if dlg.exec() == QDialog.Accepted:
             enter_label, suppressed_labels = dlg.get_result()
             self._signoff_enter_label[gid] = enter_label
@@ -2820,6 +2842,7 @@ class SettingsDialog(QDialog):
         enter_label = self._signoff_enter_label.get(gid, "")
         suppressed = self._signoff_suppressed_labels.get(gid, [])
         label_to_media = {r.label: r.media_name for r in self._roi_manager.video_rois}
+        label_to_media.update({r.label: r.media_name for r in self._roi_manager.audio_rois})
         if enter_label:
             media = label_to_media.get(enter_label, "")
             trigger_text = f"{enter_label}  ({media})" if media else enter_label

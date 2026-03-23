@@ -143,7 +143,7 @@ class Detector:
 
         # 스틸 감지 설정
         self.still_threshold = 4           # 픽셀당 변화 기준값 (0~255): 이 값 이상 차이나면 '변화한 픽셀'로 분류
-        self.still_block_threshold = 15.0  # 블록 움직임 임계값 (%): 3×3 블록 중 하나라도 이 비율 이상 변화하면 스틸 아님
+        self.still_block_threshold = 10.0  # 블록 움직임 임계값 (%): 5×5 블록 중 하나라도 이 비율 이상 변화하면 스틸 아님
         self.still_duration = 10.0         # 몇 초 이상 지속 시 알림 발생
         self.still_alarm_duration = 10.0   # 알림 지속 시간(초)
         self.still_reset_frames = 3        # 타이머 리셋에 필요한 연속 정상 프레임 수 (히스테리시스)
@@ -185,12 +185,12 @@ class Detector:
         self._near_miss_start: Dict[str, float] = {}
 
     def _check_still_by_blocks(self, changed_mask: np.ndarray) -> bool:
-        """3×3 블록 기반 스틸 판정. 블록 중 하나라도 움직임 임계값 초과 시 False(스틸 아님) 반환."""
+        """5×5 블록 기반 스틸 판정. 블록 중 하나라도 움직임 임계값 초과 시 False(스틸 아님) 반환."""
         bh, bw = changed_mask.shape[:2]
         # 채널 차원이 있으면 any 축으로 2D로 축소 (RGB diff > threshold → 어느 채널이든 변화)
         if changed_mask.ndim == 3:
             changed_mask = changed_mask.any(axis=2)
-        rows, cols = 3, 3
+        rows, cols = 5, 5
         row_edges = np.linspace(0, bh, rows + 1, dtype=int)
         col_edges = np.linspace(0, bw, cols + 1, dtype=int)
         threshold = self.still_block_threshold
@@ -308,7 +308,7 @@ class Detector:
                             changed_mask = diff > self.still_threshold
                             # 전체 changed_ratio (블랙 모션 억제 + 진단용)
                             changed_ratio = float(np.mean(changed_mask)) * 100.0
-                            # 블록 기반 스틸 판정: 3×3 격자 중 하나라도 움직임 있으면 스틸 아님
+                            # 블록 기반 스틸 판정: 5×5 격자 중 하나라도 움직임 있으면 스틸 아님
                             is_still = self._check_still_by_blocks(changed_mask)
                         else:
                             is_still = False

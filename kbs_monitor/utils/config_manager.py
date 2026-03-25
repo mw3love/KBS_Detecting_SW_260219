@@ -119,8 +119,8 @@ DEFAULT_CONFIG = {
         },
     },
     "system": {
-        "scheduled_restart_enabled": True,   # 매일 자동 재시작 활성화
-        "scheduled_restart_hour":    3,      # 재시작 시각 (0~23)
+        "scheduled_restart_enabled": True,     # 매일 자동 재시작 활성화
+        "scheduled_restart_time":    "03:00",  # 재시작 시각 (HH:MM, 24시간제)
     },
 }
 

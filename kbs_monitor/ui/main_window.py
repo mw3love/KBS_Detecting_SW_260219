@@ -1161,10 +1161,18 @@ class MainWindow(QMainWindow):
             return
 
         now = datetime.datetime.now()
-        if now.hour == 0:
+        if now.hour == 0 and now.minute == 0:
             self._restart_done_today = False  # 자정 플래그 리셋
-        restart_hour = sys_cfg.get("scheduled_restart_hour", 3)
-        if now.hour == restart_hour and now.minute == 0 and not self._restart_done_today:
+
+        try:
+            t = datetime.datetime.strptime(
+                sys_cfg.get("scheduled_restart_time", "03:00"), "%H:%M"
+            )
+            restart_hour, restart_minute = t.hour, t.minute
+        except ValueError:
+            return
+
+        if now.hour == restart_hour and now.minute == restart_minute and not self._restart_done_today:
             self._do_scheduled_restart()
 
     def _do_scheduled_restart(self):

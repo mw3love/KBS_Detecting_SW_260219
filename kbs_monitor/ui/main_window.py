@@ -1178,12 +1178,13 @@ class MainWindow(QMainWindow):
     def _do_scheduled_restart(self):
         """새 프로세스를 시작하고 현재 프로세스를 종료한다."""
         self._restart_done_today = True
-        self._logger.info("SYSTEM - 예약 재시작 실행 (설정된 시각)")
+        self._logger.info("SYSTEM - 예약 재시작 실행 (설정된 시각) — 30초 후 재시작")
         subprocess.Popen(
             [sys.executable] + sys.argv,
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
         )
-        QApplication.instance().quit()
+        # 500ms 지연: 로그 시그널이 UI에 표시된 뒤 종료
+        QTimer.singleShot(500, QApplication.instance().quit)
 
     def closeEvent(self, event: QCloseEvent):
         # 설정 저장

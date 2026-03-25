@@ -35,6 +35,10 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 _log = logging.getLogger("kbs_monitor")
 
+# 정파 진입/해제 타이머 리셋에 필요한 연속 틱 수 (1틱=1초)
+# 캡처카드 노이즈로 인한 순간적 스틸/비스틸 전환으로 타이머가 오리셋되는 것을 방지
+_SIGNOFF_HYSTERESIS_TICKS = 3
+
 
 class SignoffState(Enum):
     """정파 상태"""
@@ -49,7 +53,7 @@ class SignoffGroup:
     group_id: int
     name: str
     enter_roi: dict          # {"video_label": str} — 정파 진입 트리거 ROI
-    suppressed_labels: List[str]  # 정파(SIGNOFF/PREPARATION) 중 알림을 억제할 video ROI label 목록
+    suppressed_labels: List[str]  # 정파(SIGNOFF/PREPARATION) 중 알림을 억제할 ROI label 목록 (비디오+오디오 레벨미터)
     start_time: str          # "HH:MM" 형식 — 정파모드(SIGNOFF) 시작 시각
     end_time: str            # "HH:MM" 형식 — 정파 종료 시각
     prep_minutes: int        # 정파준비 시작 = start_time - prep_minutes (0, 30, 60, 90, 120, 150, 180)
@@ -547,7 +551,7 @@ class SignoffManager(QObject):
                 self._video_enter_start[gid] = now
         else:
             self._video_enter_not_still[gid] = self._video_enter_not_still.get(gid, 0) + 1
-            if self._video_enter_not_still[gid] >= 3:
+            if self._video_enter_not_still[gid] >= _SIGNOFF_HYSTERESIS_TICKS:
                 self._video_enter_start[gid] = None
 
         # ── 디버그 로그: 스틸 값 변화 시 즉시 기록 ──
@@ -686,7 +690,7 @@ class SignoffManager(QObject):
         else:
             # 스틸 상태 복귀 → 히스테리시스: 3틱 연속 스틸이어야 해제 타이머 리셋
             self._video_exit_still[gid] = self._video_exit_still.get(gid, 0) + 1
-            if self._video_exit_still[gid] >= 3:
+            if self._video_exit_still[gid] >= _SIGNOFF_HYSTERESIS_TICKS:
                 self._video_exit_start[gid] = None
                 self._dbg_last_exit_log[gid] = 0.0  # 리셋 시 타이머 초기화
 

@@ -1155,8 +1155,8 @@ class MainWindow(QMainWindow):
     # ── 예약 재시작 ─────────────────────────────────────
 
     def _check_scheduled_restart(self):
-        """1분 주기로 예약 재시작 시각 확인"""
-        sys_cfg = self._config.get("system", {})
+        """1분 주기로 예약 재시작 시각 확인 (설정 파일을 매번 직접 읽어 런타임 변경 반영)"""
+        sys_cfg = self._config_manager.load().get("system", {})
         if not sys_cfg.get("scheduled_restart_enabled", True):
             return
 

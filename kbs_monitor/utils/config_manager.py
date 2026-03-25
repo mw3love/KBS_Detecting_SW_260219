@@ -118,6 +118,10 @@ DEFAULT_CONFIG = {
             "weekdays":          [0, 1, 2, 3, 4, 5, 6],
         },
     },
+    "system": {
+        "scheduled_restart_enabled": True,   # 매일 자동 재시작 활성화
+        "scheduled_restart_hour":    3,      # 재시작 시각 (0~23)
+    },
 }
 
 

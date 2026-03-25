@@ -3,8 +3,11 @@
 3분할 레이아웃: 상단 바 + 비디오 영역(~75%) + 로그 영역(~25%)
 """
 import copy
+import datetime
 import logging
 import os
+import subprocess
+import sys
 import time
 from typing import Optional
 
@@ -128,6 +131,9 @@ class MainWindow(QMainWindow):
         self._startup_complete = False
         QTimer.singleShot(3000, lambda: setattr(self, '_startup_complete', True))
 
+        # 예약 재시작: 당일 재시작 완료 여부 플래그 (자정에 리셋)
+        self._restart_done_today = False
+
         self._logger.info("SYSTEM - 프로그램 시작")
 
     # ── UI 구성 ────────────────────────────────────────
@@ -227,6 +233,11 @@ class MainWindow(QMainWindow):
         self._summary_timer.setInterval(1000)
         self._summary_timer.timeout.connect(self._update_summary)
         self._summary_timer.start()
+
+        self._restart_timer = QTimer(self)
+        self._restart_timer.setInterval(60_000)
+        self._restart_timer.timeout.connect(self._check_scheduled_restart)
+        self._restart_timer.start()
 
         self._latest_frame = None
 
@@ -1141,6 +1152,31 @@ class MainWindow(QMainWindow):
         if self._roi_overlay:
             self._roi_overlay.resize(self._video_widget.size())
 
+    # ── 예약 재시작 ─────────────────────────────────────
+
+    def _check_scheduled_restart(self):
+        """1분 주기로 예약 재시작 시각 확인"""
+        sys_cfg = self._config.get("system", {})
+        if not sys_cfg.get("scheduled_restart_enabled", True):
+            return
+
+        now = datetime.datetime.now()
+        if now.hour == 0:
+            self._restart_done_today = False  # 자정 플래그 리셋
+        restart_hour = sys_cfg.get("scheduled_restart_hour", 3)
+        if now.hour == restart_hour and now.minute == 0 and not self._restart_done_today:
+            self._do_scheduled_restart()
+
+    def _do_scheduled_restart(self):
+        """새 프로세스를 시작하고 현재 프로세스를 종료한다."""
+        self._restart_done_today = True
+        self._logger.info("SYSTEM - 예약 재시작 실행 (설정된 시각)")
+        subprocess.Popen(
+            [sys.executable] + sys.argv,
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        )
+        QApplication.instance().quit()
+
     def closeEvent(self, event: QCloseEvent):
         # 설정 저장
         if self._settings_dialog:
@@ -1158,6 +1194,7 @@ class MainWindow(QMainWindow):
         # 스레드 종료
         self._detect_timer.stop()
         self._summary_timer.stop()
+        self._restart_timer.stop()
         if hasattr(self, "_tg_test_timer"):
             self._tg_test_timer.stop()
         if hasattr(self, "_capture_thread"):

@@ -122,6 +122,7 @@ class MainWindow(QMainWindow):
             self._detect_timer.stop()
         if not roi_visible:
             self._video_widget.set_show_rois(False)
+        self._restore_fullscreen = ui_state.get("fullscreen", False)
 
         # 정파 버튼 활성화 상태 복원 (자동 정파 비활성 시 버튼 비활성화)
         auto_prep = self._config.get("signoff", {}).get("auto_preparation", True)
@@ -131,8 +132,13 @@ class MainWindow(QMainWindow):
         self._startup_complete = False
         QTimer.singleShot(3000, lambda: setattr(self, '_startup_complete', True))
 
-        # 예약 재시작: 당일 재시작 완료 여부 플래그 (자정에 리셋)
-        self._restart_done_today = False
+        # 예약 재시작: 마지막으로 재시작을 실행한 "HH:MM" 기록 (같은 시각 재트리거 방지)
+        # --restarted HH:MM 인자가 있으면 해당 시각을 기록하여 같은 분 반복 방지
+        self._restart_done_time: str = ""
+        if "--restarted" in sys.argv:
+            idx = sys.argv.index("--restarted")
+            if idx + 1 < len(sys.argv):
+                self._restart_done_time = sys.argv[idx + 1]
 
         self._logger.info("SYSTEM - 프로그램 시작")
 
@@ -235,7 +241,7 @@ class MainWindow(QMainWindow):
         self._summary_timer.start()
 
         self._restart_timer = QTimer(self)
-        self._restart_timer.setInterval(60_000)
+        self._restart_timer.setInterval(10_000)
         self._restart_timer.timeout.connect(self._check_scheduled_restart)
         self._restart_timer.start()
 
@@ -613,6 +619,7 @@ class MainWindow(QMainWindow):
                 self._settings_dialog.load_config_requested.connect(self._on_load_config)
                 self._settings_dialog.reset_config_requested.connect(self._on_reset_config)
                 self._settings_dialog.signoff_settings_changed.connect(self._on_signoff_settings_changed)
+                self._settings_dialog.system_settings_changed.connect(self._on_system_settings_changed)
                 self._settings_dialog.finished.connect(self._on_settings_closed)
             else:
                 self._settings_dialog.refresh_roi_tables()
@@ -1131,6 +1138,14 @@ class MainWindow(QMainWindow):
 
     # ── 전체화면 ───────────────────────────────────────
 
+    def show(self):
+        """전체화면 복원을 위해 show() 오버라이드"""
+        if self._restore_fullscreen:
+            self.showFullScreen()
+            self._top_bar.set_fullscreen_button_state(True)
+        else:
+            super().show()
+
     def _toggle_fullscreen(self):
         """전체화면 / 일반 창 전환"""
         if self.isFullScreen():
@@ -1152,35 +1167,48 @@ class MainWindow(QMainWindow):
         if self._roi_overlay:
             self._roi_overlay.resize(self._video_widget.size())
 
+    def _on_system_settings_changed(self, params: dict):
+        """시스템 설정 변경 시 config에 반영하고 즉시 파일 저장"""
+        self._config["system"] = params
+        self._config_manager.save(self._config)
+
     # ── 예약 재시작 ─────────────────────────────────────
 
     def _check_scheduled_restart(self):
-        """1분 주기로 예약 재시작 시각 확인 (설정 파일을 매번 직접 읽어 런타임 변경 반영)"""
+        """10초 주기로 예약 재시작 시각 확인 (설정 파일을 매번 직접 읽어 런타임 변경 반영)"""
         sys_cfg = self._config_manager.load().get("system", {})
         if not sys_cfg.get("scheduled_restart_enabled", True):
             return
 
-        now = datetime.datetime.now()
-        if now.hour == 0 and now.minute == 0:
-            self._restart_done_today = False  # 자정 플래그 리셋
-
+        time_str = sys_cfg.get("scheduled_restart_time", "03:00")
         try:
-            t = datetime.datetime.strptime(
-                sys_cfg.get("scheduled_restart_time", "03:00"), "%H:%M"
-            )
+            t = datetime.datetime.strptime(time_str, "%H:%M")
             restart_hour, restart_minute = t.hour, t.minute
         except ValueError:
             return
 
-        if now.hour == restart_hour and now.minute == restart_minute and not self._restart_done_today:
-            self._do_scheduled_restart()
+        now = datetime.datetime.now()
+        if now.hour == restart_hour and now.minute == restart_minute and self._restart_done_time != time_str:
+            self._do_scheduled_restart(time_str)
 
-    def _do_scheduled_restart(self):
+    def _do_scheduled_restart(self, time_str: str):
         """새 프로세스를 시작하고 현재 프로세스를 종료한다."""
-        self._restart_done_today = True
+        self._restart_done_time = time_str
         self._logger.info("SYSTEM - 예약 재시작 실행 (설정된 시각) — 30초 후 재시작")
+        # --restarted HH:MM 전달: 새 프로세스에서 같은 시각 재트리거 방지
+        clean = []
+        skip = False
+        for a in sys.argv:
+            if a == "--restarted":
+                skip = True
+                continue
+            if skip:
+                skip = False
+                continue
+            clean.append(a)
+        args = clean + ["--restarted", time_str]
         subprocess.Popen(
-            [sys.executable] + sys.argv,
+            [sys.executable] + args,
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
         )
         # 500ms 지연: 로그 시그널이 UI에 표시된 뒤 종료
@@ -1194,6 +1222,7 @@ class MainWindow(QMainWindow):
         self._config["ui_state"] = {
             "detection_enabled": self._detection_enabled,
             "roi_visible": self._top_bar._btn_roi.isChecked(),
+            "fullscreen": self.isFullScreen(),
         }
         self._config_manager.save(self._config)
 

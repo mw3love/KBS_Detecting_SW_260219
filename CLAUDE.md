@@ -23,25 +23,26 @@
 - 감지합계 표기: V(영상) A(오디오레벨미터) EA(임베디드오디오)
 
 ## 현재 개발 상태
-- 체크포인트 파일(PHASE*_COMPLETE.md)을 확인하여 현재 진행 상황 파악
-- 체크포인트가 없으면 Phase 1부터 시작
-- 각 Phase 완료 시 PHASE{N}_COMPLETE.md 파일 생성
-- **현재: Phase 5 완료 (코드 최적화 완료) + v1.6.3**
+- **현재: Phase 5 완료 (코드 최적화) + v1.6.5**
+- 체크포인트: `Fix/KBS_16CH_모니터링_v2_개발계획서/PHASE4_COMPLETE.md` (Phase 5 기록 포함)
 
 ## 주의사항
 - 스냅샷 탭 없음, 비히스토리 탭 없음 (2차 개발)
-- 카카오톡/이메일 없음 (2차 개발)
+- 카카오톡/이메일 없음 (텔레그램만 지원)
 - 성능 제한: 감지영역 최대 500×300 (ROI 개수 제한 없음, 많을수록 CPU 부하 증가)
 - 비디오 영역에 소스 라벨, LIVE 인디케이터, 상태 선 없음
+- 상단바에 "알림 초기화" 버튼 없음 (알림확인 버튼만 존재, core/CLAUDE.md 참조)
 
 ## 설치된 외부 패키지
 ```
 PySide6
 opencv-python
 numpy
-sounddevice  (없으면 더미 신호로 동작)
-psutil==7.2.2
-gputil==1.4.0  (NVIDIA GPU 없으면 N/A 표시)
+sounddevice    (없으면 더미 신호로 동작)
+psutil
+gputil         (NVIDIA GPU 없으면 N/A 표시)
+pycaw          (Windows 시스템 볼륨 제어)
+requests       (텔레그램 HTTP 발송)
 ```
 
 ## 외부 도구: ffmpeg (자동 녹화 오디오 합성)
@@ -55,236 +56,58 @@ gputil==1.4.0  (NVIDIA GPU 없으면 N/A 표시)
 ### 파일 구조
 ```
 kbs_monitor/
-├── main.py                  # 진입점, dark_theme.qss 로드, 콘솔 숨기기
-├── ui/
-│   ├── main_window.py       # 오케스트레이터 (3분할 레이아웃)
-│   ├── top_bar.py           # 상단 바 (SysMonitor, 시계, 오디오, 감지현황, 버튼)
-│   ├── video_widget.py      # 비디오 표시 + ROI 오버레이
-│   ├── log_widget.py        # 시스템 로그 (최대 500개)
-│   ├── settings_dialog.py   # 6탭 설정 다이얼로그 (비모달)
-│   ├── roi_editor.py        # ROIEditorCanvas (반화면 편집) + FullScreenROIEditor
-│   └── dual_slider.py       # HSV 듀얼 슬라이더 (두 핸들 드래그 범위 선택)
-├── core/
-│   ├── video_capture.py     # VideoCaptureThread (QThread, OpenCV CAP_DSHOW)
-│   ├── audio_monitor.py     # AudioMonitorThread (QThread, sounddevice)
-│   ├── roi_manager.py       # ROI dataclass + ROIManager
-│   ├── detector.py          # 블랙/스틸/HSV레벨미터/임베디드오디오 감지 엔진
-│   └── alarm.py             # AlarmSystem (winsound WAV + 시각 깜박임, 개별 파일 경로 지원)
+├── main.py                      # 진입점, dark_theme.qss 로드, 콘솔 숨기기
+├── ui/                          # → ui/CLAUDE.md (PySide6 위젯 패턴)
+│   ├── main_window.py           # 오케스트레이터 (3분할 레이아웃)
+│   ├── top_bar.py               # 상단 바 (SysMonitor, 시계, 오디오, 감지현황, 버튼)
+│   ├── video_widget.py          # 비디오 표시 + ROI 오버레이
+│   ├── log_widget.py            # 시스템 로그 (최대 500개)
+│   ├── settings_dialog.py       # 6탭 설정 다이얼로그 (비모달)
+│   ├── roi_editor.py            # ROIEditorCanvas (반화면) + FullScreenROIEditor
+│   └── dual_slider.py           # HSV 듀얼 슬라이더
+├── core/                        # → core/CLAUDE.md (감지 루프·알림 설계 원칙)
+│   ├── video_capture.py         # VideoCaptureThread (QThread, OpenCV CAP_DSHOW)
+│   ├── audio_monitor.py         # AudioMonitorThread (QThread, sounddevice)
+│   ├── roi_manager.py           # ROI dataclass + ROIManager
+│   ├── detector.py              # 블랙/스틸/HSV레벨미터/임베디드오디오 감지 엔진
+│   ├── alarm.py                 # AlarmSystem (winsound WAV + 시각 깜박임)
+│   ├── auto_recorder.py         # 사고 발생 MP4 자동 녹화 (ffmpeg 통합)
+│   ├── signoff_manager.py       # 정파준비/정파모드 상태 관리 (1초 타이머)
+│   └── telegram_notifier.py     # 텔레그램 알림 발송 (큐 기반)
 ├── utils/
-│   ├── config_manager.py    # JSON 설정 저장/불러오기
-│   └── logger.py            # 파일(일별 로테이션) + UI 동시 출력
+│   ├── config_manager.py        # JSON 설정 저장/불러오기
+│   └── logger.py                # 파일(일별 로테이션) + UI 동시 출력
 ├── config/
 │   └── default_config.json
 └── resources/
-    ├── sounds/              # black_alarm.wav, still_alarm.wav, audio_alarm.wav, alarm.wav
+    ├── sounds/                  # black_alarm.wav, still_alarm.wav, audio_alarm.wav, alarm.wav
     └── styles/
-        └── dark_theme.qss
+        ├── dark_theme.qss
+        └── light_theme.qss
 ```
 
 ### 핵심 시그널 흐름
 ```
-VideoCaptureThread.frame_ready  → MainWindow._on_frame_ready → VideoWidget.update_frame
+VideoCaptureThread.frame_ready   → _on_frame_ready → VideoWidget.update_frame
+                                                    → AutoRecorder.push_frame
 AudioMonitorThread.level_updated → TopBar.update_audio_levels (LevelMeterBar)
-QTimer(200ms, 기본)             → MainWindow._run_detection → Detector.detect_frame
-                                  → AlarmSystem.trigger/resolve → VideoWidget.set_alert_state
-QTimer(1000ms)                  → MainWindow._update_summary → TopBar.update_summary
+QTimer(200ms, 기본)              → _run_detection → Detector.detect_frame
+                                                   → SignoffManager.tick
+                                                   → AlarmSystem.trigger/resolve
+QTimer(1000ms)                   → _update_summary → TopBar.update_summary
+SignoffManager.state_changed     → _on_signoff_state_changed
+AlarmSystem.visual_blink         → VideoWidget.set_blink_state
 ```
 
-### 감지 모드 (현재)
+### 감지 모드
 - **항상 감지 활성**: 프로그램 실행 즉시 감지 시작 (On/Off 버튼 없음)
-- 반화면 ROI 편집 중에만 감지 타이머 일시 중단
-
-### 주요 최적화 사항 (Phase 5)
-- `Detector._apply_scale_factor()`: 스케일 로직 단일 공통 메서드로 통합
-- `Detector.update_roi_list()`: `_audio_ratio_buffer`, `_audio_level_states` 정리 추가 (메모리 누수 수정)
-- `MainWindow._run_detection()`: ROI label→name 조회를 O(n) 탐색에서 dict 캐시 O(1)로 교체
-- `SettingsDialog._apply_detection_params_to_ui()`, `_apply_performance_params_to_ui()`: 중복 UI 적용 로직 공통 메서드화
-- `AudioMonitorThread`: `_stereo` 플래그를 초기화 시 한 번만 결정, 루프 내 상수 비교 제거
-
-## PySide6 위젯 생성 규칙 (반드시 준수)
-
-### QScrollArea 내부 위젯 패턴
-
-탭 함수에서 `QScrollArea` + 내부 `QWidget` 패턴 사용 시 **반드시 아래 순서**를 지킨다:
-
-```python
-# ✅ 올바른 순서
-inner = QWidget()
-scroll.setWidget(inner)      # ← inner 생성 직후 즉시 호출 (Qt 소유권 이전)
-layout = QVBoxLayout(inner)
-# ... 위젯 추가 ...
-return scroll
-
-# ❌ 잘못된 순서 (함수 끝에서 setWidget 호출)
-inner = QWidget()
-layout = QVBoxLayout(inner)
-# ... 위젯 추가 ...
-scroll.setWidget(inner)      # ← 너무 늦음: 중간에 GC가 inner를 삭제할 수 있음
-return scroll
-```
-
-**이유**: `inner = QWidget()`은 부모가 없는 상태로 생성된다. `scroll.setWidget(inner)` 호출 전까지 Python 로컬 변수만이 유일한 참조이므로, 함수 실행 중 Python GC가 `inner`(와 그 자식 `layout`)를 삭제할 수 있다. `setWidget()` 즉시 호출로 Qt가 소유권을 가져가면 GC 삭제가 방지된다.
-
-### 레이아웃 변수명 충돌 금지
-
-한 함수 안에서 **`inner`, `layout` 등의 범용 변수명을 재사용하지 않는다**.
-
-```python
-# ❌ 버그 유발 패턴 — inner를 덮어씌워 QWidget 참조 소멸 → GC 삭제 → RuntimeError
-inner = QWidget()            # 스크롤 내부 위젯
-layout = QVBoxLayout(inner)
-group = QGroupBox("...")
-inner = QHBoxLayout(group)   # ← inner 덮어씌움! 원래 QWidget 참조 소멸
-
-# ✅ 올바른 패턴 — 역할이 명확한 이름 사용
-inner = QWidget()
-scroll.setWidget(inner)
-layout = QVBoxLayout(inner)
-group = QGroupBox("...")
-group_row = QHBoxLayout(group)   # ← 별도 변수명 사용
-```
-
-**증상**: `RuntimeError: Internal C++ object (PySide6.QtWidgets.QVBoxLayout) already deleted`
-→ 이 오류가 발생하면 변수명 덮어쓰기 또는 `setWidget` 호출 순서 문제를 먼저 확인한다.
+- 반화면 ROI 편집 중에만 감지 타이머 일시 중단 (`_roi_overlay is not None`)
 
 ---
 
-## alarm.py 핵심 설계 원칙 (수정 시 반드시 준수)
+## 핵심 설계 원칙 — 서브 CLAUDE.md 참조
 
-### 알림음 테스트 재생 (`play_test_sound` / `_play_test_worker`)
-
-**절대 바꾸지 말아야 할 사항:**
-
-1. **winsound를 sounddevice보다 먼저 시도한다**
-   - sounddevice는 시스템 기본 오디오 장치가 아닌 장치로 재생되거나 볼륨이 0이면 소리가 전혀 안 날 수 있음
-   - winsound(`SND_FILENAME | SND_SYNC`)는 항상 시스템 기본 장치 + 시스템 볼륨 기준으로 재생 → 안정적
-   - 순서를 바꾸면 파일 선택 후 테스트 버튼이 무음이 되는 버그 재발
-
-2. **`play_test_sound`에서 `threading.Event()`를 새 인스턴스로 생성한다**
-   ```python
-   self._stop_sound = threading.Event()  # ← 반드시 새 객체, clear()만 하면 안 됨
-   ```
-   - `_stop_playback()`이 기존 이벤트에 `set()`을 한 상태에서 `join(timeout)`이 타임아웃되면 기존 스레드가 살아있을 수 있음
-   - `clear()`만 하면 기존 스레드가 되살아나 새 스레드와 충돌함
-
-3. **파일 경로는 반드시 절대경로(`os.path.abspath`)로 변환 후 사용한다**
-   - UI에서 저장되는 경로는 상대경로일 수 있음 (`resources\sounds\Alert.wav`)
-   - winsound/sounddevice 모두 상대경로는 cwd 의존적이므로 절대경로로 변환해야 안전
-
-4. **sounddevice `sd.play()` 호출 후 반드시 `sd.wait()`를 호출한다**
-   - `sd.play()`의 기본값은 `blocking=False` (non-blocking)
-   - `sd.wait()` 없이 while 루프를 돌면 재생이 계속 덮어씌워져 무음이 됨
-   - `sd.stop()`을 다른 스레드에서 호출하면 `sd.wait()`가 즉시 반환되어 루프 종료됨
-
-5. **`_play_test_worker`는 `_play_sound_worker`와 별개로 유지한다**
-   - 테스트 재생(1회) 로직과 알림 재생(반복) 로직을 분리
-   - 공유하면 반복 루프 / 블로킹 / 중지 조건이 복잡해져 버그 유발
-
-### 실제 알림 반복 재생 (`_play_sound_worker`)
-- **winsound → sounddevice → 내장음 순서** (테스트와 동일, sounddevice 무음 버그 방지)
-- winsound: `SND_ASYNC` + `wait(timeout=sound_duration)` 패턴으로 반복 재생
-- sounddevice: `sd.play()` + `sd.wait()` 쌍, winsound가 없을 때만 사용
-- `_stop_playback()`에서 `_stop_sound.set()` + `sd.stop()`으로 즉시 중단 가능
-- 파일 경로는 `os.path.abspath()`로 절대경로 변환 후 사용
-
-## 감지 루프 안정성 원칙 (수정 시 반드시 준수)
-
-> 현장 운용 중 장기 실행 후 감지가 조용히 멈추는 버그(silent failure) 발생 이력이 있음.
-> 아래 try-except 구조는 이를 방지하기 위한 것으로 **절대 삭제하지 않는다.**
-
-### `MainWindow._run_detection()` — 전체 try-except 보호
-
-```python
-def _run_detection(self):
-    if self._latest_frame is None:
-        return
-    if self._roi_overlay is not None:
-        return
-
-    self._detection_count += 1
-    if self._detection_count % 1500 == 0:          # 200ms × 1500 ≈ 5분
-        elapsed_min = self._detection_count // 1500 * 5
-        self._logger.info(f"SYSTEM - 감지 정상 실행 중 ({elapsed_min}분 경과)")
-
-    try:
-        # ... 감지 로직 전체 ...
-    except Exception as e:
-        self._logger.error(f"SYSTEM - 감지 루프 오류 (silent fail 방지): {e}")
-```
-
-- **이유**: 예외 발생 시 타이머는 살아있어 겉으론 정상처럼 보이지만 매 주기 fail → 감지 완전 중단
-- **`_detection_count`**: `__init__`에서 `self._detection_count: int = 0`으로 초기화
-- **5분 로그**: 로그 파일에서 이 줄이 끊기는 시점이 곧 silent failure 발생 시점
-
-### `VideoCaptureThread.run()` — while 루프 try-except 보호
-
-```python
-while self._running:
-    try:
-        # ... 연결/캡처 로직 전체 ...
-    except Exception as e:
-        self.status_changed.emit(f"캡처 스레드 오류: {e}")
-        if cap is not None:
-            cap.release()
-            cap = None
-        if was_connected:
-            was_connected = False
-            self.disconnected.emit()
-        consecutive_failures = 0
-        self.msleep(1000)
-        continue
-    self.msleep(33)
-```
-
-- **이유**: OpenCV `cap.read()` 예외 시 스레드 크래시 → `frame_ready` 신호 없음 → `_latest_frame = None` → 감지 중단
-
-### `Detector.detect_frame()` / `detect_audio_roi()` — ROI별 try-except
-
-```python
-for roi in rois:
-    label = roi.label
-    try:
-        # ... ROI 처리 로직 ...
-    except Exception as e:
-        _log.error("detect_frame ROI[%s] 오류: %s", label, e)
-```
-
-- **이유**: 특정 ROI 예외가 전체 감지를 멈추지 않도록 격리
-- `_log = logging.getLogger(__name__)` — 파일 상단에 선언
-
-### `DetectionState.update()` — 히스테리시스 대칭 원칙 (절대 변경 금지)
-
-> 경보 전/후 히스테리시스 비대칭으로 인해 장기 실행 후 스틸 감지가 작동하지 않는 버그 발생 이력이 있음.
-> 캡처 카드 인코딩 노이즈로 인한 단일 프레임 `is_still=False` 글리치가 원인.
-
-- **경보 전 (not alerting)**: `reset_frames` 연속 정상 프레임이어야 타이머 리셋
-- **경보 후 (alerting, recovery_seconds=0)**: **동일하게** `reset_frames` 연속 정상이어야 복구
-- `_do_resolve()` 호출 시 반드시 `_last_reset_time`, `_last_reset_from` 업데이트 (DIAG 추적)
-- `_not_still_count`는 `is_abnormal=True` 시 0으로 리셋, `is_abnormal=False` 시 경보 전/후 공통 증가
-
-**절대 하지 말 것**: 경보 상태에서 단일 프레임으로 즉시 `_do_resolve()` 호출 (히스테리시스 우회)
-
-### SignoffManager 타이머 — 히스테리시스 원칙
-
-- `_tick_preparation()`: `_video_enter_not_still` 카운터로 3틱 연속 비-스틸이어야 `_video_enter_start` 리셋
-- `_tick_exit_preparation()`: `_video_exit_still` 카운터로 3틱 연속 스틸이어야 `_video_exit_start` 리셋
-- 단일 틱의 `is_still` 값 변동으로 타이머를 즉시 리셋하면 안 됨
-
-### `_on_frame_ready()` — 프레임 복사
-
-```python
-self._latest_frame = frame.copy()  # 캡처 스레드 버퍼 공유 방지
-```
-
-- **이유**: `cap.read()`가 반환하는 numpy 배열이 캡처 스레드에서 재사용될 수 있음 → 감지 루프에서 처리 중 데이터 변조 방지
-
-## 탭별 구현 현황
-
-| 탭 | 이름 | 구현 상태 |
-|----|------|----------|
-| 1 | 입력선택 | ✅ 완료 (포트 0~5 콤보박스) |
-| 2 | 비디오 감지 설정 | ✅ 완료 (ROI 편집 + 테이블) |
-| 3 | 오디오 레벨미터 감지 설정 | ✅ 완료 (ROI 편집 + 테이블 + HSV 설정) |
-| 4 | 감지 설정 | ✅ 완료 (블랙/스틸/오디오레벨미터/임베디드 파라미터 + 성능 설정) |
-| 5 | 알림설정 | ✅ 완료 (알림음 파일 선택 + 볼륨 슬라이더) |
-| 6 | 저장/불러오기 | ✅ 완료 (JSON 저장/불러오기 + 기본값 초기화) |
+| 파일 수정 시 | 참조 문서 |
+|-------------|----------|
+| `ui/` 폴더 전체 | **[kbs_monitor/ui/CLAUDE.md](kbs_monitor/ui/CLAUDE.md)** — QScrollArea GC 패턴, 변수명 충돌 규칙 |
+| `core/alarm.py` `core/detector.py` `core/video_capture.py` `core/signoff_manager.py` | **[kbs_monitor/core/CLAUDE.md](kbs_monitor/core/CLAUDE.md)** — alarm 설계 원칙, 감지 루프 안정성, 히스테리시스 원칙 |

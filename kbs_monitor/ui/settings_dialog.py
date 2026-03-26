@@ -672,6 +672,7 @@ class SettingsDialog(QDialog):
     load_config_requested = Signal(str)       # 설정 불러오기 요청 (절대경로)
     reset_config_requested = Signal()         # 기본값 초기화 요청
     signoff_settings_changed = Signal(dict)   # 정파 설정 변경
+    system_settings_changed = Signal(dict)    # 시스템 설정 변경 (자동 재시작)
 
     def __init__(self, config: dict, roi_manager: ROIManager, parent=None):
         super().__init__(parent)
@@ -1575,6 +1576,32 @@ class SettingsDialog(QDialog):
         tg_opt_layout.addLayout(cooldown_row)
 
         layout.addWidget(group_tg_opt)
+
+        layout.addWidget(self._make_separator())
+
+        # ── 자동 재시작 설정 그룹 ──
+        group_restart = QGroupBox("자동 재시작")
+        restart_layout = QVBoxLayout(group_restart)
+        restart_layout.setSpacing(6)
+
+        self._chk_restart_enabled = QCheckBox("매일 자동 재시작 활성화")
+        self._chk_restart_enabled.stateChanged.connect(self._save_system_params)
+        restart_layout.addWidget(self._chk_restart_enabled)
+
+        restart_time_row = QHBoxLayout()
+        restart_time_row.addWidget(QLabel("재시작 시각:"))
+        self._restart_time = _TimeWidget(3, 0)
+        self._restart_time.valueChanged.connect(self._save_system_params)
+        restart_time_row.addWidget(self._restart_time)
+        restart_time_row.addStretch()
+        restart_layout.addLayout(restart_time_row)
+
+        restart_hint = QLabel("프로그램을 종료 후 재시작하여 OS 리소스(GDI, 메모리 등)를 초기화합니다.")
+        restart_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        restart_hint.setWordWrap(True)
+        restart_layout.addWidget(restart_hint)
+
+        layout.addWidget(group_restart)
         layout.addStretch()
 
         return scroll
@@ -1998,6 +2025,7 @@ class SettingsDialog(QDialog):
         self._load_telegram_config(config)
         self._load_recording_config(config)
         self._apply_signoff_params_to_ui(config.get("signoff", {}))
+        self._load_system_config(config)
         self.refresh_roi_tables()
 
     def _get_current_detection_params(self) -> dict:
@@ -2385,6 +2413,8 @@ class SettingsDialog(QDialog):
         cfg["telegram"] = self._get_telegram_params()
         cfg["recording"] = self._get_recording_params()
         cfg["signoff"] = self._get_signoff_params()
+        self._save_system_params()
+        cfg["system"] = self._config.get("system", {})
         return cfg
 
     def switch_to_tab(self, index: int):
@@ -3027,6 +3057,35 @@ class SettingsDialog(QDialog):
                 self._to_relative_if_possible(path)
             )
             self._save_signoff_params()
+
+    # ── 시스템 설정 (자동 재시작) ─────────────────────
+
+    def _save_system_params(self):
+        """자동 재시작 설정을 config에 저장하고 시그널 발송"""
+        h = self._restart_time.hour()
+        m = self._restart_time.minute()
+        params = {
+            "scheduled_restart_enabled": self._chk_restart_enabled.isChecked(),
+            "scheduled_restart_time": f"{h:02d}:{m:02d}",
+        }
+        self._config["system"] = params
+        self.system_settings_changed.emit(params)
+
+    def _load_system_config(self, config: dict):
+        """시스템 설정 UI 로드"""
+        sys_cfg = config.get("system", {})
+        self._chk_restart_enabled.blockSignals(True)
+        self._chk_restart_enabled.setChecked(
+            bool(sys_cfg.get("scheduled_restart_enabled", True))
+        )
+        self._chk_restart_enabled.blockSignals(False)
+
+        time_str = sys_cfg.get("scheduled_restart_time", "03:00")
+        try:
+            parts = time_str.split(":")
+            self._restart_time.setTime(int(parts[0]), int(parts[1]))
+        except (ValueError, IndexError):
+            self._restart_time.setTime(3, 0)
 
     # ── 알림설정 탭 헬퍼 ─────────────────────────────
 

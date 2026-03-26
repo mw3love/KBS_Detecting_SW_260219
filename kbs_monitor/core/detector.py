@@ -286,6 +286,8 @@ class Detector:
                     continue
 
                 crop = frame[y1:y2, x1:x2]
+                if crop.size == 0:
+                    continue
 
                 # 블랙 감지 (어두운 픽셀 비율 방식 — 비활성화 시 계산 생략)
                 dark_ratio = -1.0
@@ -411,6 +413,8 @@ class Detector:
 
                 # BGR crop 후 HSV 변환 (전체 프레임 변환 제거)
                 crop_bgr = frame[y1:y2, x1:x2]
+                if crop_bgr.size == 0:
+                    continue
                 crop = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2HSV)
                 mask = cv2.inRange(crop, lower, upper)
                 total_pixels = crop.shape[0] * crop.shape[1]

@@ -929,37 +929,45 @@ class MainWindow(QMainWindow):
 
     def _on_load_config(self, filepath: str):
         """지정된 경로에서 설정 불러오기 후 전체 적용"""
-        config = self._config_manager.load_from_path(filepath)
-        self._config = config
+        try:
+            config = self._config_manager.load_from_path(filepath)
+            self._config = config
 
-        # ROI 적용
-        self._roi_manager.from_dict(config.get("rois", {}))
+            # ROI 적용
+            self._roi_manager.from_dict(config.get("rois", {}))
 
-        # 감지 파라미터 적용
-        self._apply_detection_config(config.get("detection", {}))
-        self._detector.reset_all()
+            # 감지 파라미터 적용
+            self._apply_detection_config(config.get("detection", {}))
+            self._detector.reset_all()
 
-        # 성능 파라미터 적용
-        self._apply_performance_config(config.get("performance", {}))
+            # 성능 파라미터 적용
+            self._apply_performance_config(config.get("performance", {}))
 
-        # 알림 설정 적용
-        alarm_cfg = config.get("alarm", {})
-        self._apply_alarm_config(alarm_cfg)
-        self._top_bar.set_volume_display(alarm_cfg.get("volume", 80))
+            # 알림 설정 적용
+            alarm_cfg = config.get("alarm", {})
+            self._apply_alarm_config(alarm_cfg)
+            self._top_bar.set_volume_display(alarm_cfg.get("volume", 80))
 
-        # 텔레그램/녹화 설정 적용
-        self._apply_telegram_config(config.get("telegram", {}))
-        self._apply_recording_config(config.get("recording", {}))
+            # 텔레그램/녹화 설정 적용
+            self._apply_telegram_config(config.get("telegram", {}))
+            self._apply_recording_config(config.get("recording", {}))
 
-        # 정파 설정 적용
-        self._apply_signoff_config(config.get("signoff", {}))
+            # 정파 설정 적용
+            self._apply_signoff_config(config.get("signoff", {}))
 
-        # 설정창 UI 갱신
-        if self._settings_dialog:
-            self._settings_dialog.reload_config(config)
+            # 설정창 UI 갱신
+            if self._settings_dialog:
+                self._settings_dialog.reload_config(config)
 
-        self._update_summary()
-        self._logger.info(f"SYSTEM - 설정 불러오기 완료: {os.path.basename(filepath)}")
+            self._update_summary()
+            self._logger.info(f"SYSTEM - 설정 불러오기 완료: {os.path.basename(filepath)}")
+        except Exception as e:
+            self._logger.error(f"SYSTEM - 설정 불러오기 실패: {e}")
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, "설정 불러오기 실패",
+                f"설정 파일을 적용하는 중 오류가 발생했습니다.\n{e}\n\n기존 설정을 유지합니다.",
+            )
 
     def _on_reset_config(self):
         """모든 설정을 기본값으로 초기화"""

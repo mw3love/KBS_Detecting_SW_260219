@@ -14,9 +14,12 @@ import datetime
 from collections import deque
 from typing import Optional
 
+import logging
+
 import cv2
 import numpy as np
 
+_log = logging.getLogger(__name__)
 
 _JPEG_QUALITY = 85
 _MAX_RECORD_FRAMES = 3000  # 녹화 큐 최대 프레임 수 (10fps × 300초 = 5분 상한, 메모리 보호)
@@ -171,6 +174,11 @@ class AutoRecorder:
                 except Exception:
                     pass
             else:
+                if len(self._record_queue) >= _MAX_RECORD_FRAMES:
+                    _log.warning(
+                        "녹화 큐 상한 도달 (%d프레임) — 녹화 종료 (메모리 보호)",
+                        _MAX_RECORD_FRAMES,
+                    )
                 self._recording = False
 
     # ── 오디오 청크 수신 ──────────────────────────────────────────────────────
@@ -423,9 +431,10 @@ class AutoRecorder:
     # ── 자동 삭제 ─────────────────────────────────────────────────────────────
 
     def _cleanup_loop(self):
-        """1시간마다 max_keep_days 초과 파일 자동 삭제"""
+        """1시간마다 max_keep_days 초과 파일 및 고아 임시파일 자동 삭제"""
         while self._running:
             self._delete_old_files()
+            self._cleanup_orphan_temp_files()
             for _ in range(3600):
                 if not self._running:
                     return

@@ -169,8 +169,10 @@ class TelegramNotifier:
                 )
                 if success:
                     jpeg_bytes = buf.tobytes()
-            except Exception:
-                pass
+                else:
+                    self._log(f"JPEG 인코딩 실패 ({alarm_type} {label}) — 텍스트만 전송", error=True)
+            except Exception as e:
+                self._log(f"JPEG 인코딩 예외 ({alarm_type} {label}): {e} — 텍스트만 전송", error=True)
 
         item = {
             "alarm_type": alarm_type,

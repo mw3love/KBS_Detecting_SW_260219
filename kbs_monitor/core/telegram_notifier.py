@@ -46,6 +46,7 @@ class TelegramNotifier:
 
         self._queue: queue.Queue = queue.Queue(maxsize=50)
         self._running: bool = False
+        self._worker_lock = threading.Lock()  # 워커 스레드 재시작 원자성 보장
         self._worker_thread = threading.Thread(
             target=self._worker_loop, daemon=True, name="TelegramWorker"
         )
@@ -131,11 +132,13 @@ class TelegramNotifier:
             return  # 비활성 상태 — 로그 없이 종료
         # 워커 스레드 사망 감지 → 자동 재시작 (장기 실행 안정성)
         if self._running and not self._worker_thread.is_alive():
-            self._log("워커 스레드 비정상 종료 감지 — 재시작", error=True)
-            self._worker_thread = threading.Thread(
-                target=self._worker_loop, daemon=True, name="TelegramWorker"
-            )
-            self._worker_thread.start()
+            with self._worker_lock:
+                if not self._worker_thread.is_alive():  # double-check
+                    self._log("워커 스레드 비정상 종료 감지 — 재시작", error=True)
+                    self._worker_thread = threading.Thread(
+                        target=self._worker_loop, daemon=True, name="TelegramWorker"
+                    )
+                    self._worker_thread.start()
         if not self._bot_token or not self._chat_id:
             self._log("Bot Token 또는 Chat ID가 설정되지 않았습니다.", error=True)
             return
@@ -179,7 +182,7 @@ class TelegramNotifier:
         try:
             self._queue.put_nowait(item)
         except queue.Full:
-            pass   # 큐 가득 참 → 무시 (감지 루프 영향 없음)
+            self._log(f"알림 큐 가득참 (최대 50) — {alarm_type} {label} 알림 손실", error=True)
 
     # ── 연결 테스트 ───────────────────────────────────────────────────────────
 

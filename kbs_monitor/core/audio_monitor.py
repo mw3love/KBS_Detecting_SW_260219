@@ -103,6 +103,8 @@ class AudioMonitorThread(QThread):
 
             while self._running:
                 try:
+                    if stream is None:
+                        raise RuntimeError("오디오 스트림 없음 — 재연결 필요")
                     data, overflowed = stream.read(self.CHUNK)
                     consecutive_errors = 0  # 성공 시 리셋
                     samples = np.frombuffer(data, dtype=np.int16)
@@ -160,6 +162,7 @@ class AudioMonitorThread(QThread):
                             stream.close()
                         except Exception:
                             pass
+                        stream = None  # 좀비 스트림 참조 방지
                         if output_stream is not None:
                             try:
                                 output_stream.stop()

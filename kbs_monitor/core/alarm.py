@@ -241,6 +241,13 @@ class AlarmSystem(QObject):
         if self._sound_thread and self._sound_thread.is_alive():
             return
 
+        # 이전 스레드 좀비 정리
+        if self._sound_thread is not None:
+            try:
+                self._sound_thread.join(timeout=0.5)
+            except Exception:
+                pass
+
         self._stop_sound.clear()
         self._sound_thread = threading.Thread(
             target=self._play_sound_worker,

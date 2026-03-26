@@ -120,15 +120,18 @@ DEFAULT_CONFIG = {
     },
     "system": {
         "scheduled_restart_enabled": True,     # 매일 자동 재시작 활성화
-        "scheduled_restart_time":    "03:00",  # 재시작 시각 (HH:MM, 24시간제)
+        "scheduled_restart_time":    "08:56",  # 재시작 시각 (HH:MM, 24시간제)
     },
 }
+
+
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class ConfigManager:
     """JSON 기반 설정 저장/불러오기"""
 
-    CONFIG_DIR = "config"
+    CONFIG_DIR = os.path.join(_BASE_DIR, "config")
     CONFIG_FILE = "kbs_config.json"
     DEFAULT_FILE = "default_config.json"
 

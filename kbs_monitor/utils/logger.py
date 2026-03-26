@@ -9,13 +9,16 @@ import datetime
 from PySide6.QtCore import QObject, Signal
 
 
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 class AppLogger(QObject):
     """애플리케이션 로거 - 파일 + UI 로그 위젯 동시 출력"""
 
     # log_type: "info" | "error" | "audio" | "embedded"
     log_signal = Signal(str, str)
 
-    LOG_DIR = "logs"
+    LOG_DIR = os.path.join(_BASE_DIR, "logs")
     MAX_KEEP_DAYS = 90  # 로그 파일 최대 보관 일수
 
     def __init__(self, parent=None):

@@ -2,9 +2,12 @@
 비디오 캡처 스레드 모듈
 OpenCV를 사용하여 USB 캡처 카드에서 영상을 읽어 UI에 전달
 """
+import time
 import cv2
 import numpy as np
 from PySide6.QtCore import QThread, Signal, QMutex, QMutexLocker
+
+_PERIODIC_RECONNECT_INTERVAL = 8 * 3600  # 8시간마다 캡처 장치 강제 재연결 (freeze 예방)
 
 
 class VideoCaptureThread(QThread):
@@ -50,6 +53,7 @@ class VideoCaptureThread(QThread):
         was_connected = False
         consecutive_failures = 0
         max_failures = 30  # 30프레임 연속 실패 시 재연결 시도
+        last_reconnect = time.time()  # 주기적 강제 재연결 타이머
 
         while self._running:
             try:
@@ -62,10 +66,14 @@ class VideoCaptureThread(QThread):
 
                 # 소스 변경 시 현재 캡처 강제 종료
                 if reconnect and cap is not None:
-                    cap.release()
+                    try:
+                        cap.release()
+                    except Exception:
+                        pass
                     cap = None
                     was_connected = False
                     consecutive_failures = 0
+                    last_reconnect = time.time()  # 수동 변경 시 타이머 리셋
 
                 # 연결이 없는 경우 새 소스 열기
                 if cap is None:
@@ -90,14 +98,31 @@ class VideoCaptureThread(QThread):
                             was_connected = False
                             self.disconnected.emit()
                             self.status_changed.emit(f"{source_name} 연결 실패")
-                        cap.release()
+                        try:
+                            cap.release()
+                        except Exception:
+                            pass
                         cap = None
                         self.msleep(1000)
                         continue
 
+                # 주기적 강제 재연결 (캡처 카드 freeze 예방) — 파일 소스 제외, 포트 캡처 전용
+                if was_connected and not current_file and (time.time() - last_reconnect >= _PERIODIC_RECONNECT_INTERVAL):
+                    self.status_changed.emit(f"포트 {current_port} 정기 재연결 (freeze 예방)")
+                    was_connected = False
+                    self.disconnected.emit()
+                    try:
+                        cap.release()
+                    except Exception:
+                        pass
+                    cap = None
+                    last_reconnect = time.time()
+                    consecutive_failures = 0
+                    continue
+
                 # 프레임 읽기
                 ret, frame = cap.read()
-                if ret and frame is not None:
+                if ret and frame is not None and frame.size > 0:
                     consecutive_failures = 0
                     self.frame_ready.emit(frame)
                 else:
@@ -108,7 +133,10 @@ class VideoCaptureThread(QThread):
                         consecutive_failures += 1
                         if consecutive_failures >= max_failures:
                             # 연결 끊김으로 판단
-                            cap.release()
+                            try:
+                                cap.release()
+                            except Exception:
+                                pass
                             cap = None
                             if was_connected:
                                 was_connected = False
@@ -136,4 +164,7 @@ class VideoCaptureThread(QThread):
 
         # 정리
         if cap is not None:
-            cap.release()
+            try:
+                cap.release()
+            except Exception:
+                pass

@@ -223,7 +223,8 @@ class AutoRecorder:
 
         # 파일 경로 생성
         os.makedirs(self._save_dir, exist_ok=True)
-        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        now_dt = datetime.datetime.now()
+        ts = now_dt.strftime("%Y%m%d_%H%M%S") + f"_{now_dt.microsecond // 1000:03d}"
         safe_label = label.replace("/", "_").replace("\\", "_")
         safe_media = media_name.replace("/", "_").replace("\\", "_") if media_name else ""
         safe_type = alarm_type.replace("/", "_")

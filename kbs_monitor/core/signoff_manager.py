@@ -226,6 +226,9 @@ class SignoffManager(QObject):
             if schedule_changed:
                 # 조기 해제 후 자동 재진입 차단 플래그 리셋
                 self._exit_released[gid] = False
+                # 진입/퇴출 타이머 리셋 (이전 스케줄 상태 잔류 방지)
+                self._reset_enter_timers(gid)
+                self._reset_exit_timers(gid)
 
                 # 수동 오버라이드가 아닌 경우, 새 스케줄 기준으로 현재 상태 재검사
                 if not self._manual_override.get(gid, False):
@@ -471,6 +474,11 @@ class SignoffManager(QObject):
         """정파 진입 타이머 초기화."""
         self._video_enter_start[gid] = None
         self._video_enter_not_still[gid] = 0
+
+    def _reset_exit_timers(self, gid: int):
+        """정파 퇴출 타이머 초기화."""
+        self._video_exit_start[gid] = None
+        self._video_exit_still[gid] = 0
 
     # ── 1초 주기 상태 점검 ────────────────────────────────────────────────
 

@@ -179,7 +179,6 @@ class MainWindow(QMainWindow):
         self._top_bar.detection_toggled.connect(self._on_detection_toggled)
         self._top_bar.sound_toggled.connect(self._on_sound_toggled)
         self._top_bar.volume_changed.connect(self._on_volume_changed)
-        self._top_bar.clear_alarm_requested.connect(self._on_clear_alarm)
         self._top_bar.alarm_acknowledged.connect(self._on_alarm_acknowledged)
         self._top_bar.dark_mode_toggled.connect(self._on_dark_mode_toggled)
         self._top_bar.fullscreen_toggled.connect(self._toggle_fullscreen)
@@ -572,18 +571,6 @@ class MainWindow(QMainWindow):
             )
 
     # ── 모니터링 제어 ──────────────────────────────────
-
-    def _on_clear_alarm(self):
-        self._alarm.resolve_all()
-        self._detector.reset_all()
-        for roi in self._roi_manager.video_rois:
-            self._video_widget.set_alert_state(roi.label, False)
-        self._black_logged.clear()
-        self._still_logged.clear()
-        self._audio_level_logged.clear()
-        self._embedded_log_sent = False
-        self._last_silence_seconds = 0.0
-        self._logger.info("SYSTEM - 알림 초기화")
 
     def _on_alarm_acknowledged(self):
         """알림확인 버튼 클릭 — 소리 및 깜빡임 해제 (감지기 상태·로그 집합 유지).
@@ -1237,8 +1224,10 @@ class MainWindow(QMainWindow):
             self._tg_test_timer.stop()
         if hasattr(self, "_capture_thread"):
             self._capture_thread.stop()
+            self._capture_thread.wait(5000)
         if hasattr(self, "_audio_thread"):
             self._audio_thread.stop()
+            self._audio_thread.wait(5000)
         self._telegram.stop()
         self._recorder.stop()
 

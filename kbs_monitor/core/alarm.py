@@ -190,8 +190,7 @@ class AlarmSystem(QObject):
                     n_channels = wf.getnchannels()
                     raw_data = wf.readframes(wf.getnframes())
 
-                # 볼륨 0이면 무음 — 최소 0.5 보장
-                vol = max(self._volume, 0.5)
+                vol = max(self._volume, 1e-6)
                 if sampwidth == 1:
                     audio_raw = np.frombuffer(raw_data, dtype=np.uint8)
                     audio_f = 128 + (audio_raw.astype(np.float64) - 128) * vol

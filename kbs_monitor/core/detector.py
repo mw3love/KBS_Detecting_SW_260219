@@ -234,6 +234,9 @@ class Detector:
         for label in list(self._prev_frames.keys()):
             if label not in labels:
                 del self._prev_frames[label]
+        for label in list(self._near_miss_start.keys()):
+            if label not in labels:
+                del self._near_miss_start[label]
         # 삭제된 ROI의 오디오 버퍼 정리 (메모리 누수 방지)
         for label in list(self._audio_ratio_buffer.keys()):
             if label not in labels:

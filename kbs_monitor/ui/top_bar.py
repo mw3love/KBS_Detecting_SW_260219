@@ -255,7 +255,6 @@ class TopBar(QWidget):
     detection_toggled = Signal(bool)   # True=ON, False=OFF
     sound_toggled = Signal(bool)
     volume_changed = Signal(int)
-    clear_alarm_requested = Signal()
     alarm_acknowledged = Signal()      # 알림확인 버튼 클릭 (소리+깜빡임 해제)
     dark_mode_toggled = Signal(bool)
     fullscreen_toggled = Signal()
@@ -399,14 +398,6 @@ class TopBar(QWidget):
         self._btn_ack.clicked.connect(self.alarm_acknowledged)
         layout.addWidget(self._btn_ack)
 
-        # 7-1. 알림 초기화 버튼 (감지기 상태 + 로그 집합 + 알람 전체 리셋)
-        self._btn_clear = QPushButton("알림 초기화")
-        self._btn_clear.setObjectName("btnAlarmClear")
-        self._btn_clear.setFixedSize(96, 36)
-        self._btn_clear.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        self._btn_clear.setToolTip("알림 초기화 — 감지 상태·로그·알람 전체 리셋")
-        self._btn_clear.clicked.connect(self.clear_alarm_requested)
-        layout.addWidget(self._btn_clear)
 
         layout.addWidget(self._make_separator())
 

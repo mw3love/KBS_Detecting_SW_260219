@@ -355,13 +355,14 @@ class Detector:
                     )
 
                 # near-miss 추적: 임계값에 근접한 상태가 30초 이상 지속 시 진단 로그
+                # dark_ratio > 80%: 블랙 기준(98%)에 실질적으로 근접한 경우만 추적
                 now_nm = time.time()
-                is_near_miss = (dark_ratio > 50.0) or (changed_ratio >= 0 and changed_ratio < 3.0)
+                is_near_miss = (dark_ratio > 80.0) or (changed_ratio >= 0 and changed_ratio < 3.0)
                 if is_near_miss:
                     if label not in self._near_miss_start:
                         self._near_miss_start[label] = now_nm
                     elif now_nm - self._near_miss_start[label] >= 30.0:
-                        _log.info(
+                        _log.debug(
                             "NEAR-MISS - ROI[%s]: dark=%.1f%% changed=%.2f%% (30초 지속)",
                             label, dark_ratio, changed_ratio,
                         )

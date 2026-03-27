@@ -187,9 +187,11 @@ class SignoffManager(QObject):
         self._dbg_prev_still: Dict[int, Optional[bool]] = {}   # PREP: 이전 스틸 값
         self._dbg_last_prep_log: Dict[int, float] = {}         # PREP: 마지막 진행상황 로그 시각
         self._dbg_prev_exit_still: Dict[int, Optional[bool]] = {}  # EXIT: 이전 비스틸 값
-        self._dbg_last_exit_log: Dict[int, float] = {}             # EXIT: 마지막 진행상황 로그 시각
 
         self._auto_preparation: bool = True  # 자동 정파 준비 모드
+
+        # label → media_name 매핑 (main_window에서 주입, PREP-DBG/EXIT-DBG 로그에서 매체명 표시용)
+        self._media_names: Dict[str, str] = {}
 
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
@@ -282,6 +284,18 @@ class SignoffManager(QObject):
         still_results : {label: bool}  — 비디오 ROI별 스틸 감지 여부
         """
         self._latest_video.update(still_results)
+
+    def update_media_names(self, media_name_map: Dict[str, str]):
+        """label → media_name 매핑 갱신. PREP-DBG/EXIT-DBG 로그에서 매체명 표시에 사용.
+        main_window에서 ROI 변경 시 호출한다."""
+        self._media_names = dict(media_name_map)
+
+    def get_debug_flags(self, group_id: int) -> dict:
+        """DIAG-SIGNOFF 로그용 내부 상태 플래그 반환."""
+        return {
+            "exit_released": self._exit_released.get(group_id, False),
+            "manual": self._manual_override.get(group_id, False),
+        }
 
     # ── 수동 상태 전환 ────────────────────────────────────────────────────
 
@@ -516,6 +530,11 @@ class SignoffManager(QObject):
                 is_manual = self._manual_override.get(gid, False)
                 if not in_prep_window and not is_manual:
                     # 정파준비 시간창을 벗어남 → IDLE로 복귀
+                    _log.debug(
+                        "PREP-DBG [%s] 준비시간창 이탈 → IDLE 전환 (current=%s prep_start=%s end=%s)",
+                        group.name, current_time,
+                        self._calc_prep_start_str(group), group.end_time,
+                    )
                     self._reset_enter_timers(gid)
                     self._transition_to(gid, SignoffState.IDLE)
                 elif in_signoff_window:
@@ -552,6 +571,10 @@ class SignoffManager(QObject):
         is_still = self._latest_video.get(v_label, False)
         prev_still = self._dbg_prev_still.get(gid)
 
+        # label 표시명: V2(2TV ON-AIR) 형태
+        media = self._media_names.get(v_label, "")
+        lbl_str = f"{v_label}({media})" if media else v_label
+
         # ── 스틸 타이머 갱신 (히스테리시스: 3틱 연속 비-스틸이어야 리셋) ──
         if is_still:
             self._video_enter_not_still[gid] = 0  # 히스테리시스 카운터 리셋
@@ -568,13 +591,13 @@ class SignoffManager(QObject):
             if is_still:
                 _log.debug(
                     "PREP-DBG [%s] %s 스틸 감지 시작 (기준: %.0fs)",
-                    group.name, v_label, group.still_trigger_sec,
+                    group.name, lbl_str, group.still_trigger_sec,
                 )
             else:
                 elapsed = (now - self._video_enter_start[gid]) if self._video_enter_start[gid] is not None else 0.0
                 _log.debug(
                     "PREP-DBG [%s] %s 스틸 중단→리셋 (직전 경과: %.1fs / 기준: %.0fs)",
-                    group.name, v_label, elapsed, group.still_trigger_sec,
+                    group.name, lbl_str, elapsed, group.still_trigger_sec,
                 )
 
         # ── 디버그 로그: 스틸 타이머 진행 중 10초마다 진행상황 ──
@@ -585,7 +608,7 @@ class SignoffManager(QObject):
                 self._dbg_last_prep_log[gid] = now
                 _log.debug(
                     "PREP-DBG [%s] %s 스틸 지속 중 %.1fs / %.0fs",
-                    group.name, v_label, v_elapsed, group.still_trigger_sec,
+                    group.name, lbl_str, v_elapsed, group.still_trigger_sec,
                 )
         else:
             self._dbg_last_prep_log[gid] = 0.0  # 리셋 시 타이머 초기화
@@ -658,19 +681,23 @@ class SignoffManager(QObject):
         is_not_still = not is_still
         prev_exit_still = self._dbg_prev_exit_still.get(gid)
 
+        # label 표시명: V2(2TV ON-AIR) 형태
+        media = self._media_names.get(v_label, "")
+        lbl_str = f"{v_label}({media})" if media else v_label
+
         # ── 디버그 로그: 비스틸 값 변화 시 즉시 기록 ──
         if is_not_still != prev_exit_still:
             self._dbg_prev_exit_still[gid] = is_not_still
             if is_not_still:
                 _log.debug(
                     "EXIT-DBG [%s] %s 비스틸 감지 시작 (기준: %.0fs)",
-                    group.name, v_label, group.exit_trigger_sec,
+                    group.name, lbl_str, group.exit_trigger_sec,
                 )
             else:
                 elapsed = (now - self._video_exit_start[gid]) if self._video_exit_start[gid] is not None else 0.0
                 _log.debug(
                     "EXIT-DBG [%s] %s 스틸 복귀→리셋 (직전 경과: %.1fs / 기준: %.0fs)",
-                    group.name, v_label, elapsed, group.exit_trigger_sec,
+                    group.name, lbl_str, elapsed, group.exit_trigger_sec,
                 )
 
         # 비-스틸 상태이면 타이머 갱신, 스틸 상태이면 리셋 (히스테리시스: 3틱 연속 스틸이어야 리셋)
@@ -679,15 +706,6 @@ class SignoffManager(QObject):
             if self._video_exit_start[gid] is None:
                 self._video_exit_start[gid] = now
             v_elapsed = now - self._video_exit_start[gid]
-
-            # ── 디버그 로그: 비스틸 타이머 진행 중 10초마다 진행상황 ──
-            last_log = self._dbg_last_exit_log.get(gid, 0.0)
-            if now - last_log >= 10.0:
-                self._dbg_last_exit_log[gid] = now
-                _log.debug(
-                    "EXIT-DBG [%s] %s 비스틸 지속 중 %.1fs / %.0fs",
-                    group.name, v_label, v_elapsed, group.exit_trigger_sec,
-                )
 
             if v_elapsed >= group.exit_trigger_sec:
                 self._video_exit_start[gid] = None
@@ -700,7 +718,6 @@ class SignoffManager(QObject):
             self._video_exit_still[gid] = self._video_exit_still.get(gid, 0) + 1
             if self._video_exit_still[gid] >= _SIGNOFF_HYSTERESIS_TICKS:
                 self._video_exit_start[gid] = None
-                self._dbg_last_exit_log[gid] = 0.0  # 리셋 시 타이머 초기화
 
     def _is_in_time_range(self, group: SignoffGroup,
                            current_time: str, weekday: int,

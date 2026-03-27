@@ -740,10 +740,13 @@ class SignoffManager(QObject):
 
         if new_state == SignoffState.PREPARATION:
             self._preparation_entered_at[group_id] = time.time()
+            self._dbg_prev_still[group_id] = None          # 이전 주기 잔류값 초기화 (진단 로그 정확성)
 
         if new_state == SignoffState.SIGNOFF:
             self._signoff_entered_at[group_id] = time.time()
             self._preparation_entered_at[group_id] = None
+            self._reset_exit_timers(group_id)              # 이전 주기 퇴출 타이머 초기화 (stale 방지)
+            self._dbg_prev_exit_still[group_id] = None     # 이전 주기 잔류값 초기화 (진단 로그 정확성)
 
         group = self._groups[group_id]
         if new_state == SignoffState.PREPARATION:

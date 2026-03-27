@@ -46,7 +46,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.6.6")
+        self.setWindowTitle("KBS Peacock v1.6.7")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -300,7 +300,7 @@ class MainWindow(QMainWindow):
                     alerting_str, resolve_cnt, "Y" if has_start else "N",
                 )
 
-            # ── DIAG-ALARM: 알람 활성 상태 + 억제 여부 ──
+            # ── DIAG-ALARM: 활성 알람이 있을 때만 기록 ──
             active_alarms = self._alarm._active_alarms
             if active_alarms:
                 alarm_parts = []
@@ -312,17 +312,20 @@ class MainWindow(QMainWindow):
                     )
                     alarm_parts.append(f"{key}{'(억제중)' if suppressed else ''}")
                 _log.info("DIAG-ALARM - 활성: [%s]", ", ".join(alarm_parts))
-            else:
-                _log.info("DIAG-ALARM - 활성알람 없음")
 
             # ── DIAG-SIGNOFF: 정파 그룹별 상태 ──
             signoff_parts = []
+            video_name_map_hb = {r.label: r.media_name for r in self._roi_manager.video_rois}
             for gid, group in self._signoff_manager.get_groups().items():
                 state = self._signoff_manager.get_state(gid)
                 enter_lbl = group.enter_roi.get("video_label", "-")
+                enter_media = video_name_map_hb.get(enter_lbl, "")
+                enter_str = f"{enter_lbl}({enter_media})" if enter_media else enter_lbl
                 sup_labels = ",".join(group.suppressed_labels) if group.suppressed_labels else "-"
+                dbg = self._signoff_manager.get_debug_flags(gid)
+                flags = f"exit_rel={'T' if dbg['exit_released'] else 'F'},manual={'T' if dbg['manual'] else 'F'}"
                 signoff_parts.append(
-                    f"그룹{gid}=[{group.name}/{state.value}/진입:{enter_lbl}/억제:{sup_labels}]"
+                    f"그룹{gid}=[{group.name}/{state.value}/진입:{enter_str}/억제:{sup_labels}/{flags}]"
                 )
             _log.info("DIAG-SIGNOFF - %s", " ".join(signoff_parts) if signoff_parts else "그룹없음")
 
@@ -358,16 +361,16 @@ class MainWindow(QMainWindow):
                 audio_diag_parts.append("임베디드감지 비활성")
             _log.info("DIAG-AUDIO - %s", " | ".join(audio_diag_parts))
 
-            # ── DIAG-TELEGRAM: 텔레그램 상태 ──
+            # ── DIAG-TELEGRAM: 비정상 상태(worker 사망 또는 큐 누적)일 때만 기록 ──
             tg_enabled = self._telegram._enabled
             tg_worker_alive = self._telegram._worker_thread.is_alive()
             tg_queue_size = self._telegram._queue.qsize()
-            _log.info(
-                "DIAG-TELEGRAM - enabled=%s worker=%s queue=%d",
-                tg_enabled,
-                "alive" if tg_worker_alive else "DEAD",
-                tg_queue_size,
-            )
+            if tg_enabled and (not tg_worker_alive or tg_queue_size >= 1):
+                _log.warning(
+                    "DIAG-TELEGRAM - worker=%s queue=%d",
+                    "alive" if tg_worker_alive else "DEAD",
+                    tg_queue_size,
+                )
 
         try:
             video_rois = self._roi_manager.video_rois
@@ -774,6 +777,7 @@ class MainWindow(QMainWindow):
             self._roi_overlay.apply_rois()
             if self._settings_dialog:
                 self._settings_dialog.refresh_roi_tables()
+            self._sync_signoff_media_names()
 
     def _finish_halfscreen_edit(self):
         """반화면 편집 완료 (설정창 편집 버튼 재클릭 또는 설정창 닫기 시 호출)"""
@@ -1024,6 +1028,12 @@ class MainWindow(QMainWindow):
                 self._top_bar.set_signoff_buttons_enabled(auto_prep)
         finally:
             self._signoff_settings_applying = False
+        self._sync_signoff_media_names()
+
+    def _sync_signoff_media_names(self):
+        """ROI 매체명 매핑을 SignoffManager에 동기화. ROI 변경 시에도 호출한다."""
+        name_map = {r.label: r.media_name for r in self._roi_manager.video_rois}
+        self._signoff_manager.update_media_names(name_map)
 
     def _on_signoff_settings_changed(self, params: dict):
         """SettingsDialog 정파 설정 변경 → 즉시 적용"""

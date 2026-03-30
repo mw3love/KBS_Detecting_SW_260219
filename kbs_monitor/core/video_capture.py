@@ -2,11 +2,13 @@
 비디오 캡처 스레드 모듈
 OpenCV를 사용하여 USB 캡처 카드에서 영상을 읽어 UI에 전달
 """
+import logging
 import time
 import cv2
 import numpy as np
 from PySide6.QtCore import QThread, Signal, QMutex, QMutexLocker
 
+_log = logging.getLogger(__name__)
 _PERIODIC_RECONNECT_INTERVAL = 8 * 3600  # 8시간마다 캡처 장치 강제 재연결 (freeze 예방)
 
 
@@ -52,6 +54,7 @@ class VideoCaptureThread(QThread):
         cap = None
         was_connected = False
         consecutive_failures = 0
+        frame_count = 0
         max_failures = 30  # 30프레임 연속 실패 시 재연결 시도
         last_reconnect = time.time()  # 주기적 강제 재연결 타이머
 
@@ -73,6 +76,7 @@ class VideoCaptureThread(QThread):
                     cap = None
                     was_connected = False
                     consecutive_failures = 0
+                    frame_count = 0
                     last_reconnect = time.time()  # 수동 변경 시 타이머 리셋
 
                 # 연결이 없는 경우 새 소스 열기
@@ -124,6 +128,12 @@ class VideoCaptureThread(QThread):
                 ret, frame = cap.read()
                 if ret and frame is not None and frame.size > 0:
                     consecutive_failures = 0
+                    frame_count += 1
+                    if frame_count % 500 == 0:
+                        _log.debug(
+                            "VIDEO-HB port=%s frames=%d fails=%d",
+                            source_name, frame_count, consecutive_failures,
+                        )
                     self.frame_ready.emit(frame)
                 else:
                     if current_file and cap is not None:

@@ -1,18 +1,4 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python -c \"\nimport sys, json\ndata = json.load(sys.stdin)\nfp = data.get('tool_input',{}).get('file_path','') or data.get('tool_response',{}).get('filePath','')\nif fp.endswith('.py'):\n    print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':'[Doc Update Reminder] .py file modified. Check and update: CLAUDE.md, memory/, TODO.md'}}))\n\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(cmd /c:*)",
@@ -33,7 +19,11 @@
       "Skill(update-config)",
       "Skill(update-config:*)",
       "Bash(powershell.exe -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\minwoo\\\\.claude\\\\setup-toast-notification.ps1\")",
-      "Bash(powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\aros\\\\.claude\\\\toast.ps1\")"
+      "Bash(powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\aros\\\\.claude\\\\toast.ps1\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''kbs_monitor/core/video_capture.py'', doraise=True\\); print\\(''video_capture.py OK''\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''kbs_monitor/core/alarm.py'', doraise=True\\); print\\(''alarm.py OK''\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''kbs_monitor/core/audio_monitor.py'', doraise=True\\); print\\(''audio_monitor.py OK''\\)\")",
+      "Bash(python -m py_compile kbs_monitor/core/auto_recorder.py)"
     ]
   }
 }

@@ -7,12 +7,12 @@
     "black_alarm_duration": 60,
     "black_motion_suppress_ratio": 0.2,
     "still_threshold": 4,
-    "still_block_threshold": 15.0,
+    "still_block_threshold": 10.0,
     "still_duration": 60,
     "still_alarm_duration": 60,
     "still_reset_frames": 3,
-    "audio_hsv_h_min": 40,
-    "audio_hsv_h_max": 95,
+    "audio_hsv_h_min": 0,
+    "audio_hsv_h_max": 179,
     "audio_hsv_s_min": 80,
     "audio_hsv_s_max": 255,
     "audio_hsv_v_min": 60,
@@ -29,7 +29,7 @@
     "audio_tone_min_level": 5
   },
   "alarm": {
-    "sound_enabled": false,
+    "sound_enabled": true,
     "volume": 0,
     "sounds_dir": "resources/sounds",
     "sound_files": {
@@ -37,100 +37,8 @@
     }
   },
   "rois": {
-    "video": [
-      {
-        "label": "V1",
-        "media_name": "",
-        "x": 1019,
-        "y": 36,
-        "w": 227,
-        "h": 108,
-        "roi_type": "video"
-      },
-      {
-        "label": "V2",
-        "media_name": "",
-        "x": 1017,
-        "y": 560,
-        "w": 242,
-        "h": 112,
-        "roi_type": "video"
-      },
-      {
-        "label": "V3",
-        "media_name": "",
-        "x": 1027,
-        "y": 570,
-        "w": 242,
-        "h": 112,
-        "roi_type": "video"
-      },
-      {
-        "label": "V4",
-        "media_name": "",
-        "x": 1037,
-        "y": 580,
-        "w": 242,
-        "h": 112,
-        "roi_type": "video"
-      },
-      {
-        "label": "V5",
-        "media_name": "",
-        "x": 1047,
-        "y": 590,
-        "w": 242,
-        "h": 112,
-        "roi_type": "video"
-      },
-      {
-        "label": "V6",
-        "media_name": "",
-        "x": 1057,
-        "y": 600,
-        "w": 242,
-        "h": 112,
-        "roi_type": "video"
-      }
-    ],
-    "audio": [
-      {
-        "label": "A1",
-        "media_name": "",
-        "x": 10,
-        "y": 200,
-        "w": 100,
-        "h": 100,
-        "roi_type": "audio"
-      },
-      {
-        "label": "A2",
-        "media_name": "",
-        "x": 20,
-        "y": 210,
-        "w": 100,
-        "h": 100,
-        "roi_type": "audio"
-      },
-      {
-        "label": "A3",
-        "media_name": "",
-        "x": 30,
-        "y": 220,
-        "w": 100,
-        "h": 100,
-        "roi_type": "audio"
-      },
-      {
-        "label": "A4",
-        "media_name": "",
-        "x": 40,
-        "y": 230,
-        "w": 100,
-        "h": 100,
-        "roi_type": "audio"
-      }
-    ]
+    "video": [],
+    "audio": []
   },
   "performance": {
     "detection_interval": 200,
@@ -159,11 +67,12 @@
     "max_keep_days": 7,
     "output_width": 960,
     "output_height": 540,
-    "output_fps": 10
+    "output_fps": 5
   },
   "ui_state": {
     "detection_enabled": false,
-    "roi_visible": true
+    "roi_visible": true,
+    "fullscreen": false
   },
   "signoff": {
     "auto_preparation": true,
@@ -178,7 +87,7 @@
       "suppressed_labels": [],
       "start_time": "03:00",
       "end_time": "05:00",
-      "prep_minutes": 150,
+      "prep_minutes": 180,
       "exit_prep_minutes": 30,
       "exit_trigger_sec": 5,
       "end_next_day": false,
@@ -209,5 +118,9 @@
         6
       ]
     }
+  },
+  "system": {
+    "scheduled_restart_enabled": true,
+    "scheduled_restart_time": "03:00"
   }
 }

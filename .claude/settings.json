@@ -1,4 +1,29 @@
 {
   "model": "sonnet",
-  "language": "korean"
+  "language": "korean",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"C:\\Users\\minwoo\\.claude\\toast.ps1\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"\nimport sys, json\ndata = json.load(sys.stdin)\nfp = data.get('tool_input',{}).get('file_path','') or data.get('tool_response',{}).get('filePath','')\nif fp.endswith('.py'):\n    print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':'[Doc Update Reminder] .py file modified. Check and update: CLAUDE.md, memory/, TODO.md'}}))\n\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
 }

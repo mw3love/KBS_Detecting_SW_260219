@@ -6,7 +6,7 @@
 
 ## 1단계: 인수 확인
 
-`$ARGUMENTS`가 비어 있으면 현재 버전(`kbs_monitor/main.py`에서 확인)을 알려주고 중단하세요.
+`$ARGUMENTS`가 비어 있으면 `kbs_monitor/main.py`에서 현재 버전을 읽은 뒤 **패치 버전(세 번째 숫자)을 자동으로 +1**하여 그 버전으로 진행하세요 (사용자에게 묻지 않음). 자동 결정된 버전을 한 줄로 알리고 바로 다음 단계로 넘어가세요.
 
 `$ARGUMENTS`가 비어 있지 않으면 버전 문자열은 `v$ARGUMENTS` 형식입니다 (예: 입력 `1.5.6` → `v1.5.6`).
 
@@ -40,12 +40,23 @@ date +%Y-%m-%d
 `CLAUDE.md` 파일의 현재 버전 표기를 새 버전으로 업데이트하세요:
 - `**현재: Phase 5 완료 (코드 최적화 완료) + v...` 부분의 버전 번호를 `v$ARGUMENTS`로 변경
 
-## 5단계: 변경 확인 후 커밋
+## 5단계: README.md 버전 이력 업데이트
+
+`README.md`의 "버전 업데이트 이력" 테이블 맨 윗줄에 새 버전을 추가하세요.
+
+형식:
+```
+| **v$ARGUMENTS** | (사용자에게 변경사항 설명을 물어보거나, 커밋 메시지에서 추론한 핵심 변경사항 한 줄) |
+```
+
+이전 최신 버전의 `**굵음**` 강조를 일반 텍스트로 변경하세요 (새 버전만 굵게 표시).
+
+## 6단계: 변경 확인 후 커밋
 
 수정한 파일들을 git add하고 커밋하세요:
 
 ```bash
-git add kbs_monitor/main.py kbs_monitor/ui/main_window.py kbs_monitor/ui/settings_dialog.py CLAUDE.md
+git add kbs_monitor/main.py kbs_monitor/ui/main_window.py kbs_monitor/ui/settings_dialog.py CLAUDE.md README.md
 ```
 
 커밋 메시지 형식:
@@ -53,7 +64,7 @@ git add kbs_monitor/main.py kbs_monitor/ui/main_window.py kbs_monitor/ui/setting
 v$ARGUMENTS: 버전 표기 및 About 날짜 업데이트
 ```
 
-## 6단계: 푸시
+## 7단계: 푸시
 
 ```bash
 git push

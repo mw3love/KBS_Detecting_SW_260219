@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KBS 모니터링 시스템 — 감도설정 사용자 설명서</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface2: #0f3460;
+    --accent: #e94560;
+    --accent2: #f5a623;
+    --text: #e8e8e8;
+    --text-dim: #9999b0;
+    --green: #4ecdc4;
+    --blue: #457bde;
+    --purple: #9b59b6;
+    --card: #1e2a4a;
+    --border: #2e3a5c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  /* ── 슬라이드 컨테이너 ── */
+  #slideshow {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 40px 60px;
+    opacity: 0;
+    transform: translateX(60px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .slide.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+    overflow-y: auto;
+  }
+
+  .slide.exit {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+
+  /* ── 공통 ── */
+  h1 { font-size: 2.4em; font-weight: 700; line-height: 1.2; }
+  h2 { font-size: 1.8em; font-weight: 700; margin-bottom: 0.3em; }
+  h3 { font-size: 1.2em; font-weight: 600; margin-bottom: 0.3em; }
+  p  { font-size: 0.95em; line-height: 1.7; color: var(--text-dim); }
+
+  .tag {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-size: 0.75em;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .slide-num {
+    position: fixed;
+    bottom: 24px;
+    right: 36px;
+    font-size: 0.8em;
+    color: var(--text-dim);
+    z-index: 100;
+  }
+
+  /* ── 네비게이션 ── */
+  .nav {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 16px;
+    z-index: 200;
+  }
+
+  .nav button {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 28px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-family: inherit;
+    transition: background 0.2s;
+  }
+
+  .nav button:hover { background: var(--accent); border-color: var(--accent); }
+
+  .dots {
+    position: fixed;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 200;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+  }
+
+  .dot.active { background: var(--accent); transform: scale(1.4); }
+
+  /* ── 카드 레이아웃 ── */
+  .cards { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    flex: 1;
+    min-width: 200px;
+  }
+  .card .icon { font-size: 2em; margin-bottom: 10px; }
+  .card h3 { font-size: 1.05em; margin-bottom: 8px; }
+  .card p { font-size: 0.85em; }
+
+  /* ── 표 ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 14px;
+    font-size: 0.88em;
+  }
+  th {
+    background: var(--surface2);
+    padding: 10px 14px;
+    text-align: left;
+    color: var(--accent2);
+    font-weight: 600;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
+
+  /* ── 순서도 ── */
+  .flowchart {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    margin-top: 20px;
+  }
+
+  .flow-step {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 0.82em;
+    min-width: 110px;
+    max-width: 150px;
+    line-height: 1.4;
+    position: relative;
+  }
+
+  .flow-step.decision {
+    background: var(--surface2);
+    border-color: var(--accent2);
+    transform: rotate(0deg);
+  }
+
+  .flow-step.alert {
+    background: rgba(233,69,96,0.2);
+    border-color: var(--accent);
+    color: #ff8fa3;
+  }
+
+  .flow-step.normal {
+    background: rgba(78,205,196,0.15);
+    border-color: var(--green);
+    color: var(--green);
+  }
+
+  .flow-arrow {
+    font-size: 1.4em;
+    color: var(--text-dim);
+    padding: 0 4px;
+  }
+
+  .flow-label {
+    font-size: 0.7em;
+    color: var(--accent2);
+    display: block;
+    margin-top: 4px;
+  }
+
+  /* ── 슬라이더 시뮬레이터 ── */
+  .param-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+
+  .param-name { font-size: 0.88em; min-width: 200px; font-weight: 600; }
+  .param-bar-wrap { flex: 1; }
+  .param-bar-bg {
+    background: var(--border);
+    border-radius: 4px;
+    height: 8px;
+    position: relative;
+    margin-bottom: 4px;
+  }
+  .param-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--green), var(--accent2));
+  }
+  .param-bar-labels { display: flex; justify-content: space-between; font-size: 0.72em; color: var(--text-dim); }
+  .param-desc { font-size: 0.8em; color: var(--text-dim); min-width: 200px; max-width: 260px; }
+
+  /* ── 체크리스트 ── */
+  .checklist { margin-top: 16px; }
+  .check-item {
+    display: flex;
+    gap: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    align-items: flex-start;
+  }
+  .check-icon { font-size: 1.4em; flex-shrink: 0; }
+  .check-text h4 { font-size: 0.95em; margin-bottom: 4px; }
+  .check-text p { font-size: 0.84em; }
+
+  .highlight { color: var(--accent2); font-weight: 700; }
+  .highlight-r { color: var(--accent); font-weight: 700; }
+  .highlight-g { color: var(--green); font-weight: 700; }
+  .highlight-b { color: var(--blue); font-weight: 700; }
+
+  /* ── 표지 슬라이드 ── */
+  .cover {
+    justify-content: center;
+    align-items: flex-start;
+  }
+  .cover-badge {
+    background: var(--accent);
+    color: #fff;
+    padding: 6px 20px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 700;
+    display: inline-block;
+    margin-bottom: 24px;
+  }
+  .cover h1 { font-size: 3em; margin-bottom: 16px; }
+  .cover-sub { font-size: 1.1em; color: var(--text-dim); margin-bottom: 40px; }
+  .cover-items { display: flex; gap: 16px; flex-wrap: wrap; }
+  .cover-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 24px;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* ── 2열 그리드 ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-top: 16px; }
+
+  /* ── HSV 색상 시각화 ── */
+  .hsv-demo {
+    display: flex;
+    gap: 20px;
+    margin-top: 16px;
+    align-items: flex-start;
+  }
+  .hsv-bar-group { flex: 1; }
+  .hsv-label { font-size: 0.82em; font-weight: 600; margin-bottom: 6px; color: var(--accent2); }
+  .hsv-spectrum {
+    height: 32px;
+    border-radius: 6px;
+    position: relative;
+    margin-bottom: 6px;
+    overflow: hidden;
+  }
+  .hsv-range-marker {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    opacity: 0.85;
+  }
+  .hsv-axis { display: flex; justify-content: space-between; font-size: 0.7em; color: var(--text-dim); }
+
+  /* ── 비교 테이블 ── */
+  .compare-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 6px;
+    margin-top: 16px;
+  }
+  .compare-table th {
+    border-radius: 8px 8px 0 0;
+    padding: 10px 16px;
+    text-align: center;
+  }
+  .compare-table td {
+    padding: 12px 16px;
+    border-radius: 0;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85em;
+  }
+
+  .section-title {
+    font-size: 0.8em;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .divider {
+    width: 60px;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 2px;
+    margin: 12px 0 20px;
+  }
+
+  /* ── 진행 바 ── */
+  #progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: var(--accent);
+    transition: width 0.3s ease;
+    z-index: 300;
+  }
+
+  /* ── 스크롤 가능 영역 내 스크롤바 ── */
+  .slide::-webkit-scrollbar { width: 4px; }
+  .slide::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .note {
+    background: rgba(245,166,35,0.1);
+    border-left: 3px solid var(--accent2);
+    padding: 10px 14px;
+    border-radius: 0 8px 8px 0;
+    margin-top: 14px;
+    font-size: 0.85em;
+  }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div id="slideshow">
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 01 — 표지 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide active" id="s0">
+  <div class="cover">
+    <div class="cover-badge">KBS 16CH 모니터링 시스템</div>
+    <h1>감도설정<br>사용자 설명서</h1>
+    <p class="cover-sub">블랙 · 스틸 · 오디오 레벨미터 · 임베디드 오디오 감지 원리와 설정 가이드</p>
+    <div class="divider"></div>
+    <div class="cover-items">
+      <div class="cover-item">⬛ 블랙 감지</div>
+      <div class="cover-item">🖼️ 스틸 감지</div>
+      <div class="cover-item">🎚️ 오디오 레벨미터 감지</div>
+      <div class="cover-item">🔊 임베디드 오디오 감지</div>
+    </div>
+    <div style="margin-top:40px; font-size:0.8em; color:var(--text-dim);">
+      ← → 키 또는 하단 버튼으로 이동 &nbsp;|&nbsp; v1.6.x &nbsp;|&nbsp; 2026-03-30
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 02 — 전체 감지 개요 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s1">
+  <div class="tag" style="background:rgba(78,205,196,0.2);color:var(--green);">개요</div>
+  <h2>감도설정이란?</h2>
+  <div class="divider"></div>
+  <p>프로그램은 <span class="highlight">200ms(0.2초)마다</span> 영상 프레임을 분석하여 이상 여부를 판단합니다.<br>
+  감도설정은 이 판단 기준을 조절하는 파라미터 모음입니다.</p>
+
+  <div class="cards" style="margin-top:24px;">
+    <div class="card" style="border-color:rgba(233,69,96,0.4);">
+      <div class="icon">⬛</div>
+      <h3 style="color:#ff8fa3;">블랙 감지</h3>
+      <p>화면이 검게 변했을 때 감지.<br>픽셀 밝기 기반.</p>
+    </div>
+    <div class="card" style="border-color:rgba(155,89,182,0.4);">
+      <div class="icon">🖼️</div>
+      <h3 style="color:#c39bd3;">스틸 감지</h3>
+      <p>화면이 정지(스틸)됐을 때 감지.<br>프레임 간 변화량 기반.</p>
+    </div>
+    <div class="card" style="border-color:rgba(78,205,196,0.4);">
+      <div class="icon">🎚️</div>
+      <h3 style="color:var(--green);">오디오 레벨미터</h3>
+      <p>화면에 표시된 레벨미터 색상을 HSV로 분석.<br>색이 사라지면 무음으로 판단.</p>
+    </div>
+    <div class="card" style="border-color:rgba(69,123,222,0.4);">
+      <div class="icon">🔊</div>
+      <h3 style="color:var(--blue);">임베디드 오디오</h3>
+      <p>수신된 오디오 신호의 dB를 직접 측정.<br>무음 지속 시 알림.</p>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:24px;">
+    💡 <strong>공통 원칙:</strong> 모든 감지는 설정된 시간만큼 이상 상태가 <em>지속</em>되어야 알림이 발생합니다.
+    일시적인 노이즈나 단일 프레임 이상으로는 알림이 울리지 않습니다.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 03 — 공통 개념: ROI·타이머·알림 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s2">
+  <div class="tag" style="background:rgba(69,123,222,0.2);color:var(--blue);">공통 개념</div>
+  <h2>감지 공통 동작 원리</h2>
+  <div class="divider"></div>
+
+  <div class="two-col">
+    <div>
+      <h3 style="color:var(--accent2);">감지영역 (ROI)</h3>
+      <div class="card" style="margin-top:10px;">
+        <p>전체 화면 중 <span class="highlight">분석할 영역을 지정</span>합니다.<br>
+        영역이 작을수록 CPU 부하가 낮고, 여러 개 지정 가능합니다.<br>
+        비디오 ROI는 블랙/스틸 감지에, 오디오 ROI는 레벨미터 감지에 사용됩니다.</p>
+      </div>
+
+      <h3 style="color:var(--accent2); margin-top:20px;">공통 타임라인 구조</h3>
+      <div class="card" style="margin-top:10px; font-size:0.85em;">
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <div style="background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:6px 10px;">정상 상태</div>
+          <span style="color:var(--text-dim);">→</span>
+          <div style="background:rgba(245,166,35,0.2); border:1px solid var(--accent2); border-radius:6px; padding:6px 10px; color:var(--accent2);">이상 감지 시작<br><small>타이머 카운트</small></div>
+          <span style="color:var(--text-dim);">→</span>
+          <div style="background:rgba(233,69,96,0.2); border:1px solid var(--accent); border-radius:6px; padding:6px 10px; color:var(--accent);">알림 발생<br><small>T초 경과 후</small></div>
+          <span style="color:var(--text-dim);">→</span>
+          <div style="background:rgba(78,205,196,0.15); border:1px solid var(--green); border-radius:6px; padding:6px 10px; color:var(--green);">복구 감지</div>
+          <span style="color:var(--text-dim);">→</span>
+          <div style="background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:6px 10px;">정상 복귀</div>
+        </div>
+        <div style="margin-top:10px; color:var(--text-dim); font-size:0.9em;">
+          T = <span class="highlight">알림 발생 시간</span> 설정값 (초 단위)
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="color:var(--accent2);">히스테리시스(오감지 방지)</h3>
+      <div class="card" style="margin-top:10px;">
+        <p>단 한 프레임의 이상이나 정상 신호로는 상태가 바뀌지 않습니다.<br>
+        <span class="highlight">연속 N프레임</span>이 같은 상태여야 판정이 바뀝니다.</p>
+        <div style="margin-top:12px; font-size:0.82em;">
+          <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+            <span style="color:var(--accent);">✕ 오감지 위험</span>
+            <span style="color:var(--text-dim);">단일 프레임만으로 즉시 판정</span>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <span style="color:var(--green);">✔ 히스테리시스 적용</span>
+            <span style="color:var(--text-dim);">연속 3프레임 정상 → 타이머 리셋</span>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="color:var(--accent2); margin-top:20px;">알림 발생 흐름</h3>
+      <div class="card" style="margin-top:10px; font-size:0.85em;">
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="background:var(--surface2); padding:3px 8px; border-radius:4px; font-size:0.85em;">1</span>
+            <span>이상 상태 감지 → 타이머 시작</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="background:var(--surface2); padding:3px 8px; border-radius:4px; font-size:0.85em;">2</span>
+            <span>설정 시간 이상 지속 → <span class="highlight-r">알림 발생</span> (소리 + 화면 깜빡임)</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="background:var(--surface2); padding:3px 8px; border-radius:4px; font-size:0.85em;">3</span>
+            <span>정상 복귀 감지 → 소리 정지</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="background:var(--surface2); padding:3px 8px; border-radius:4px; font-size:0.85em;">4</span>
+            <span>텔레그램 알림 발송 (설정 시)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 04 — 블랙 감지 작동 원리 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s3">
+  <div class="tag" style="background:rgba(233,69,96,0.2);color:#ff8fa3;">블랙 감지</div>
+  <h2>블랙 감지 — 작동 원리</h2>
+  <div class="divider"></div>
+
+  <!-- 순서도 -->
+  <div style="margin-top: 8px;">
+    <div style="font-size:0.82em; color:var(--text-dim); margin-bottom:12px;">200ms마다 반복</div>
+
+    <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; row-gap:12px;">
+
+      <div class="flow-step">
+        <div style="font-size:1.2em; margin-bottom:4px;">📹</div>
+        프레임 획득<br>(감지영역 잘라내기)
+      </div>
+      <div class="flow-arrow">→</div>
+
+      <div class="flow-step">
+        <div style="font-size:1.1em; margin-bottom:4px;">🔆</div>
+        각 픽셀<br>밝기 측정
+        <span class="flow-label">0~255</span>
+      </div>
+      <div class="flow-arrow">→</div>
+
+      <div class="flow-step decision" style="border-color:var(--accent2);">
+        픽셀 밝기 &lt;<br><span style="color:var(--accent2);">밝기 임계값</span>(5)?
+        <span class="flow-label">"어두운 픽셀"</span>
+      </div>
+      <div class="flow-arrow">→</div>
+
+      <div class="flow-step">
+        어두운 픽셀<br>비율 계산<br>
+        <span class="flow-label">dark_ratio (%)</span>
+      </div>
+      <div class="flow-arrow">→</div>
+
+      <div class="flow-step decision" style="border-color:var(--accent2);">
+        dark_ratio ≥<br><span style="color:var(--accent2);">비율 임계값</span>(98%)?
+      </div>
+      <div class="flow-arrow">→</div>
+
+      <div class="flow-step decision" style="border-color:var(--accent2);">
+        움직임(changed)<br>&lt; <span style="color:var(--accent2);">모션억제</span>(0.2%)?
+        <span class="flow-label">모션 억제 확인</span>
+      </div>
+
+    </div>
+
+    <!-- 2번째 줄 -->
+    <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-top:16px; row-gap:12px;">
+      <div class="flow-step" style="min-width:90px; background:rgba(233,69,96,0.1); border-color:var(--accent);">
+        ✔ 블랙 상태<br><span style="color:var(--accent); font-size:0.9em;">is_black = True</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        타이머 누적<br>
+        <span class="flow-label">블랙 지속 시간(초)</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step decision" style="border-color:var(--accent2);">
+        지속 시간 ≥<br><span style="color:var(--accent2);">알림 발생 시간</span>?
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step alert">
+        🔔 알림 발생!<br>소리 + 깜빡임
+      </div>
+      <div style="margin-left:20px; padding:6px 12px; border:1px dashed var(--border); border-radius:8px; font-size:0.78em; color:var(--text-dim);">
+        움직임 ≥ 모션억제 → <span style="color:var(--green);">블랙 취소</span><br>
+        (스크롤 자막 오감지 방지)
+      </div>
+    </div>
+  </div>
+
+  <!-- 핵심 수식 박스 -->
+  <div style="margin-top:24px; display:flex; gap:16px; flex-wrap:wrap;">
+    <div style="background:rgba(233,69,96,0.1); border:1px solid rgba(233,69,96,0.4); border-radius:10px; padding:14px 20px; font-family:monospace; font-size:0.88em; flex:1; min-width:280px;">
+      <div style="color:var(--text-dim); font-size:0.85em; margin-bottom:8px;">판정 공식</div>
+      <div>gray = 픽셀 평균 밝기 (BGR → 평균)</div>
+      <div>dark_pixel = gray &lt; <span style="color:var(--accent2);">밝기 임계값</span></div>
+      <div>dark_ratio = <span style="color:var(--accent);">어두운 픽셀 수</span> / 전체 픽셀 수 × 100</div>
+      <div>is_black = dark_ratio ≥ <span style="color:var(--accent2);">비율 임계값 (%)</span></div>
+    </div>
+    <div style="background:rgba(245,166,35,0.1); border:1px solid rgba(245,166,35,0.4); border-radius:10px; padding:14px 20px; font-size:0.85em; flex:1; min-width:240px;">
+      <div style="color:var(--text-dim); font-size:0.85em; margin-bottom:8px;">예시 (기본값)</div>
+      <div>픽셀 밝기 = 3 → <span style="color:var(--accent);">어두운 픽셀 ✔</span> (3 &lt; 5)</div>
+      <div>픽셀 밝기 = 8 → <span style="color:var(--green);">밝은 픽셀 ✔</span> (8 ≥ 5)</div>
+      <div style="margin-top:6px;">어두운 픽셀 = 99% → <span style="color:var(--accent);">블랙 판정 ✔</span> (99 ≥ 98)</div>
+      <div>어두운 픽셀 = 95% → <span style="color:var(--green);">블랙 아님</span> (95 &lt; 98)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 05 — 블랙 감지 파라미터 설명 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+  <div class="tag" style="background:rgba(233,69,96,0.2);color:#ff8fa3;">블랙 감지</div>
+  <h2>블랙 감지 — 파라미터 설명</h2>
+  <div class="divider"></div>
+
+  <table>
+    <tr>
+      <th>파라미터</th>
+      <th>기본값</th>
+      <th>범위</th>
+      <th>역할</th>
+      <th>값 올리면</th>
+      <th>값 낮추면</th>
+    </tr>
+    <tr>
+      <td><strong>밝기 임계값</strong><br><small style="color:var(--text-dim);">black_threshold</small></td>
+      <td><span class="highlight">5</span></td>
+      <td>0 ~ 255</td>
+      <td>이 밝기 미만 = 어두운 픽셀로 분류</td>
+      <td>더 밝은 픽셀도 어둡다고 인식<br>→ 감지 민감해짐</td>
+      <td>거의 완전한 검정만 어둡다고 인식<br>→ 감지 둔감해짐</td>
+    </tr>
+    <tr>
+      <td><strong>어두운 픽셀 비율(%)</strong><br><small style="color:var(--text-dim);">black_dark_ratio</small></td>
+      <td><span class="highlight">98%</span></td>
+      <td>50 ~ 100%</td>
+      <td>ROI 내 어두운 픽셀이 이 비율 이상이면 블랙 판정</td>
+      <td>더 많은 픽셀이 어두워야 판정<br>→ 엄격 (자막 있어도 놓침)</td>
+      <td>일부 픽셀만 어두워도 판정<br>→ 느슨 (자막 있어도 감지)</td>
+    </tr>
+    <tr>
+      <td><strong>모션 억제 비율(%)</strong><br><small style="color:var(--text-dim);">black_motion_suppress_ratio</small></td>
+      <td><span class="highlight">0.2%</span></td>
+      <td>0 ~ 5%</td>
+      <td>블랙 판정 중 이 이상 움직임 있으면 블랙 취소</td>
+      <td>조금만 움직여도 블랙 취소<br>→ 스크롤 자막 오감지 감소</td>
+      <td>많이 움직여야 블랙 취소<br>(0.0 = 억제 비활성)</td>
+    </tr>
+    <tr>
+      <td><strong>알림 발생 시간(초)</strong><br><small style="color:var(--text-dim);">black_duration</small></td>
+      <td><span class="highlight">20초</span></td>
+      <td>1 ~ 120초</td>
+      <td>블랙이 이 시간 이상 지속되면 알림 발생</td>
+      <td>더 오래 지속해야 알림<br>→ 오알람 줄어듦</td>
+      <td>짧은 블랙에도 빠르게 알림</td>
+    </tr>
+    <tr>
+      <td><strong>알림 지속시간(초)</strong><br><small style="color:var(--text-dim);">black_alarm_duration</small></td>
+      <td><span class="highlight">60초</span></td>
+      <td>1 ~ 60초</td>
+      <td>알림음을 울리는 시간</td>
+      <td>소리가 더 오래 울림</td>
+      <td>소리가 짧게 울리고 멈춤</td>
+    </tr>
+  </table>
+
+  <div class="note" style="margin-top:20px;">
+    💡 <strong>자막이 있는 화면(뉴스 자막 등)에서 블랙 오감지가 날 때:</strong>
+    <span class="highlight">어두운 픽셀 비율 임계값을 낮추지 말고</span>,
+    먼저 <span class="highlight">감지영역(ROI)을 자막이 없는 중앙 부분으로만 한정</span>하는 것이 더 효과적입니다.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 06 — 블랙 감지 안 될 때 대처법 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s5">
+  <div class="tag" style="background:rgba(233,69,96,0.2);color:#ff8fa3;">블랙 감지</div>
+  <h2>블랙 감지가 안 될 때 — 조절 가이드</h2>
+  <div class="divider"></div>
+
+  <p style="margin-bottom:16px;">기본값으로 감지가 안 되는 경우, 아래 순서대로 확인하고 조절하세요.</p>
+
+  <div class="checklist">
+
+    <div class="check-item">
+      <div class="check-icon">1️⃣</div>
+      <div class="check-text">
+        <h4>감지영역(ROI) 위치 확인</h4>
+        <p>ROI가 화면의 블랙이 발생하는 부분을 제대로 덮고 있는지 확인합니다.<br>
+        자막이나 로고가 포함된 영역을 피해 <span class="highlight">순수 영상 영역</span>에 ROI를 설정하세요.</p>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-icon">2️⃣</div>
+      <div class="check-text">
+        <h4>어두운 픽셀 비율 임계값 낮추기 (98% → 85~90%)</h4>
+        <p>화면이 블랙이어도 자막·로고·오버레이 때문에 일부 픽셀이 밝게 남아 있는 경우입니다.<br>
+        <span class="highlight">어두운 픽셀 비율을 98% → 85%</span>로 낮춰보세요.<br>
+        <span style="color:var(--accent);">⚠️ 너무 낮추면 정상 영상도 블랙으로 오감지될 수 있습니다.</span></p>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-icon">3️⃣</div>
+      <div class="check-text">
+        <h4>밝기 임계값 올리기 (5 → 10~15)</h4>
+        <p>인코더 또는 전송 과정에서 완전 검정이 아닌 약간 밝은(값 5~10) 픽셀로 변환되는 경우입니다.<br>
+        <span class="highlight">밝기 임계값을 5 → 10</span>으로 올리면 약간 밝은 픽셀도 어둡다고 인식합니다.</p>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-icon">4️⃣</div>
+      <div class="check-text">
+        <h4>모션 억제 비율 확인 (스크롤 자막 오판 케이스)</h4>
+        <p>블랙인데 스크롤 자막이 있어서 감지가 취소되는 경우, <span class="highlight">모션 억제 비율을 0.0으로 설정</span>하거나<br>
+        자막이 없는 영역만으로 ROI를 재설정합니다.</p>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-icon">5️⃣</div>
+      <div class="check-text">
+        <h4>알림 발생 시간 조정 (20초 → 10초)</h4>
+        <p>블랙이 짧게 발생(예: 10초)하는 경우 기본값(20초)에서 알림이 안 울립니다.<br>
+        <span class="highlight">알림 발생 시간을 짧게(예: 10초)</span> 줄여 더 빠르게 감지하도록 합니다.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 18px; margin-top:8px; font-size:0.85em;">
+    <strong style="color:var(--accent2);">권장 조절 순서:</strong>
+    ROI 위치 확인 → 어두운 픽셀 비율 낮추기 → 밝기 임계값 올리기 → 모션 억제 조정 → 알림 시간 조정
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 07 — 스틸 감지 작동 원리 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s6">
+  <div class="tag" style="background:rgba(155,89,182,0.2);color:#c39bd3;">스틸 감지</div>
+  <h2>스틸 감지 — 작동 원리</h2>
+  <div class="divider"></div>
+
+  <div style="margin-top:8px;">
+    <div style="font-size:0.82em; color:var(--text-dim); margin-bottom:12px;">200ms마다 반복 (이전 프레임과 현재 프레임 비교)</div>
+
+    <div style="display:flex; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+
+      <!-- 왼쪽: 순서도 -->
+      <div style="flex:1; min-width:320px;">
+        <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; row-gap:10px;">
+          <div class="flow-step">
+            <div style="font-size:1.2em; margin-bottom:4px;">📹</div>
+            현재 프레임<br>ROI 잘라내기
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            이전 프레임과<br>픽셀 차이 계산<br>
+            <span class="flow-label">|현재 - 이전|</span>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step decision" style="border-color:var(--purple);">
+            차이 ≥ <span style="color:#c39bd3;">픽셀 변화<br>기준값</span>(4)?
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            변화한<br>픽셀 마스크 생성
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; row-gap:10px; margin-top:12px;">
+          <div class="flow-step">
+            <div style="font-size:1.1em; margin-bottom:4px;">🔲</div>
+            화면을<br>5×5 블록으로<br>분할
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            블록별<br>변화 픽셀<br>비율 계산
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step decision" style="border-color:var(--purple);">
+            모든 블록<br>변화율 &lt;<br><span style="color:#c39bd3;">블록 임계값</span>(10%)?
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="background:rgba(155,89,182,0.15); border-color:var(--purple);">
+            ✔ 스틸 상태<br>
+            <span style="color:#c39bd3; font-size:0.9em;">is_still = True</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; row-gap:10px; margin-top:12px;">
+          <div class="flow-step">
+            타이머 누적
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step decision" style="border-color:var(--purple);">
+            지속 시간 ≥<br><span style="color:#c39bd3;">알림 발생<br>시간</span>?
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step alert">
+            🔔 알림 발생!
+          </div>
+          <div style="margin-left:12px; padding:6px 10px; border:1px dashed var(--border); border-radius:8px; font-size:0.78em; color:var(--text-dim);">
+            하나라도 변화율<br>≥ 블록 임계값<br>→ <span style="color:var(--green);">스틸 아님</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 오른쪽: 5×5 블록 시각화 -->
+      <div style="min-width:200px;">
+        <div style="font-size:0.82em; color:var(--text-dim); margin-bottom:8px;">5×5 블록 판정 예시</div>
+        <div style="display:grid; grid-template-columns: repeat(5, 36px); gap:3px;">
+          <!-- 스틸 케이스 -->
+          <div style="grid-column:1/-1; font-size:0.75em; color:var(--purple); margin-bottom:2px; margin-top:4px;">스틸 (모든 블록 변화 없음)</div>
+          <div style="background:rgba(155,89,182,0.3); border:1px solid var(--purple); border-radius:4px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:0.7em;">0%</div>
+          <div style="background:rgba(155,89,182,0.3); border:1px solid var(--purple); border-radius:4px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:0.7em;">1%</div>
+          <div style="background:rgba(155,89,182,0.3); border:1px solid var(--purple); border-radius:4px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:0.7em;">2%</div>
+          <div style="background:rgba(155,89,182,0.3); border:1px solid var(--purple); border-radius:4px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:0.7em;">0%</div>
+          <div style="background:rgba(155,89,182,0.3); border:1px solid var(--purple); border-radius:4px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:0.7em;">1%</div>
+
+          <!-- 움직임 케이스 -->
+          <div style="grid-column:1/-1; font-size:0.75em; color:var(--green); margin-bottom:2px; margin-top:10px;">움직임 있음 (중앙 블록 15%)</div>
+          <div style="background:rgba(78,205,196,0.1); border:1px solid var(--border); border-radius:4px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:0.7em;">1%</div>
+          <div style="background:rgba(78,205,196,0.1); border:1px solid var(--border); border-radius:4px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:0.7em;">2%</div>
+          <div style="background:rgba(78,205,196,0.4); border:1px solid var(--green); border-radius:4px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:0.7em; color:var(--green); font-weight:700;">15%</div>
+          <div style="background:rgba(78,205,196,0.1); border:1px solid var(--border); border-radius:4px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:0.7em;">1%</div>
+          <div style="background:rgba(78,205,196,0.1); border:1px solid var(--border); border-radius:4px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:0.7em;">0%</div>
+        </div>
+        <div style="font-size:0.75em; color:var(--text-dim); margin-top:8px;">
+          한 블록이라도 임계값(10%) 이상이면<br>스틸이 아닌 것으로 판정
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 08 — 스틸 감지 파라미터 설명 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s7">
+  <div class="tag" style="background:rgba(155,89,182,0.2);color:#c39bd3;">스틸 감지</div>
+  <h2>스틸 감지 — 파라미터 설명</h2>
+  <div class="divider"></div>
+
+  <table>
+    <tr>
+      <th>파라미터</th>
+      <th>기본값</th>
+      <th>범위</th>
+      <th>역할</th>
+      <th>값 올리면</th>
+      <th>값 낮추면</th>
+    </tr>
+    <tr>
+      <td><strong>픽셀당 변화 기준값</strong><br><small style="color:var(--text-dim);">still_threshold</small></td>
+      <td><span class="highlight">4</span></td>
+      <td>0 ~ 255</td>
+      <td>이 값 이상 차이나는 픽셀을 '변화한 픽셀'로 인식</td>
+      <td>인코더 압축 노이즈를 변화로 안 봄<br>→ 노이즈 내성 증가</td>
+      <td>미세한 밝기 차이도 변화로 인식<br>→ 감지 민감해짐</td>
+    </tr>
+    <tr>
+      <td><strong>블록 움직임 임계값(%)</strong><br><small style="color:var(--text-dim);">still_block_threshold</small></td>
+      <td><span class="highlight">10%</span></td>
+      <td>1 ~ 50%</td>
+      <td>블록 내 변화한 픽셀 비율이 이 값 이상이면 "움직임 있음"으로 판정</td>
+      <td>블록에 픽셀이 많이 바뀌어야 움직임으로 봄<br>→ 스틸 감지 민감해짐 (오작동 방지)</td>
+      <td>작은 변화도 움직임으로 봄<br>→ 스틸 감지 둔감해짐 (놓침 방지)</td>
+    </tr>
+    <tr>
+      <td><strong>타이머 리셋 프레임 수</strong><br><small style="color:var(--text-dim);">still_reset_frames</small></td>
+      <td><span class="highlight">3프레임</span></td>
+      <td>1 ~ 10</td>
+      <td>연속 N프레임 동안 정상이어야 스틸 타이머 리셋 (히스테리시스)</td>
+      <td>일시적 1프레임 움직임에도 타이머 유지<br>→ MPEG 아티팩트 오감지 방지</td>
+      <td>단 1프레임만 정상이어도 타이머 리셋<br>→ 즉시 반응</td>
+    </tr>
+    <tr>
+      <td><strong>알림 발생 시간(초)</strong><br><small style="color:var(--text-dim);">still_duration</small></td>
+      <td><span class="highlight">60초</span></td>
+      <td>1 ~ 120초</td>
+      <td>스틸이 이 시간 이상 지속되면 알림 발생</td>
+      <td>더 오래 지속해야 알림<br>→ 오알람 줄어듦</td>
+      <td>짧은 정지도 빠르게 알림</td>
+    </tr>
+    <tr>
+      <td><strong>알림 지속시간(초)</strong><br><small style="color:var(--text-dim);">still_alarm_duration</small></td>
+      <td><span class="highlight">60초</span></td>
+      <td>1 ~ 60초</td>
+      <td>알림음을 울리는 시간</td>
+      <td>소리가 더 오래 울림</td>
+      <td>소리가 짧게 울리고 멈춤</td>
+    </tr>
+  </table>
+
+  <div class="note" style="margin-top:16px;">
+    💡 <strong>MPEG/H.264 인코더 노이즈:</strong> 압축 영상은 정지해 보여도 프레임마다 미세한 픽셀 변화가 발생합니다.
+    <span class="highlight">픽셀 변화 기준값을 4→8</span>로 올리거나, <span class="highlight">블록 임계값을 10%→5%</span>로 낮추는 것이 핵심입니다.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 09 — 스틸 감지 안 될 때 대처법 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s8">
+  <div class="tag" style="background:rgba(155,89,182,0.2);color:#c39bd3;">스틸 감지</div>
+  <h2>스틸 감지가 안 될 때 — 조절 가이드</h2>
+  <div class="divider"></div>
+
+  <div class="two-col">
+    <div>
+      <h3 style="color:#c39bd3; margin-bottom:12px;">케이스 A: 스틸인데 타이머가 계속 리셋될 때</h3>
+      <p style="font-size:0.85em; margin-bottom:12px;">화면은 정지해 있는데 인코더 압축 노이즈 때문에 1~2프레임씩 "움직임 있음"으로 오판정되는 경우입니다.</p>
+
+      <div class="checklist">
+        <div class="check-item">
+          <div class="check-icon">🔧</div>
+          <div class="check-text">
+            <h4>픽셀 변화 기준값 올리기 (4 → 8~12)</h4>
+            <p>노이즈 크기보다 기준값을 높여 실제 움직임만 인식하게 합니다.</p>
+          </div>
+        </div>
+        <div class="check-item">
+          <div class="check-icon">🔧</div>
+          <div class="check-text">
+            <h4>타이머 리셋 프레임 수 올리기 (3 → 5~7)</h4>
+            <p>1프레임의 노이즈로 타이머가 리셋되지 않게 합니다.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="color:#c39bd3; margin-bottom:12px;">케이스 B: 화면이 진짜 변하는데 스틸로 오감지될 때</h3>
+      <p style="font-size:0.85em; margin-bottom:12px;">자막 티커나 시계 등 작은 움직임만 있을 때 블록 임계값이 너무 높아 움직임을 인식 못 하는 경우입니다.</p>
+
+      <div class="checklist">
+        <div class="check-item">
+          <div class="check-icon">🔧</div>
+          <div class="check-text">
+            <h4>블록 움직임 임계값 낮추기 (10% → 3~5%)</h4>
+            <p>작은 움직임도 움직임으로 판정하게 합니다.</p>
+          </div>
+        </div>
+        <div class="check-item">
+          <div class="check-icon">🔧</div>
+          <div class="check-text">
+            <h4>픽셀 변화 기준값 낮추기 (4 → 2)</h4>
+            <p>미세한 픽셀 변화도 변화로 인식하게 합니다.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 18px; margin-top:12px;">
+    <strong style="color:var(--accent2);">핵심 요약</strong>
+    <div style="display:flex; gap:24px; margin-top:10px; font-size:0.84em; flex-wrap:wrap;">
+      <div>
+        <span style="color:var(--text-dim);">스틸 감지 민감도 올리기:</span><br>
+        픽셀 변화 기준값 ↓ &nbsp;·&nbsp; 블록 임계값 ↓
+      </div>
+      <div>
+        <span style="color:var(--text-dim);">노이즈 내성 올리기 (오감지 줄이기):</span><br>
+        픽셀 변화 기준값 ↑ &nbsp;·&nbsp; 타이머 리셋 프레임 수 ↑
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 10 — 오디오 레벨미터 감지 작동 원리 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s9">
+  <div class="tag" style="background:rgba(78,205,196,0.2);color:var(--green);">오디오 레벨미터</div>
+  <h2>오디오 레벨미터 감지 — 작동 원리</h2>
+  <div class="divider"></div>
+
+  <div class="two-col">
+    <div>
+      <div style="font-size:0.82em; color:var(--text-dim); margin-bottom:12px;">HSV 색상 분석 방식 — 화면에 표시된 레벨미터를 영상 분석</div>
+
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="flow-step" style="min-width:80px; max-width:120px;">
+            <div style="font-size:1.2em;">🎥</div>
+            오디오 ROI<br>잘라내기
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="min-width:100px; max-width:140px;">
+            BGR →<br>HSV 변환
+            <span class="flow-label">색상 공간 변환</span>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="min-width:100px; max-width:140px;">
+            HSV 범위<br>마스킹
+            <span class="flow-label">H:40~95 초록색</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="flow-step" style="min-width:100px; max-width:140px;">
+            초록 픽셀<br>비율 계산<br>
+            <span class="flow-label">ratio (%)</span>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="min-width:120px; max-width:160px;">
+            최근 5프레임<br>이동 평균<br>
+            <span class="flow-label">노이즈 평활화</span>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step decision" style="border-color:var(--green);">
+            평균 비율 ≥<br><span style="color:var(--green);">감지 픽셀<br>비율</span>(5%)?
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <div class="flow-step normal" style="min-width:90px;">
+            ✔ 활성<br>(정상)
+          </div>
+          <div style="font-size:0.82em; color:var(--text-dim); padding:0 8px;">또는</div>
+          <div class="flow-step" style="min-width:90px; background:rgba(233,69,96,0.1); border-color:var(--accent);">
+            ✕ 비활성<br>(무음 의심)
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            타이머 누적<br>
+            <span class="flow-label">비활성 지속 시간</span>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step alert">
+            🔔 알림!
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HSV 색상 설명 -->
+    <div>
+      <h3 style="color:var(--green); margin-bottom:12px;">HSV 색상 범위란?</h3>
+      <div class="card" style="border-color:rgba(78,205,196,0.3);">
+        <p style="font-size:0.85em; margin-bottom:12px;">
+          레벨미터의 <span class="highlight-g">초록색 바</span>를 픽셀 단위로 검출합니다.<br>
+          HSV(색상·채도·명도) 색상 공간에서 범위를 지정합니다.
+        </p>
+
+        <div style="margin-bottom:10px;">
+          <div style="font-size:0.8em; font-weight:600; color:var(--accent2); margin-bottom:4px;">H (색상, Hue): 40 ~ 95</div>
+          <div style="height:20px; border-radius:4px; background:linear-gradient(90deg,
+            hsl(0,100%,50%) 0%,
+            hsl(60,100%,50%) 33%,
+            hsl(120,100%,50%) 66%,
+            hsl(180,100%,50%) 100%); position:relative; overflow:hidden;">
+            <div style="position:absolute; left:22%; width:30%; height:100%; border:2px solid white; border-radius:2px; opacity:0.8;"></div>
+          </div>
+          <div style="font-size:0.72em; color:var(--text-dim); display:flex; justify-content:space-between;"><span>0 (빨강)</span><span>60 (노랑)</span><span>120 (초록)</span><span>180 (청록)</span></div>
+          <div style="font-size:0.72em; color:var(--green); margin-top:2px;">↑ 이 범위(노란-초록-청록 계열)를 감지</div>
+        </div>
+
+        <div style="font-size:0.82em; margin-top:8px;">
+          <div style="margin-bottom:4px;"><span style="color:var(--accent2);">S (채도): 80 ~ 255</span> — 탁한 색 제외, 선명한 색만</div>
+          <div><span style="color:var(--accent2);">V (명도): 60 ~ 255</span> — 너무 어두운 색 제외</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px; border-color:rgba(78,205,196,0.2);">
+        <div style="font-size:0.82em;">
+          <div style="color:var(--text-dim); margin-bottom:6px;">레벨미터 감지 원리 요약</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <div style="width:40px; height:16px; background:linear-gradient(90deg, #2ecc71, #27ae60); border-radius:3px;"></div>
+            <span>소리 있음 → 초록 바 표시 → ratio 높음 → <span style="color:var(--green);">정상</span></span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:40px; height:16px; background:rgba(50,50,60,0.8); border:1px solid var(--border); border-radius:3px;"></div>
+            <span>소리 없음 → 바 사라짐 → ratio 낮음 → <span style="color:var(--accent);">이상</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 11 — 오디오 레벨미터 파라미터 설명 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s10">
+  <div class="tag" style="background:rgba(78,205,196,0.2);color:var(--green);">오디오 레벨미터</div>
+  <h2>오디오 레벨미터 — 파라미터 설명</h2>
+  <div class="divider"></div>
+
+  <table>
+    <tr>
+      <th>파라미터</th>
+      <th>기본값</th>
+      <th>범위</th>
+      <th>역할</th>
+      <th>값 올리면</th>
+      <th>값 낮추면</th>
+    </tr>
+    <tr>
+      <td><strong>HSV H 범위</strong><br><small style="color:var(--text-dim);">audio_hsv_h_min/max</small></td>
+      <td><span class="highlight">40 ~ 95</span></td>
+      <td>0 ~ 179</td>
+      <td>감지할 색상(색조) 범위. 레벨미터 초록 계열 색상</td>
+      <td>범위 넓힐수록 더 다양한 색 감지</td>
+      <td>범위 좁힐수록 특정 색만 감지</td>
+    </tr>
+    <tr>
+      <td><strong>HSV S 범위 (채도)</strong><br><small style="color:var(--text-dim);">audio_hsv_s_min/max</small></td>
+      <td><span class="highlight">80 ~ 255</span></td>
+      <td>0 ~ 255</td>
+      <td>색의 선명도 범위. S_min 낮추면 흐릿한 색도 포함</td>
+      <td>탁한 색도 포함</td>
+      <td>선명한 색만 포함</td>
+    </tr>
+    <tr>
+      <td><strong>HSV V 범위 (명도)</strong><br><small style="color:var(--text-dim);">audio_hsv_v_min/max</small></td>
+      <td><span class="highlight">60 ~ 255</span></td>
+      <td>0 ~ 255</td>
+      <td>색의 밝기 범위. V_min 낮추면 어두운 색도 포함</td>
+      <td>어두운 색도 포함</td>
+      <td>밝은 색만 포함</td>
+    </tr>
+    <tr>
+      <td><strong>감지 픽셀 비율(%)</strong><br><small style="color:var(--text-dim);">audio_pixel_ratio</small></td>
+      <td><span class="highlight">5%</span></td>
+      <td>1 ~ 50%</td>
+      <td>ROI 내 초록 픽셀이 이 비율 이상이면 "활성" 판정</td>
+      <td>초록 픽셀이 더 많아야 활성 판정<br>→ 감지 엄격해짐</td>
+      <td>적은 초록 픽셀로도 활성 판정<br>→ 감지 민감해짐</td>
+    </tr>
+    <tr>
+      <td><strong>알림 발생 시간(초)</strong><br><small style="color:var(--text-dim);">audio_level_duration</small></td>
+      <td><span class="highlight">20초</span></td>
+      <td>1 ~ 120초</td>
+      <td>레벨미터 비활성이 이 시간 이상 지속되면 알림</td>
+      <td>더 오래 비활성이어야 알림</td>
+      <td>짧은 비활성에도 빠르게 알림</td>
+    </tr>
+    <tr>
+      <td><strong>복구 딜레이(초)</strong><br><small style="color:var(--text-dim);">audio_level_recovery_seconds</small></td>
+      <td><span class="highlight">2초</span></td>
+      <td>0 ~ 10초</td>
+      <td>알림 발생 후 정상 판정을 위한 최소 정상 지속 시간</td>
+      <td>더 오래 정상이어야 알림 해제</td>
+      <td>즉시 복구 판정 (0 = 즉시 복구)</td>
+    </tr>
+  </table>
+
+  <div class="note" style="margin-top:16px;">
+    💡 <strong>복구 딜레이 활용:</strong> 방송 중 순간 음 소거(2~3초)로 알림이 계속 켜졌다 꺼졌다 하는 경우,
+    복구 딜레이를 <span class="highlight">5~10초</span>로 늘리면 안정적으로 동작합니다.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 12 — 오디오 레벨미터 감지 안 될 때 대처법 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s11">
+  <div class="tag" style="background:rgba(78,205,196,0.2);color:var(--green);">오디오 레벨미터</div>
+  <h2>오디오 레벨미터 감지가 안 될 때 — 조절 가이드</h2>
+  <div class="divider"></div>
+
+  <p style="margin-bottom:16px;">레벨미터가 화면에 보이는데도 감지가 안 되는 경우, 주로 <span class="highlight">HSV 색상 범위 불일치</span>가 원인입니다.</p>
+
+  <div class="checklist">
+
+    <div class="check-item">
+      <div class="check-icon">1️⃣</div>
+      <div class="check-text">
+        <h4>오디오 ROI 위치 확인</h4>
+        <p>ROI가 레벨미터 바의 초록 부분을 <span class="highlight">정확히 포함</span>하는지 확인합니다.<br>
+        ROI가 레벨미터 테두리나 배경 영역에만 걸쳐 있으면 초록 픽셀이 감지되지 않습니다.</p>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-icon">2️⃣</div>
+      <div class="check-text">
+        <h4>H(색상) 범위 확장 — 레벨미터 색이 다른 경우</h4>
+        <p>레벨미터가 노란색·청록색 등 다른 색상인 경우입니다.<br>
+        H_min을 <span class="highlight">20~30</span>으로 낮추거나, H_max를 <span class="highlight">120~130</span>으로 올려 범위를 넓혀보세요.</p>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-icon">3️⃣</div>
+      <div class="check-text">
+        <h4>S(채도) 최솟값 낮추기 — 색이 흐릿한 경우</h4>
+        <p>레벨미터가 연한 색(채도 낮음)인 경우입니다.<br>
+        S_min을 <span class="highlight">80 → 40~60</span>으로 낮춰 흐릿한 색도 감지하도록 합니다.</p>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-icon">4️⃣</div>
+      <div class="check-text">
+        <h4>V(명도) 최솟값 낮추기 — 화면이 어두운 경우</h4>
+        <p>레벨미터 배경이 어두워서 바 색상도 어둡게 보이는 경우입니다.<br>
+        V_min을 <span class="highlight">60 → 30~40</span>으로 낮춰보세요.</p>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-icon">5️⃣</div>
+      <div class="check-text">
+        <h4>감지 픽셀 비율 낮추기 (5% → 2~3%)</h4>
+        <p>레벨미터 바가 ROI 대비 차지하는 면적이 작은 경우입니다.<br>
+        <span class="highlight">감지 픽셀 비율을 2~3%</span>로 낮추면 적은 초록 픽셀로도 활성으로 판정합니다.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 18px; margin-top:8px;">
+    <strong style="color:var(--accent2);">HSV 조절 팁</strong>
+    <p style="font-size:0.84em; margin-top:6px;">변경 후 로그 창에서 실시간으로 <span class="highlight">ratio 값</span>을 확인할 수 있습니다.
+    소리가 있을 때 ratio가 5% 이상이고, 소리 없을 때 5% 미만이면 설정이 올바릅니다.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 13 — 임베디드 오디오 감지 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s12">
+  <div class="tag" style="background:rgba(69,123,222,0.2);color:var(--blue);">임베디드 오디오</div>
+  <h2>임베디드 오디오 감지 — 개요</h2>
+  <div class="divider"></div>
+
+  <div class="two-col">
+    <div>
+      <p style="margin-bottom:16px;">임베디드 오디오는 영상 신호에 포함된 오디오를 <span class="highlight-b">직접 dB 수치로 측정</span>합니다.<br>
+      레벨미터를 화면에서 보는 것이 아닌, 실제 오디오 데이터를 분석합니다.</p>
+
+      <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="flow-step" style="max-width:130px;">
+            <div style="font-size:1.2em;">🔊</div>
+            오디오 신호<br>수신
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="max-width:130px;">
+            오디오 레벨<br>dB 측정
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step decision" style="border-color:var(--blue); max-width:150px;">
+            dB &lt;<br><span style="color:var(--blue);">무음 임계값</span>?<br>(-50dB)
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="flow-step" style="background:rgba(69,123,222,0.15); border-color:var(--blue); max-width:130px;">
+            무음 상태<br>
+            <span style="color:var(--blue); font-size:0.9em;">타이머 시작</span>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step decision" style="border-color:var(--blue); max-width:150px;">
+            지속 시간 ≥<br><span style="color:var(--blue);">알림 발생<br>시간</span>?
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step alert">
+            🔔 알림 발생!
+          </div>
+        </div>
+      </div>
+
+      <table>
+        <tr>
+          <th>파라미터</th>
+          <th>기본값</th>
+          <th>역할</th>
+        </tr>
+        <tr>
+          <td><strong>무음 임계값(dB)</strong></td>
+          <td><span class="highlight">-50dB</span></td>
+          <td>이 dB 이하를 무음으로 판단 (-60 ~ 0)</td>
+        </tr>
+        <tr>
+          <td><strong>알림 발생 시간(초)</strong></td>
+          <td><span class="highlight">20초</span></td>
+          <td>무음이 이 시간 이상 지속 시 알림</td>
+        </tr>
+        <tr>
+          <td><strong>알림 지속시간(초)</strong></td>
+          <td><span class="highlight">60초</span></td>
+          <td>알림음을 울리는 시간</td>
+        </tr>
+      </table>
+    </div>
+
+    <div>
+      <h3 style="color:var(--blue); margin-bottom:12px;">dB 값 이해하기</h3>
+      <div class="card" style="border-color:rgba(69,123,222,0.3);">
+        <div style="font-size:0.85em;">
+          <div style="margin-bottom:12px; color:var(--text-dim);">dB(데시벨)는 소리 크기를 나타냅니다. 0에 가까울수록 크고, 음수가 클수록 작습니다.</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 8px; background:rgba(78,205,196,0.1); border-radius:4px;">
+              <span>0 dB</span><span style="color:var(--green);">최대 음량</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 8px; background:rgba(78,205,196,0.08); border-radius:4px;">
+              <span>-12 dB</span><span style="color:var(--green);">일반 방송 수준</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 8px; background:rgba(245,166,35,0.08); border-radius:4px;">
+              <span>-30 dB</span><span style="color:var(--accent2);">아주 작은 소리</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 8px; background:rgba(233,69,96,0.1); border-radius:4px; border-left:2px solid var(--accent);">
+              <span>-50 dB</span><span style="color:var(--accent);">← 기본 무음 임계값</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 8px; background:rgba(233,69,96,0.15); border-radius:4px;">
+              <span>-60 dB</span><span style="color:var(--accent);">거의 완전한 무음</span>
+            </div>
+          </div>
+          <div style="margin-top:10px; color:var(--text-dim);">
+            <span style="color:var(--accent2);">임계값을 -30 dB로 올리면</span> 작은 소리도 무음으로 판단<br>
+            <span style="color:var(--accent2);">임계값을 -60 dB로 낮추면</span> 거의 완전한 무음만 감지
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 14 — 전체 요약 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="s13">
+  <div class="tag" style="background:rgba(245,166,35,0.2);color:var(--accent2);">요약</div>
+  <h2>감도설정 빠른 참조 카드</h2>
+  <div class="divider"></div>
+
+  <div class="three-col" style="margin-top:12px;">
+    <!-- 블랙 -->
+    <div class="card" style="border-color:rgba(233,69,96,0.4);">
+      <h3 style="color:#ff8fa3; margin-bottom:10px;">⬛ 블랙 감지</h3>
+      <div style="font-size:0.8em; line-height:1.8;">
+        <div><span style="color:var(--text-dim);">감지 안 될 때:</span></div>
+        <div>→ <span class="highlight">비율 임계값 낮추기</span> 98% → 85%</div>
+        <div>→ <span class="highlight">밝기 임계값 올리기</span> 5 → 10</div>
+        <div style="margin-top:8px;"><span style="color:var(--text-dim);">오감지 날 때:</span></div>
+        <div>→ ROI를 자막 없는 곳으로 이동</div>
+        <div>→ 모션 억제 비율 조정</div>
+        <div style="margin-top:8px;"><span style="color:var(--text-dim);">알림 타이밍 조정:</span></div>
+        <div>→ 알림 발생 시간 변경</div>
+      </div>
+    </div>
+
+    <!-- 스틸 -->
+    <div class="card" style="border-color:rgba(155,89,182,0.4);">
+      <h3 style="color:#c39bd3; margin-bottom:10px;">🖼️ 스틸 감지</h3>
+      <div style="font-size:0.8em; line-height:1.8;">
+        <div><span style="color:var(--text-dim);">노이즈로 타이머 계속 리셋:</span></div>
+        <div>→ <span class="highlight">픽셀 변화 기준값 올리기</span> 4 → 8</div>
+        <div>→ <span class="highlight">리셋 프레임 수 올리기</span> 3 → 6</div>
+        <div style="margin-top:8px;"><span style="color:var(--text-dim);">작은 움직임 놓칠 때:</span></div>
+        <div>→ <span class="highlight">블록 임계값 낮추기</span> 10% → 5%</div>
+        <div>→ 픽셀 변화 기준값 낮추기 4 → 2</div>
+        <div style="margin-top:8px;"><span style="color:var(--text-dim);">알림 타이밍 조정:</span></div>
+        <div>→ 알림 발생 시간 변경</div>
+      </div>
+    </div>
+
+    <!-- 오디오 레벨미터 -->
+    <div class="card" style="border-color:rgba(78,205,196,0.4);">
+      <h3 style="color:var(--green); margin-bottom:10px;">🎚️ 오디오 레벨미터</h3>
+      <div style="font-size:0.8em; line-height:1.8;">
+        <div><span style="color:var(--text-dim);">색이 안 잡힐 때:</span></div>
+        <div>→ <span class="highlight">H 범위 확장</span> 40~95 → 20~120</div>
+        <div>→ <span class="highlight">S_min 낮추기</span> 80 → 40</div>
+        <div>→ <span class="highlight">V_min 낮추기</span> 60 → 30</div>
+        <div style="margin-top:8px;"><span style="color:var(--text-dim);">ROI가 작아서 안 잡힐 때:</span></div>
+        <div>→ <span class="highlight">감지 픽셀 비율 낮추기</span> 5% → 2%</div>
+        <div style="margin-top:8px;"><span style="color:var(--text-dim);">켜졌다 꺼졌다 반복:</span></div>
+        <div>→ 복구 딜레이 올리기 2초 → 5초</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:rgba(245,166,35,0.08); border:1px solid rgba(245,166,35,0.3); border-radius:10px; padding:16px 20px; margin-top:20px; font-size:0.85em;">
+    <strong style="color:var(--accent2);">감도설정 전체 초기화:</strong>
+    감도설정 탭 하단의 <span class="highlight">"감도설정 전체 초기화"</span> 버튼으로 모든 값을 기본값으로 되돌릴 수 있습니다.
+  </div>
+</div>
+
+</div><!-- #slideshow -->
+
+<!-- ── 네비게이션 ── -->
+<div class="nav">
+  <button onclick="prevSlide()">◀ 이전</button>
+  <button onclick="nextSlide()">다음 ▶</button>
+</div>
+
+<div class="dots" id="dots"></div>
+<div class="slide-num" id="slideNum"></div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let current = 0;
+
+  // 도트 생성
+  const dotsEl = document.getElementById('dots');
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.onclick = () => goTo(i);
+    dotsEl.appendChild(d);
+  });
+
+  function goTo(n) {
+    if (n < 0 || n >= total) return;
+    slides[current].classList.remove('active');
+    slides[current].classList.add('exit');
+    setTimeout(() => slides[current].classList.remove('exit'), 400);
+    current = n;
+    slides[current].classList.add('active');
+    slides[current].scrollTop = 0;
+
+    // 도트 업데이트
+    document.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i === current);
+    });
+
+    // 슬라이드 번호
+    document.getElementById('slideNum').textContent = (current + 1) + ' / ' + total;
+
+    // 진행 바
+    document.getElementById('progress').style.width = ((current + 1) / total * 100) + '%';
+  }
+
+  function nextSlide() { goTo(current + 1); }
+  function prevSlide() { goTo(current - 1); }
+
+  // 키보드 지원
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault(); nextSlide();
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); prevSlide();
+    }
+    if (e.key === 'Home') goTo(0);
+    if (e.key === 'End') goTo(total - 1);
+  });
+
+  // 초기화
+  goTo(0);
+</script>
+
+</body>
+</html>

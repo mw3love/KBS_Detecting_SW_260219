@@ -117,6 +117,12 @@ for roi in rois:
 - **이유**: 특정 ROI 예외가 전체 감지를 멈추지 않도록 격리
 - `_log = logging.getLogger(__name__)` — 파일 상단에 선언
 
+### `_update_summary()` / `_check_scheduled_restart()` — try-except 보호
+
+- **이유**: `_run_detection()`과 마찬가지로 QTimer 콜백. unhandled exception 발생 시 타이머가 중단되지는 않지만
+  콜백이 매 주기 실패하면 정파 상태 패널이 갱신되지 않거나 예약 재시작이 불능화됨
+- 최외곽 try-except로 보호하고 except 블록에서 `_log.error()`만 호출 후 정상 반환
+
 ### `_on_frame_ready()` — 프레임 복사
 
 ```python
@@ -149,12 +155,16 @@ self._latest_frame = frame.copy()  # 캡처 스레드 버퍼 공유 방지
 
 ### `SignoffManager` 상태 진입 시 타이머 초기화 원칙
 
+- **IDLE 진입 시**: `_transition_to()` 내에서 `_reset_enter_timers()` **자동 호출** (이전 주기 `_video_enter_start` stale 방지)
+  - 이유: SIGNOFF→IDLE 전환 후 `_video_enter_start[gid]`가 이전 PREPARATION 사이클의 Unix 타임스탬프로 잔류.
+    다음 날 PREPARATION 재진입 시 `v_elapsed = now - _video_enter_start`가 수만 초로 즉시 `still_trigger_sec` 초과
+    → SIGNOFF 즉시 조기 전환되는 버그 발생 (2026-03-30 eval-freeze 분석에서 확인). `_transition_to()`에서 처리.
 - **SIGNOFF 진입 시**: `_reset_exit_timers()` **반드시 호출** (이전 주기 `_video_exit_start` stale 방지)
   - 이유: 이전 주기에서 `end_time` 도달로 SIGNOFF→IDLE 시 exit 타이머가 초기화되지 않음.
     다음 주기 exit_prep_window 진입 시 `v_elapsed ≫ exit_trigger_sec` 조건이 즉시 충족되어
     정파가 즉시 조기 종료되는 버그 발생 (2026-03-27 조사에서 확인). `_transition_to()`에서 처리.
 - **PREPARATION 진입 시**: `_dbg_prev_still` `None`으로 초기화 (이전 주기 잔류로 인한 오진단 로그 방지)
-- **절대 하지 말 것**: SIGNOFF 진입 시 `_reset_exit_timers()` 생략
+- **절대 하지 말 것**: IDLE 진입 시 `_reset_enter_timers()` 생략 / SIGNOFF 진입 시 `_reset_exit_timers()` 생략
 
 ---
 

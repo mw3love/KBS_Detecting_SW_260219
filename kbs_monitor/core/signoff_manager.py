@@ -754,6 +754,7 @@ class SignoffManager(QObject):
         if new_state == SignoffState.IDLE:
             self._manual_override[group_id] = False
             self._preparation_entered_at[group_id] = None
+            self._reset_enter_timers(group_id)  # 이전 주기 진입 타이머 초기화 (stale 방지)
 
         if new_state == SignoffState.PREPARATION:
             self._preparation_entered_at[group_id] = time.time()

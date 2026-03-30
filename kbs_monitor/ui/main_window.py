@@ -549,29 +549,32 @@ class MainWindow(QMainWindow):
             self._logger.error(f"SYSTEM - 감지 루프 오류 (silent fail 방지): {e}")
 
     def _update_summary(self):
-        v_count = len(self._roi_manager.video_rois)
-        a_count = len(self._roi_manager.audio_rois)
-        self._top_bar.update_summary(
-            v_count, a_count,
-            self._embedded_detect_enabled,
-            self._detector.embedded_alerting,
-        )
-        # 감지영역 정보를 비디오 위젯에도 동기화
-        self._video_widget.set_rois(
-            self._roi_manager.video_rois,
-            self._roi_manager.audio_rois,
-        )
-        # 정파 상태 패널 갱신 (1초마다)
-        for gid, group in self._signoff_manager.get_groups().items():
-            state = self._signoff_manager.get_state(gid)
-            if state == SignoffState.SIGNOFF:
-                secs = self._signoff_manager.get_end_remaining_seconds(gid)
-            else:
-                secs = self._signoff_manager.get_elapsed_seconds(gid)
-            self._top_bar.update_signoff_state(
-                gid, state.value, group.name, secs,
-                clock_enabled=self._signoff_manager.is_group_enabled(gid),
+        try:
+            v_count = len(self._roi_manager.video_rois)
+            a_count = len(self._roi_manager.audio_rois)
+            self._top_bar.update_summary(
+                v_count, a_count,
+                self._embedded_detect_enabled,
+                self._detector.embedded_alerting,
             )
+            # 감지영역 정보를 비디오 위젯에도 동기화
+            self._video_widget.set_rois(
+                self._roi_manager.video_rois,
+                self._roi_manager.audio_rois,
+            )
+            # 정파 상태 패널 갱신 (1초마다)
+            for gid, group in self._signoff_manager.get_groups().items():
+                state = self._signoff_manager.get_state(gid)
+                if state == SignoffState.SIGNOFF:
+                    secs = self._signoff_manager.get_end_remaining_seconds(gid)
+                else:
+                    secs = self._signoff_manager.get_elapsed_seconds(gid)
+                self._top_bar.update_signoff_state(
+                    gid, state.value, group.name, secs,
+                    clock_enabled=self._signoff_manager.is_group_enabled(gid),
+                )
+        except Exception as e:
+            _log.error("_update_summary 오류 (silent fail 방지): %s", e)
 
     # ── 모니터링 제어 ──────────────────────────────────
 
@@ -1181,20 +1184,23 @@ class MainWindow(QMainWindow):
 
     def _check_scheduled_restart(self):
         """10초 주기로 예약 재시작 시각 확인 (설정 파일을 매번 직접 읽어 런타임 변경 반영)"""
-        sys_cfg = self._config_manager.load().get("system", {})
-        if not sys_cfg.get("scheduled_restart_enabled", True):
-            return
-
-        time_str = sys_cfg.get("scheduled_restart_time", "03:00")
         try:
-            t = datetime.datetime.strptime(time_str, "%H:%M")
-            restart_hour, restart_minute = t.hour, t.minute
-        except ValueError:
-            return
+            sys_cfg = self._config_manager.load().get("system", {})
+            if not sys_cfg.get("scheduled_restart_enabled", True):
+                return
 
-        now = datetime.datetime.now()
-        if now.hour == restart_hour and now.minute == restart_minute and self._restart_done_time != time_str:
-            self._do_scheduled_restart(time_str)
+            time_str = sys_cfg.get("scheduled_restart_time", "03:00")
+            try:
+                t = datetime.datetime.strptime(time_str, "%H:%M")
+                restart_hour, restart_minute = t.hour, t.minute
+            except ValueError:
+                return
+
+            now = datetime.datetime.now()
+            if now.hour == restart_hour and now.minute == restart_minute and self._restart_done_time != time_str:
+                self._do_scheduled_restart(time_str)
+        except Exception as e:
+            _log.error("_check_scheduled_restart 오류 (silent fail 방지): %s", e)
 
     def _do_scheduled_restart(self, time_str: str):
         """새 프로세스를 시작하고 현재 프로세스를 종료한다."""

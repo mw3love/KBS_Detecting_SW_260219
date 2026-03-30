@@ -48,7 +48,7 @@ class AppLogger(QObject):
             log_path = os.path.join(self.LOG_DIR, f"{today}.txt")
             handler = logging.FileHandler(log_path, encoding="utf-8")
             formatter = logging.Formatter(
-                "%(asctime)s [%(levelname)s] %(message)s",
+                "%(asctime)s [%(levelname)s][%(threadName)s] %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S",
             )
             handler.setFormatter(formatter)
@@ -63,7 +63,7 @@ class AppLogger(QObject):
                     fallback_path = os.path.join(self.LOG_DIR, f"{self._current_date}.txt")
                     fallback_handler = logging.FileHandler(fallback_path, encoding="utf-8")
                     fallback_handler.setFormatter(logging.Formatter(
-                        "%(asctime)s [%(levelname)s] %(message)s",
+                        "%(asctime)s [%(levelname)s][%(threadName)s] %(message)s",
                         datefmt="%Y-%m-%d %H:%M:%S",
                     ))
                     self._file_logger.addHandler(fallback_handler)

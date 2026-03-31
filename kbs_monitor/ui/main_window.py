@@ -46,7 +46,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.6.9")
+        self.setWindowTitle("KBS Peacock v1.6.10")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -99,6 +99,11 @@ class MainWindow(QMainWindow):
         # 감지 주기 카운터 (silent failure 감지 / 주기적 정상 작동 로그용)
         # 타이머 200ms 기준: 1500회 ≈ 5분
         self._detection_count: int = 0
+
+        # Health Check: 감지 루프 / 비디오 프레임 staleness 추적
+        self._last_detection_time: float = time.time()
+        self._last_frame_time: float = time.time()
+        self._health_alarm_logged: bool = False
 
         # 현재 연결 중인 캡처 포트 (connected 시점에 고정 — 포트 변경 타이밍 혼동 방지)
         self._active_capture_port: int = self._config.get("port", 0)
@@ -262,6 +267,7 @@ class MainWindow(QMainWindow):
 
     def _on_frame_ready(self, frame):
         self._latest_frame = frame.copy()  # 캡처 스레드 버퍼 공유 방지
+        self._last_frame_time = time.time()
         if self._roi_overlay is None:
             self._video_widget.update_frame(frame)
         self._recorder.push_frame(frame)
@@ -274,6 +280,7 @@ class MainWindow(QMainWindow):
 
         # 주기적 정상 작동 로그 (200ms × 150 ≈ 30초) — 파일 로그 전용 (UI 미출력)
         self._detection_count += 1
+        self._last_detection_time = time.time()
         if self._detection_count % 150 == 0:
             total_sec = self._detection_count // 5
             days, rem = divmod(total_sec, 86400)
@@ -596,6 +603,41 @@ class MainWindow(QMainWindow):
                 )
         except Exception as e:
             _log.error("_update_summary 오류 (silent fail 방지): %s", e)
+
+        # Health Check: 감지 루프 + 비디오 프레임 staleness 검사 (1초마다)
+        try:
+            now = time.time()
+            detect_stale = (now - self._last_detection_time) > 5.0
+            frame_stale = (now - self._last_frame_time) > 10.0
+
+            # 감지 의도적 중단 상태에서는 오탐 방지
+            if not self._detection_enabled or self._roi_overlay is not None:
+                detect_stale = False
+
+            self._top_bar.update_health(detect_stale, frame_stale)
+
+            # 상태 변경 시에만 로그 (반복 방지)
+            health_abnormal = detect_stale or frame_stale
+            if health_abnormal and not self._health_alarm_logged:
+                if detect_stale:
+                    elapsed_d = now - self._last_detection_time
+                    self._logger.error(
+                        f"SYSTEM - 감지 루프 중단 감지 (health check) | "
+                        f"마지막 감지: {elapsed_d:.1f}초 전 | "
+                        f"감지횟수: {self._detection_count}"
+                    )
+                if frame_stale:
+                    elapsed_f = now - self._last_frame_time
+                    self._logger.error(
+                        f"SYSTEM - 비디오 프레임 수신 중단 감지 (health check) | "
+                        f"마지막 프레임: {elapsed_f:.1f}초 전"
+                    )
+                self._health_alarm_logged = True
+            elif not health_abnormal and self._health_alarm_logged:
+                self._logger.info("SYSTEM - 정상 복구 (health check)")
+                self._health_alarm_logged = False
+        except Exception as e:
+            _log.error("health check 오류 (silent fail 방지): %s", e)
 
     # ── 모니터링 제어 ──────────────────────────────────
 

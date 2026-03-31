@@ -282,6 +282,10 @@ class TopBar(QWidget):
         self._sys_monitor = SysMonitorWidget()
         layout.addWidget(self._sys_monitor, alignment=Qt.AlignTop)
 
+        # 1b. Health Check 인디케이터 (이상 시만 표시)
+        self._health_indicator = self._create_health_indicator()
+        layout.addWidget(self._health_indicator, alignment=Qt.AlignTop)
+
         layout.addWidget(self._make_separator())
 
         # 2. 현재 시각 (소제목 + 시간값)
@@ -513,6 +517,43 @@ class TopBar(QWidget):
         vbox.addWidget(items_widget)
 
         return container
+
+    def _create_health_indicator(self) -> QWidget:
+        """Health Check 인디케이터 위젯 생성 (정상 시 숨김)"""
+        container = QWidget()
+        container.setObjectName("healthIndicator")
+        container.setFixedWidth(80)
+        hc_vbox = QVBoxLayout(container)
+        hc_vbox.setContentsMargins(4, 2, 4, 2)
+        hc_vbox.setSpacing(2)
+
+        self._lbl_health = QLabel("")
+        self._lbl_health.setAlignment(Qt.AlignCenter)
+        self._lbl_health.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        self._lbl_health.setWordWrap(True)
+        hc_vbox.addWidget(self._lbl_health)
+
+        container.setVisible(False)
+        return container
+
+    def update_health(self, detect_stale: bool, frame_stale: bool):
+        """감지 루프 / 비디오 프레임 이상 여부를 인디케이터에 반영"""
+        if detect_stale or frame_stale:
+            parts = []
+            if detect_stale:
+                parts.append("감지 중단")
+            if frame_stale:
+                parts.append("영상 중단")
+            self._lbl_health.setText("\n".join(parts))
+            self._lbl_health.setStyleSheet(
+                "color: white; background-color: #cc0000; "
+                "border-radius: 4px; padding: 2px 6px;"
+            )
+            self._health_indicator.setVisible(True)
+        else:
+            self._health_indicator.setVisible(False)
+            self._lbl_health.setText("")
+            self._lbl_health.setStyleSheet("")
 
     def _make_separator(self) -> QFrame:
         line = QFrame()

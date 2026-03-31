@@ -9,7 +9,9 @@ PySide6 기반 방송 현장용 16채널 비디오 모니터링 솔루션.
 
 | 버전 | 주요 변경사항 |
 |------|--------------|
-| **v1.6.7** | 로그 개선 — 매체명 추가, NEAR-MISS/EXIT-DBG/DIAG-ALARM/DIAG-TELEGRAM 로그 정제 |
+| **v1.6.9** | 포트 연결 실패 로그 정확도 개선 + 텔레그램 연속 실패 로그 스팸 억제 |
+| v1.6.8 | 캡처 스레드 heartbeat 로그 추가, 감지 루프 heartbeat 주기 단축 + 타이머 상태 로그 |
+| v1.6.7 | 로그 개선 — 매체명 추가, NEAR-MISS/EXIT-DBG/DIAG-ALARM/DIAG-TELEGRAM 로그 정제 |
 | v1.6.6 | signoff_manager 퇴출 타이머 stale 버그 수정 |
 | v1.6.5 | 코드 최적화 Phase 5 완료 (crop 검증, requirements 상한선, 에러 처리 강화) |
 | v1.6.4 | 스틸 감지 블록 격자 세분화 (3×3→5×5), 블록 임계값 하향 (15%→10%) |

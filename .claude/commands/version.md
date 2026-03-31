@@ -51,12 +51,48 @@ date +%Y-%m-%d
 
 이전 최신 버전의 `**굵음**` 강조를 일반 텍스트로 변경하세요 (새 버전만 굵게 표시).
 
-## 6단계: 변경 확인 후 커밋
+## 6단계: 릴리즈 노트 문서 생성
+
+`Fix/릴리즈노트/` 폴더에 릴리즈 노트 파일을 생성하세요.
+
+파일명: `Fix/릴리즈노트/v$ARGUMENTS.md`
+
+내용은 이전 버전 이후의 git 커밋 로그를 분석하여 작성합니다:
+
+```bash
+git log --oneline $(git tag --sort=-version:refname | head -1)..HEAD 2>/dev/null || git log --oneline -20
+```
+
+문서 구조:
+```markdown
+# v$ARGUMENTS 릴리즈 노트
+
+**릴리즈 날짜**: 오늘날짜
+
+## 변경사항 요약
+(커밋 메시지를 분석하여 핵심 변경사항을 카테고리별로 정리)
+
+### 버그 수정
+- (fix: 커밋에서 추출)
+
+### 개선
+- (docs/chore/refactor 커밋에서 추출)
+
+## 커밋 이력
+(해당 버전에 포함된 커밋 목록, 해시 앞 7자리 + 메시지)
+
+## 정적 검증 결과
+(이번 버전에 eval-plan/eval-freeze 결과가 있으면 요약, 없으면 "해당 없음")
+```
+
+> `Fix/릴리즈노트/` 폴더가 없으면 Write 도구로 파일 생성 시 자동으로 만들어집니다.
+
+## 7단계: 변경 확인 후 커밋
 
 수정한 파일들을 git add하고 커밋하세요:
 
 ```bash
-git add kbs_monitor/main.py kbs_monitor/ui/main_window.py kbs_monitor/ui/settings_dialog.py CLAUDE.md README.md
+git add kbs_monitor/main.py kbs_monitor/ui/main_window.py kbs_monitor/ui/settings_dialog.py CLAUDE.md README.md "Fix/릴리즈노트/v$ARGUMENTS.md"
 ```
 
 커밋 메시지 형식:
@@ -64,7 +100,7 @@ git add kbs_monitor/main.py kbs_monitor/ui/main_window.py kbs_monitor/ui/setting
 v$ARGUMENTS: 버전 표기 및 About 날짜 업데이트
 ```
 
-## 7단계: 푸시
+## 8단계: 푸시
 
 ```bash
 git push

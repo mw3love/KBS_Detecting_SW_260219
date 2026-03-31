@@ -100,6 +100,9 @@ class MainWindow(QMainWindow):
         # 타이머 200ms 기준: 1500회 ≈ 5분
         self._detection_count: int = 0
 
+        # 현재 연결 중인 캡처 포트 (connected 시점에 고정 — 포트 변경 타이밍 혼동 방지)
+        self._active_capture_port: int = self._config.get("port", 0)
+
         # UI 구성
         self._setup_ui()
         self._connect_signals()
@@ -203,11 +206,10 @@ class MainWindow(QMainWindow):
 
         self._capture_thread = VideoCaptureThread(port=port)
         self._capture_thread.frame_ready.connect(self._on_frame_ready)
-        self._capture_thread.connected.connect(
-            lambda: self._logger.info(f"SYSTEM - 포트 {self._config.get('port',0)} 연결 성공")
-        )
-        self._capture_thread.disconnected.connect(
-            lambda: self._logger.error(f"SYSTEM - 포트 {self._config.get('port',0)} 연결 실패")
+        self._capture_thread.connected.connect(self._on_capture_connected)
+        self._capture_thread.disconnected.connect(self._on_capture_disconnected)
+        self._capture_thread.status_changed.connect(
+            lambda msg: self._logger.info(f"SYSTEM - {msg}")
         )
         self._capture_thread.start()
 
@@ -245,6 +247,16 @@ class MainWindow(QMainWindow):
         self._restart_timer.start()
 
         self._latest_frame = None
+
+    # ── 캡처 스레드 슬롯 ────────────────────────────────
+
+    def _on_capture_connected(self):
+        """캡처 스레드 연결 성공 — 연결 시점의 포트 번호를 고정 기록"""
+        self._active_capture_port = self._config.get("port", 0)
+
+    def _on_capture_disconnected(self):
+        """캡처 스레드 연결 끊김 — 연결 당시 포트 번호로 오류 로그"""
+        self._logger.error(f"SYSTEM - 포트 {self._active_capture_port} 연결 실패")
 
     # ── 프레임/감지 ────────────────────────────────────
 

@@ -51,6 +51,11 @@ class TelegramNotifier:
             target=self._worker_loop, daemon=True, name="TelegramWorker"
         )
 
+        # 연속 실패 카운터 (워커 스레드에서만 읽기/쓰기)
+        self._consecutive_failures: int = 0
+        # 메인 스레드 → 워커 스레드 리셋 플래그 (configure 시 설정)
+        self._reset_failure_count: bool = False
+
         # 로그 콜백 (main_window에서 set_logger()로 주입)
         self._log_info = None
         self._log_error = None
@@ -109,6 +114,8 @@ class TelegramNotifier:
             "무음": notify_embedded,
             "정파": notify_signoff,
         }
+        # 설정 변경 시 연속 실패 카운터 리셋 요청 (워커 스레드에서 처리)
+        self._reset_failure_count = True
 
     # ── 알림 발생 ─────────────────────────────────────────────────────────────
 
@@ -230,6 +237,10 @@ class TelegramNotifier:
     def _worker_loop(self):
         """백그라운드 전송 워커 루프"""
         while self._running:
+            # configure()에서 설정된 리셋 플래그 확인 (스레드 안전: 워커에서만 쓰기)
+            if self._reset_failure_count:
+                self._consecutive_failures = 0
+                self._reset_failure_count = False
             try:
                 item = self._queue.get(timeout=1.0)
             except queue.Empty:
@@ -237,15 +248,43 @@ class TelegramNotifier:
             if item is None:    # 종료 센티널
                 break
             try:
-                self._send(item)
+                success = self._send(item)
+                if success:
+                    self._consecutive_failures = 0
             except Exception as exc:
                 # _send() 내부 try-except가 놓친 예외 → 스레드 사망 방지
-                self._log(f"전송 처리 중 예외 (스레드 유지): {type(exc).__name__}: {exc}", error=True)
+                self._consecutive_failures += 1
+                self._log_with_suppression(
+                    f"전송 처리 중 예외 (스레드 유지): {type(exc).__name__}: {exc}"
+                )
 
-    def _send(self, item: dict):
-        """실제 HTTP 전송 (워커 스레드에서 실행)"""
+    @staticmethod
+    def _classify_error(exc: Exception) -> str:
+        """예외 유형을 사용자 친화적 문자열로 분류"""
+        if _REQUESTS_AVAILABLE:
+            if isinstance(exc, _requests.exceptions.ConnectionError):
+                return "네트워크 차단"
+            if isinstance(exc, _requests.exceptions.Timeout):
+                return "응답 시간 초과"
+        return type(exc).__name__
+
+    def _log_with_suppression(self, msg: str):
+        """연속 실패 카운터 기반 로그 빈도 제어 (워커 스레드 전용)"""
+        n = self._consecutive_failures
+        if n <= 3:
+            # 1~3회: UI에 표시
+            self._log(msg, error=True)
+        elif n % 10 == 0:
+            # 10, 20, 30...: 요약 1회 UI 표시
+            self._log(f"텔레그램 {n}회 연속 실패 중 — 네트워크/방화벽 확인", error=True)
+        else:
+            # 4~9, 11~19...: 파일 로그만
+            self._log(msg, error=False)
+
+    def _send(self, item: dict) -> bool:
+        """실제 HTTP 전송 (워커 스레드에서 실행). 성공 시 True, 최종 실패 시 False."""
         if not _REQUESTS_AVAILABLE:
-            return
+            return False
 
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         alarm_type = item["alarm_type"]
@@ -296,7 +335,7 @@ class TelegramNotifier:
                 if resp.status_code == 200:
                     kind = "복구" if is_recovery else "알림"
                     self._log(f"{alarm_type} {kind} 전송 완료 ({channel_str})")
-                    return
+                    return True
                 elif resp.status_code == 429:
                     # Rate Limit — 응답의 retry_after만큼 대기 후 재시도
                     try:
@@ -314,17 +353,24 @@ class TelegramNotifier:
                     self._log(
                         f"전송 실패 {resp.status_code}: {resp.text[:120]}", error=True
                     )
-                    return  # 그 외 HTTP 오류는 재시도 없이 종료
+                    return False  # 그 외 HTTP 오류는 재시도 없이 종료
             except Exception as exc:
+                error_desc = self._classify_error(exc)
                 if attempt < _SEND_RETRY_COUNT:
                     self._log(
                         f"전송 오류 (재시도 {attempt + 1}/{_SEND_RETRY_COUNT}): "
-                        f"{type(exc).__name__}: {exc}",
+                        f"{error_desc} — {exc}",
                         error=True,
                     )
                     time.sleep(_SEND_RETRY_DELAY)
                 else:
-                    self._log(
-                        f"전송 실패 (재시도 소진): {type(exc).__name__}: {exc}",
-                        error=True,
+                    # 마지막 재시도도 실패 — 카운터 기반 로그
+                    self._consecutive_failures += 1
+                    self._log_with_suppression(
+                        f"전송 실패 (재시도 소진): {error_desc} — {exc}"
                     )
+                    return False
+        # 429 재시도 루프 모두 소진
+        self._consecutive_failures += 1
+        self._log_with_suppression("전송 실패 (Rate Limit 재시도 소진)")
+        return False

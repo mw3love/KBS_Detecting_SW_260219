@@ -3,13 +3,11 @@
 OpenCV를 사용하여 USB 캡처 카드에서 영상을 읽어 UI에 전달
 """
 import logging
-import time
 import cv2
 import numpy as np
 from PySide6.QtCore import QThread, Signal, QMutex, QMutexLocker
 
 _log = logging.getLogger(__name__)
-_PERIODIC_RECONNECT_INTERVAL = 8 * 3600  # 8시간마다 캡처 장치 강제 재연결 (freeze 예방)
 
 
 class VideoCaptureThread(QThread):
@@ -56,7 +54,6 @@ class VideoCaptureThread(QThread):
         consecutive_failures = 0
         frame_count = 0
         max_failures = 30  # 30프레임 연속 실패 시 재연결 시도
-        last_reconnect = time.time()  # 주기적 강제 재연결 타이머
 
         while self._running:
             try:
@@ -77,7 +74,6 @@ class VideoCaptureThread(QThread):
                     was_connected = False
                     consecutive_failures = 0
                     frame_count = 0
-                    last_reconnect = time.time()  # 수동 변경 시 타이머 리셋
 
                 # 연결이 없는 경우 새 소스 열기
                 if cap is None:
@@ -109,20 +105,6 @@ class VideoCaptureThread(QThread):
                         cap = None
                         self.msleep(1000)
                         continue
-
-                # 주기적 강제 재연결 (캡처 카드 freeze 예방) — 파일 소스 제외, 포트 캡처 전용
-                if was_connected and not current_file and (time.time() - last_reconnect >= _PERIODIC_RECONNECT_INTERVAL):
-                    self.status_changed.emit(f"포트 {current_port} 정기 재연결 (freeze 예방)")
-                    was_connected = False
-                    self.disconnected.emit()
-                    try:
-                        cap.release()
-                    except Exception:
-                        pass
-                    cap = None
-                    last_reconnect = time.time()
-                    consecutive_failures = 0
-                    continue
 
                 # 프레임 읽기
                 ret, frame = cap.read()

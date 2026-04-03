@@ -140,13 +140,13 @@ class MainWindow(QMainWindow):
         self._startup_complete = False
         QTimer.singleShot(3000, lambda: setattr(self, '_startup_complete', True))
 
-        # 예약 재시작: 마지막으로 재시작을 실행한 "HH:MM" 기록 (같은 시각 재트리거 방지)
-        # --restarted HH:MM 인자가 있으면 해당 시각을 기록하여 같은 분 반복 방지
-        self._restart_done_time: str = ""
+        # 예약 재시작: 마지막으로 재시작을 실행한 날짜(YYYY-MM-DD) 기록 (같은 날 재트리거 방지)
+        # --restarted HH:MM 인자가 있으면 오늘 날짜를 기록하여 당일 반복 방지
+        self._restart_done_date: str = ""
         if "--restarted" in sys.argv:
             idx = sys.argv.index("--restarted")
             if idx + 1 < len(sys.argv):
-                self._restart_done_time = sys.argv[idx + 1]
+                self._restart_done_date = datetime.date.today().isoformat()
 
         self._logger.info("SYSTEM - 프로그램 시작")
 
@@ -1260,14 +1260,16 @@ class MainWindow(QMainWindow):
                 return
 
             now = datetime.datetime.now()
-            if now.hour == restart_hour and now.minute == restart_minute and self._restart_done_time != time_str:
+            today_str = datetime.date.today().isoformat()
+            if (now.hour == restart_hour and now.minute == restart_minute
+                    and self._restart_done_date != today_str):
                 self._do_scheduled_restart(time_str)
         except Exception as e:
             _log.error("_check_scheduled_restart 오류 (silent fail 방지): %s", e)
 
     def _do_scheduled_restart(self, time_str: str):
         """새 프로세스를 시작하고 현재 프로세스를 종료한다."""
-        self._restart_done_time = time_str
+        self._restart_done_date = datetime.date.today().isoformat()
         self._logger.info("SYSTEM - 예약 재시작 실행 (설정된 시각) — 30초 후 재시작")
         # --restarted HH:MM 전달: 새 프로세스에서 같은 시각 재트리거 방지
         clean = []

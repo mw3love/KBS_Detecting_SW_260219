@@ -360,13 +360,12 @@ class TelegramNotifier:
             except Exception as exc:
                 error_desc = self._classify_error(exc)
                 if attempt < _SEND_RETRY_COUNT:
-                    # 연속 실패 중(4회+)이면 재시도 중간 로그도 파일 전용
+                    # 중간 재시도 오류는 파일 전용 — 재시도 후 성공하면 UI에 빨간 로그 불필요
                     retry_msg = (
                         f"전송 오류 (재시도 {attempt + 1}/{_SEND_RETRY_COUNT}): "
                         f"{error_desc} — {exc}"
                     )
-                    show_ui = self._consecutive_failures < 3
-                    self._log(retry_msg, error=show_ui)
+                    self._log(retry_msg, error=False)
                     time.sleep(_SEND_RETRY_DELAY)
                 else:
                     # 마지막 재시도도 실패 — 카운터 기반 로그

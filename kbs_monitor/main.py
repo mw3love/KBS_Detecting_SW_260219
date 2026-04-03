@@ -4,6 +4,7 @@ KBS 16채널 비디오 모니터링 시스템 v2
 """
 import sys
 import os
+import faulthandler
 
 # Windows 콘솔 창 숨기기
 if sys.platform == "win32":
@@ -11,7 +12,13 @@ if sys.platform == "win32":
     ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
 
 # 스크립트 위치를 작업 디렉토리로 설정 (상대 경로 참조를 위해)
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+os.chdir(_BASE_DIR)
+
+# C++ segfault 발생 시 스택트레이스 기록 (Python try-except로 잡히지 않는 크래시 추적용)
+os.makedirs(os.path.join(_BASE_DIR, "logs"), exist_ok=True)
+_fault_log = open(os.path.join(_BASE_DIR, "logs", "fault.log"), "a", encoding="utf-8")
+faulthandler.enable(file=_fault_log)
 
 from PySide6.QtWidgets import QApplication
 

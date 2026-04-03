@@ -1147,7 +1147,12 @@ class MainWindow(QMainWindow):
 
         # 텔레그램 알림: 정파모드 진입 및 해제 시만 발송
         tg = self._config.get("telegram", {})
-        if tg.get("notify_signoff", True):
+        notify_signoff_flag = tg.get("notify_signoff", True)
+        self._logger.info(
+            f"SIGNOFF-TG state={state.name} enabled={self._telegram._enabled} "
+            f"notify_signoff={notify_signoff_flag}"
+        )
+        if notify_signoff_flag:
             if state == SignoffState.SIGNOFF:
                 self._telegram.notify("정파", group_name, group_name, self._latest_frame)
             elif state == SignoffState.IDLE:

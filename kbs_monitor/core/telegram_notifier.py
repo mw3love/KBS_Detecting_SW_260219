@@ -136,7 +136,8 @@ class TelegramNotifier:
             self._log("requests 라이브러리 미설치 — pip install requests", error=True)
             return
         if not self._enabled:
-            return  # 비활성 상태 — 로그 없이 종료
+            self._log(f"[DIAG] notify() 비활성 상태 — 스킵 (alarm_type={alarm_type}, label={label})", error=False)
+            return
         # 워커 스레드 사망 감지 → 자동 재시작 (장기 실행 안정성)
         if self._running and not self._worker_thread.is_alive():
             with self._worker_lock:
@@ -150,6 +151,7 @@ class TelegramNotifier:
             self._log("Bot Token 또는 Chat ID가 설정되지 않았습니다.", error=True)
             return
         if not self._notify_flags.get(alarm_type, True):
+            self._log(f"[DIAG] notify() {alarm_type} 알림 플래그 비활성 — 스킵 (label={label})", error=False)
             return
 
         # 쿨다운 체크 (복구 메시지는 쿨다운 적용 안 함)

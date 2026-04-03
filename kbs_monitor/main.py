@@ -5,6 +5,7 @@ KBS 16채널 비디오 모니터링 시스템 v2
 import sys
 import os
 import faulthandler
+import atexit
 
 # Windows 콘솔 창 숨기기
 if sys.platform == "win32":
@@ -19,6 +20,7 @@ os.chdir(_BASE_DIR)
 os.makedirs(os.path.join(_BASE_DIR, "logs"), exist_ok=True)
 _fault_log = open(os.path.join(_BASE_DIR, "logs", "fault.log"), "a", encoding="utf-8")
 faulthandler.enable(file=_fault_log)
+atexit.register(_fault_log.close)
 
 from PySide6.QtWidgets import QApplication
 

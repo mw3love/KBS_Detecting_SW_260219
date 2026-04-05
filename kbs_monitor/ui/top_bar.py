@@ -536,15 +536,10 @@ class TopBar(QWidget):
         container.setVisible(False)
         return container
 
-    def update_health(self, detect_stale: bool, frame_stale: bool):
-        """감지 루프 / 비디오 프레임 이상 여부를 인디케이터에 반영"""
-        if detect_stale or frame_stale:
-            parts = []
-            if detect_stale:
-                parts.append("감지 중단")
-            if frame_stale:
-                parts.append("영상 중단")
-            self._lbl_health.setText("\n".join(parts))
+    def update_health(self, detect_stale: bool):
+        """감지 루프 중단 여부를 인디케이터에 반영"""
+        if detect_stale:
+            self._lbl_health.setText("감지 중단")
             self._lbl_health.setStyleSheet(
                 "color: white; background-color: #cc0000; "
                 "border-radius: 4px; padding: 2px 6px;"

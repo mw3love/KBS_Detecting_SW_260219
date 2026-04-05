@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import time
+import traceback
 from typing import Optional
 
 _log = logging.getLogger("kbs_monitor")
@@ -280,125 +281,140 @@ class MainWindow(QMainWindow):
 
         # 주기적 정상 작동 로그 (200ms × 150 ≈ 30초) — 파일 로그 전용 (UI 미출력)
         self._detection_count += 1
-        self._last_detection_time = time.time()
         if self._detection_count % 150 == 0:
-            total_sec = self._detection_count // 5
-            days, rem = divmod(total_sec, 86400)
-            hours, mins_rem = divmod(rem, 3600)
-            mins, secs = divmod(mins_rem, 60)
-            if days > 0:
-                elapsed_str = f"{days}일 {hours}시간 {mins}분"
-            elif hours > 0:
-                elapsed_str = f"{hours}시간 {mins}분"
-            elif mins > 0:
-                elapsed_str = f"{mins}분 {secs}초"
-            else:
-                elapsed_str = f"{secs}초"
-            _log.info(
-                "SYSTEM-HB [%s 경과] detect=%s summary=%s restart=%s",
-                elapsed_str,
-                "ON" if self._detect_timer.isActive() else "OFF",
-                "ON" if self._summary_timer.isActive() else "OFF",
-                "ON" if self._restart_timer.isActive() else "OFF",
-            )
-            now_hb = time.time()
-            for lbl, raw in self._detector._last_raw.items():
-                still_state = self._detector._still_states.get(lbl)
-                dark_r = raw.get("dark_ratio", -1.0)
-                changed_r = raw.get("changed_ratio", -1.0)
-                still_timer = still_state.alert_duration if still_state else 0.0
-                if still_state and still_state._last_reset_time:
-                    reset_ago_str = f"직전리셋={now_hb - still_state._last_reset_time:.1f}s전"
+            try:
+                import psutil as _psutil
+                total_sec = self._detection_count // 5
+                days, rem = divmod(total_sec, 86400)
+                hours, mins_rem = divmod(rem, 3600)
+                mins, secs = divmod(mins_rem, 60)
+                if days > 0:
+                    elapsed_str = f"{days}일 {hours}시간 {mins}분"
+                elif hours > 0:
+                    elapsed_str = f"{hours}시간 {mins}분"
+                elif mins > 0:
+                    elapsed_str = f"{mins}분 {secs}초"
                 else:
-                    reset_ago_str = "리셋없음"
-                changed_str = (
-                    f" changed={changed_r:.1f}%[블록기준{self._detector.still_block_threshold}%]"
-                    if changed_r >= 0 else ""
-                )
-                # resolve 횟수 + alert_start_time 존재 여부 (진단 강화)
-                resolve_cnt = still_state._resolve_count if still_state else 0
-                has_start = still_state.alert_start_time is not None if still_state else False
-                alerting_str = "경보중" if (still_state and still_state.is_alerting) else "정상"
+                    elapsed_str = f"{secs}초"
+                _proc = _psutil.Process()
                 _log.info(
-                    "DIAG - %s: black=%.1f%%[기준%.0f%%] still_timer=%.1fs[기준%.0fs]%s %s"
-                    " [%s/resolve=%d/start=%s]",
-                    lbl, dark_r, self._detector.black_dark_ratio,
-                    still_timer, self._detector.still_duration,
-                    changed_str, reset_ago_str,
-                    alerting_str, resolve_cnt, "Y" if has_start else "N",
+                    "SYSTEM-HB [%s 경과] detect=%s summary=%s restart=%s threads=py:%d/os:%d",
+                    elapsed_str,
+                    "ON" if self._detect_timer.isActive() else "OFF",
+                    "ON" if self._summary_timer.isActive() else "OFF",
+                    "ON" if self._restart_timer.isActive() else "OFF",
+                    threading.active_count(),
+                    _proc.num_threads(),
                 )
-
-            # ── DIAG-ALARM: 활성 알람이 있을 때만 기록 ──
-            active_alarms = self._alarm._active_alarms
-            if active_alarms:
-                alarm_parts = []
-                for key in sorted(active_alarms):
-                    label = key.split("_", 1)[1] if "_" in key else key
-                    suppressed = (
-                        self._signoff_manager.is_signoff_label(label)
-                        or self._signoff_manager.is_prep_label(label)
+                now_hb = time.time()
+                for lbl, raw in self._detector._last_raw.items():
+                    still_state = self._detector._still_states.get(lbl)
+                    dark_r = raw.get("dark_ratio", -1.0)
+                    changed_r = raw.get("changed_ratio", -1.0)
+                    still_timer = still_state.alert_duration if still_state else 0.0
+                    if still_state and still_state._last_reset_time:
+                        reset_ago_str = f"직전리셋={now_hb - still_state._last_reset_time:.1f}s전"
+                    else:
+                        reset_ago_str = "리셋없음"
+                    changed_str = (
+                        f" changed={changed_r:.1f}%[블록기준{self._detector.still_block_threshold}%]"
+                        if changed_r >= 0 else ""
                     )
-                    alarm_parts.append(f"{key}{'(억제중)' if suppressed else ''}")
-                _log.info("DIAG-ALARM - 활성: [%s]", ", ".join(alarm_parts))
+                    # resolve 횟수 + alert_start_time 존재 여부 (진단 강화)
+                    resolve_cnt = still_state._resolve_count if still_state else 0
+                    has_start = still_state.alert_start_time is not None if still_state else False
+                    alerting_str = "경보중" if (still_state and still_state.is_alerting) else "정상"
+                    _log.info(
+                        "DIAG - %s: black=%.1f%%[기준%.0f%%] still_timer=%.1fs[기준%.0fs]%s %s"
+                        " [%s/resolve=%d/start=%s]",
+                        lbl, dark_r, self._detector.black_dark_ratio,
+                        still_timer, self._detector.still_duration,
+                        changed_str, reset_ago_str,
+                        alerting_str, resolve_cnt, "Y" if has_start else "N",
+                    )
 
-            # ── DIAG-SIGNOFF: 정파 그룹별 상태 ──
-            signoff_parts = []
-            video_name_map_hb = {r.label: r.media_name for r in self._roi_manager.video_rois}
-            for gid, group in self._signoff_manager.get_groups().items():
-                state = self._signoff_manager.get_state(gid)
-                enter_lbl = group.enter_roi.get("video_label", "-")
-                enter_media = video_name_map_hb.get(enter_lbl, "")
-                enter_str = f"{enter_lbl}({enter_media})" if enter_media else enter_lbl
-                sup_labels = ",".join(group.suppressed_labels) if group.suppressed_labels else "-"
-                dbg = self._signoff_manager.get_debug_flags(gid)
-                flags = f"exit_rel={'T' if dbg['exit_released'] else 'F'},manual={'T' if dbg['manual'] else 'F'}"
-                signoff_parts.append(
-                    f"그룹{gid}=[{group.name}/{state.value}/진입:{enter_str}/억제:{sup_labels}/{flags}]"
-                )
-            _log.info("DIAG-SIGNOFF - %s", " ".join(signoff_parts) if signoff_parts else "그룹없음")
+                # ── DIAG-ALARM: 활성 알람이 있을 때만 기록 ──
+                active_alarms = self._alarm._active_alarms
+                if active_alarms:
+                    alarm_parts = []
+                    for key in sorted(active_alarms):
+                        label = key.split("_", 1)[1] if "_" in key else key
+                        suppressed = (
+                            self._signoff_manager.is_signoff_label(label)
+                            or self._signoff_manager.is_prep_label(label)
+                        )
+                        alarm_parts.append(f"{key}{'(억제중)' if suppressed else ''}")
+                    _log.info("DIAG-ALARM - 활성: [%s]", ", ".join(alarm_parts))
 
-            # ── DIAG-AUDIO: 오디오레벨미터 ROI + 임베디드 오디오 상태 ──
-            audio_diag_parts = []
-            if self._audio_detect_enabled:
-                for lbl, a_state in self._detector._audio_level_states.items():
-                    buf = self._detector._audio_ratio_buffer.get(lbl)
-                    avg_r = (sum(buf) / len(buf)) if buf else -1.0
-                    a_alert_str = "알람" if a_state.is_alerting else "정상"
+                # ── DIAG-SIGNOFF: 정파 그룹별 상태 ──
+                signoff_parts = []
+                video_name_map_hb = {r.label: r.media_name for r in self._roi_manager.video_rois}
+                for gid, group in self._signoff_manager.get_groups().items():
+                    state = self._signoff_manager.get_state(gid)
+                    enter_lbl = group.enter_roi.get("video_label", "-")
+                    enter_media = video_name_map_hb.get(enter_lbl, "")
+                    enter_str = f"{enter_lbl}({enter_media})" if enter_media else enter_lbl
+                    sup_labels = ",".join(group.suppressed_labels) if group.suppressed_labels else "-"
+                    dbg = self._signoff_manager.get_debug_flags(gid)
+                    flags = f"exit_rel={'T' if dbg['exit_released'] else 'F'},manual={'T' if dbg['manual'] else 'F'}"
+                    signoff_parts.append(
+                        f"그룹{gid}=[{group.name}/{state.value}/진입:{enter_str}/억제:{sup_labels}/{flags}]"
+                    )
+                _log.info("DIAG-SIGNOFF - %s", " ".join(signoff_parts) if signoff_parts else "그룹없음")
+
+                # ── DIAG-AUDIO: 오디오레벨미터 ROI + 임베디드 오디오 상태 ──
+                audio_diag_parts = []
+                if self._audio_detect_enabled:
+                    for lbl, a_state in self._detector._audio_level_states.items():
+                        buf = self._detector._audio_ratio_buffer.get(lbl)
+                        avg_r = (sum(buf) / len(buf)) if buf else -1.0
+                        a_alert_str = "알람" if a_state.is_alerting else "정상"
+                        audio_diag_parts.append(
+                            f"{lbl}:ratio={avg_r:.1f}%[기준{self._detector.audio_pixel_ratio:.0f}%]"
+                            f" timer={a_state.alert_duration:.1f}s[기준{self._detector.audio_level_duration:.0f}s]"
+                            f" {a_alert_str}"
+                        )
+                    if not self._detector._audio_level_states:
+                        audio_diag_parts.append("오디오ROI없음")
+                else:
+                    audio_diag_parts.append("오디오레벨미터감지 비활성")
+
+                if self._embedded_detect_enabled:
+                    emb_alert_str = "알람중" if self._detector.embedded_alerting else "정상"
+                    silence_elapsed = (
+                        (time.time() - self._detector._embedded_alert_start)
+                        if self._detector._embedded_alert_start is not None
+                        else 0.0
+                    )
                     audio_diag_parts.append(
-                        f"{lbl}:ratio={avg_r:.1f}%[기준{self._detector.audio_pixel_ratio:.0f}%]"
-                        f" timer={a_state.alert_duration:.1f}s[기준{self._detector.audio_level_duration:.0f}s]"
-                        f" {a_alert_str}"
+                        f"임베디드:{emb_alert_str}"
+                        f"[무음{silence_elapsed:.1f}s/기준{self._detector.embedded_silence_duration:.0f}s]"
                     )
-                if not self._detector._audio_level_states:
-                    audio_diag_parts.append("오디오ROI없음")
-            else:
-                audio_diag_parts.append("오디오레벨미터감지 비활성")
+                else:
+                    audio_diag_parts.append("임베디드감지 비활성")
+                _log.info("DIAG-AUDIO - %s", " | ".join(audio_diag_parts))
 
-            if self._embedded_detect_enabled:
-                emb_alert_str = "알람중" if self._detector.embedded_alerting else "정상"
-                silence_elapsed = (
-                    (time.time() - self._detector._embedded_alert_start)
-                    if self._detector._embedded_alert_start is not None
-                    else 0.0
-                )
-                audio_diag_parts.append(
-                    f"임베디드:{emb_alert_str}"
-                    f"[무음{silence_elapsed:.1f}s/기준{self._detector.embedded_silence_duration:.0f}s]"
-                )
-            else:
-                audio_diag_parts.append("임베디드감지 비활성")
-            _log.info("DIAG-AUDIO - %s", " | ".join(audio_diag_parts))
+                # ── DIAG-TELEGRAM: 비정상 상태(worker 사망 또는 큐 누적)일 때만 기록 ──
+                tg_enabled = self._telegram._enabled
+                tg_worker_alive = self._telegram._worker_thread.is_alive()
+                tg_queue_size = self._telegram._queue.qsize()
+                if tg_enabled and (not tg_worker_alive or tg_queue_size >= 1):
+                    _log.warning(
+                        "DIAG-TELEGRAM - worker=%s queue=%d",
+                        "alive" if tg_worker_alive else "DEAD",
+                        tg_queue_size,
+                    )
+            except Exception as _diag_e:
+                _diag_e_type = type(_diag_e).__name__
+                if _diag_e_type != getattr(self, "_diag_last_error_type", None):
+                    # 예외 타입이 바뀔 때만 traceback 전체 출력 (로그 폭풍 방지)
+                    self._diag_last_error_type = _diag_e_type
+                    _log.error("DIAG 로깅 오류 (감지 계속): %s\n%s",
+                               _diag_e, traceback.format_exc())
+                else:
+                    _log.error("DIAG 로깅 오류 반복 (감지 계속): %s", _diag_e)
 
-            # ── DIAG-TELEGRAM: 비정상 상태(worker 사망 또는 큐 누적)일 때만 기록 ──
-            tg_enabled = self._telegram._enabled
-            tg_worker_alive = self._telegram._worker_thread.is_alive()
-            tg_queue_size = self._telegram._queue.qsize()
-            if tg_enabled and (not tg_worker_alive or tg_queue_size >= 1):
-                _log.warning(
-                    "DIAG-TELEGRAM - worker=%s queue=%d",
-                    "alive" if tg_worker_alive else "DEAD",
-                    tg_queue_size,
-                )
+        self._last_detection_time = time.time()
 
         try:
             video_rois = self._roi_manager.video_rois

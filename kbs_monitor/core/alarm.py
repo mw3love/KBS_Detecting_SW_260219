@@ -4,12 +4,15 @@
 기본 알림음: Windows 내장 SystemHand (경고음) / 사용자 지정 WAV 파일 우선 사용
 모든 감지 타입(블랙/스틸/오디오레벨미터/임베디드)에 동일한 통합 알림음 사용
 """
+import logging
 import os
 import sys
 import time
 import wave
 import threading
 import numpy as np
+
+_log = logging.getLogger(__name__)
 from PySide6.QtCore import QObject, Signal, QTimer
 
 try:
@@ -179,7 +182,7 @@ class AlarmSystem(QObject):
                 winsound.PlaySound(sound_file, winsound.SND_FILENAME | winsound.SND_SYNC)
                 return
             except Exception as e:
-                self._log(f"  winsound 실패: {e}")
+                _log.debug("  winsound 실패: %s", e)
 
         # ── sounddevice (fallback) ───────────────────────────────────────
         if sound_file and SOUNDDEVICE_AVAILABLE:
@@ -210,7 +213,7 @@ class AlarmSystem(QObject):
                 sd.wait()
                 return
             except Exception as e:
-                self._log(f"  sounddevice 실패: {e}")
+                _log.debug("  sounddevice 실패: %s", e)
                 try:
                     sd.stop()
                 except Exception:
@@ -302,7 +305,7 @@ class AlarmSystem(QObject):
                 try:
                     winsound.PlaySound(sound_file, winsound.SND_FILENAME | winsound.SND_ASYNC)
                 except Exception as e:
-                    self._log(f"winsound 파일 재생 실패 → 내장음 대체: {e}")
+                    _log.debug("winsound 파일 재생 실패 → 내장음 대체: %s", e)
                     break
                 if self._stop_sound.wait(timeout=sound_duration + 0.05):
                     break
@@ -349,7 +352,7 @@ class AlarmSystem(QObject):
                 return
 
             except Exception as e:
-                self._log(f"sounddevice 재생 실패 → 내장음 대체: {e}")
+                _log.debug("sounddevice 재생 실패 → 내장음 대체: %s", e)
                 try:
                     sd.stop()
                 except Exception:

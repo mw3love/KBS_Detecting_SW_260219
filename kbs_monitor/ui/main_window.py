@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.6.13")
+        self.setWindowTitle("KBS Peacock v1.6.14")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -639,7 +639,7 @@ class MainWindow(QMainWindow):
                 )
                 self._health_alarm_logged = True
             elif not detect_stale and self._health_alarm_logged:
-                self._logger.info("SYSTEM - 정상 복구 (health check)")
+                self._logger.info("SYSTEM - 감지 루프 정상 복구")
                 self._health_alarm_logged = False
         except Exception as e:
             _log.error("health check 오류 (silent fail 방지): %s", e)
@@ -1153,7 +1153,7 @@ class MainWindow(QMainWindow):
         # 텔레그램 알림: 정파모드 진입 및 해제 시만 발송
         tg = self._config.get("telegram", {})
         notify_signoff_flag = tg.get("notify_signoff", True)
-        self._logger.info(
+        self._logger.file_only(
             f"SIGNOFF-TG state={state.name} enabled={self._telegram._enabled} "
             f"notify_signoff={notify_signoff_flag}"
         )

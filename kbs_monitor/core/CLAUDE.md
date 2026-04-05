@@ -59,7 +59,7 @@
 > 현장 운용 중 장기 실행 후 감지가 조용히 멈추는 버그(silent failure) 발생 이력이 있음.
 > 아래 try-except 구조는 이를 방지하기 위한 것으로 **절대 삭제하지 않는다.**
 
-### `MainWindow._run_detection()` — 전체 try-except 보호
+### `MainWindow._run_detection()` — DIAG 블록 독립 보호 + 감지 루프 보호
 
 ```python
 def _run_detection(self):
@@ -69,18 +69,32 @@ def _run_detection(self):
         return
 
     self._detection_count += 1
-    if self._detection_count % 1500 == 0:      # 200ms × 1500 ≈ 5분
-        elapsed_min = self._detection_count // 1500 * 5
-        self._logger.info(f"SYSTEM - 감지 정상 실행 중 ({elapsed_min}분 경과)")
+    if self._detection_count % 150 == 0:       # 200ms × 150 ≈ 30초
+        try:
+            # SYSTEM-HB(스레드 수 포함) ~ DIAG-TELEGRAM 전체 로그 출력
+            ...
+        except Exception as _diag_e:
+            _diag_e_type = type(_diag_e).__name__
+            if _diag_e_type != getattr(self, "_diag_last_error_type", None):
+                self._diag_last_error_type = _diag_e_type
+                _log.error("DIAG 로깅 오류 (감지 계속): %s\n%s", _diag_e, traceback.format_exc())
+            else:
+                _log.error("DIAG 로깅 오류 반복 (감지 계속): %s", _diag_e)
+
+    self._last_detection_time = time.time()    # DIAG 이후·감지 try 이전
 
     try:
         # ... 감지 로직 전체 ...
     except Exception as e:
-        self._logger.error(f"SYSTEM - 감지 루프 오류 (silent fail 방지): {e}")
+        _log.error("감지 루프 오류 (silent fail 방지): %s", e)
 ```
 
-- **이유**: 예외 발생 시 타이머는 살아있어 겉으론 정상처럼 보이지만 매 주기 fail → 감지 완전 중단
-- **5분 로그**: 이 줄이 끊기는 시점이 곧 silent failure 발생 시점
+- **DIAG 블록 독립 try-except**: SYSTEM-HB~DIAG-TELEGRAM 로그 출력 중 예외가 발생해도 감지 로직은 반드시 실행됨
+  - 동일 예외 타입 반복 시 traceback 생략, 한 줄 요약만 출력 (로그 폭풍 방지)
+  - SYSTEM-HB에 `threads=py:N/os:N` 포함 — OS 스레드 자원 고갈 진단용
+- **`_last_detection_time` 위치**: DIAG 블록 이후·감지 try 이전 — DIAG 예외로 함수 조기 종료 시에도 health check가 오탐하지 않도록
+- **감지 루프 보호**: 예외 발생 시 타이머는 살아있어 겉으론 정상처럼 보이지만 매 주기 fail → 감지 완전 중단 방지
+- **이력**: 장기 실행(20h+) 후 DIAG 블록 예외 → 감지 skip 버그 발생 (2026-04-04, v1.6.12에서 수정)
 
 ### `VideoCaptureThread.run()` — while 루프 try-except 보호
 

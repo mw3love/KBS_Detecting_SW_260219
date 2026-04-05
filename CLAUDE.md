@@ -23,7 +23,7 @@
 - 감지합계 표기: V(영상) A(오디오레벨미터) EA(임베디드오디오)
 
 ## 현재 개발 상태
-- **현재: Phase 5 완료 (코드 최적화) + v1.6.10**
+- **현재: Phase 5 완료 (코드 최적화) + v1.6.12**
 - 체크포인트: `Fix/KBS_16CH_모니터링_v2_개발계획서/PHASE4_COMPLETE.md` (Phase 5 기록 포함)
 
 ## 주의사항
@@ -56,7 +56,7 @@ requests       (텔레그램 HTTP 발송)
 ### 파일 구조
 ```
 kbs_monitor/
-├── main.py                      # 진입점, dark_theme.qss 로드, 콘솔 숨기기
+├── main.py                      # 진입점, dark_theme.qss 로드, 콘솔 숨기기, faulthandler(logs/fault.log)
 ├── ui/                          # → ui/CLAUDE.md (PySide6 위젯 패턴)
 │   ├── main_window.py           # 오케스트레이터 (3분할 레이아웃)
 │   ├── top_bar.py               # 상단 바 (SysMonitor, 시계, 오디오, 감지현황, 버튼)
@@ -110,4 +110,4 @@ AlarmSystem.visual_blink         → VideoWidget.set_blink_state
 | 파일 수정 시 | 참조 문서 |
 |-------------|----------|
 | `ui/` 폴더 전체 | **[kbs_monitor/ui/CLAUDE.md](kbs_monitor/ui/CLAUDE.md)** — QScrollArea GC 패턴, 변수명 충돌 규칙 |
-| `core/alarm.py` `core/detector.py` `core/video_capture.py` `core/signoff_manager.py` | **[kbs_monitor/core/CLAUDE.md](kbs_monitor/core/CLAUDE.md)** — alarm 설계 원칙, 감지 루프 안정성, 히스테리시스 원칙 |
+| `core/alarm.py` `core/detector.py` `core/video_capture.py` `core/signoff_manager.py` `ui/main_window.py` | **[kbs_monitor/core/CLAUDE.md](kbs_monitor/core/CLAUDE.md)** — alarm 설계 원칙, 감지 루프 안정성, 히스테리시스 원칙 |

@@ -38,7 +38,7 @@ echo [2/4] Installing required libraries...
 echo       PySide6, OpenCV, sounddevice, numpy, psutil, GPUtil, pycaw
 echo       This may take a few minutes on first install.
 echo.
-python -m pip install -r kbs_monitor\requirements.txt
+python -m pip install -r "%~dp0kbs_monitor\requirements.txt"
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Library installation failed.

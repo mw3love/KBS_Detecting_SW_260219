@@ -9,6 +9,7 @@ PySide6 기반 방송 현장용 16채널 비디오 모니터링 솔루션.
 
 | 버전 | 주요 변경사항 |
 |------|--------------|
+| **v1.6.16** | install.bat 상대경로 절대경로화 + pycaw 버전 제한 제거 — 다른 PC 설치 시 requirements.txt 탐색 실패·pycaw 버전 불일치 오류 해결 |
 | **v1.6.15** | DIAG 블록 6개 섹션 독립 격리 + traceback 보호 — 단일 try-except 구조로 인한 25시간 침묵 버그 수정, psutil.Process() 매 사이클 재생성 제거 |
 | **v1.6.14** | UI 로그 노이즈 제거 — 사운드 백엔드 폴백 메시지·SIGNOFF 내부 상태 덤프를 파일 로그 전용으로 전환, Health Check 복구 메시지 사용자 친화적 문구로 개선 |
 | **v1.6.13** | 부분 freeze 수정 — DIAG 블록 try-except 보호로 장기 실행 후 감지 중단 버그 해결, Health Check 단순화(영상 중단 알림 제거) |

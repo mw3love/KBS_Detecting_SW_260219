@@ -368,7 +368,7 @@ class MainWindow(QMainWindow):
                                    _e, traceback.format_exc())
                     except Exception as _log_e:
                         try:
-                            print(f"[FATAL] DIAG-V 로긹 실패: {_e} / {_log_e}",
+                            print(f"[FATAL] DIAG-V 로까 실패: {_e} / {_log_e}",
                                   file=sys.stderr, flush=True)
                         except Exception:
                             pass
@@ -397,7 +397,7 @@ class MainWindow(QMainWindow):
                                    _e, traceback.format_exc())
                     except Exception as _log_e:
                         try:
-                            print(f"[FATAL] DIAG-ALARM 로긹 실패: {_e} / {_log_e}",
+                            print(f"[FATAL] DIAG-ALARM 로까 실패: {_e} / {_log_e}",
                                   file=sys.stderr, flush=True)
                         except Exception:
                             pass
@@ -429,7 +429,7 @@ class MainWindow(QMainWindow):
                                    _e, traceback.format_exc())
                     except Exception as _log_e:
                         try:
-                            print(f"[FATAL] DIAG-SIGNOFF 로긹 실패: {_e} / {_log_e}",
+                            print(f"[FATAL] DIAG-SIGNOFF 로까 실패: {_e} / {_log_e}",
                                   file=sys.stderr, flush=True)
                         except Exception:
                             pass
@@ -476,7 +476,7 @@ class MainWindow(QMainWindow):
                                    _e, traceback.format_exc())
                     except Exception as _log_e:
                         try:
-                            print(f"[FATAL] DIAG-AUDIO 로긹 실패: {_e} / {_log_e}",
+                            print(f"[FATAL] DIAG-AUDIO 로까 실패: {_e} / {_log_e}",
                                   file=sys.stderr, flush=True)
                         except Exception:
                             pass
@@ -503,7 +503,7 @@ class MainWindow(QMainWindow):
                                    _e, traceback.format_exc())
                     except Exception as _log_e:
                         try:
-                            print(f"[FATAL] DIAG-TELEGRAM 로긹 실패: {_e} / {_log_e}",
+                            print(f"[FATAL] DIAG-TELEGRAM 로까 실패: {_e} / {_log_e}",
                                   file=sys.stderr, flush=True)
                         except Exception:
                             pass

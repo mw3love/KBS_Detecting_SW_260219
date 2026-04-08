@@ -70,16 +70,43 @@ def _run_detection(self):
 
     self._detection_count += 1
     if self._detection_count % 150 == 0:       # 200ms × 150 ≈ 30초
+        _now_hb = time.time()                  # try 외부 사전 정의 (섹션 간 의존성 차단)
+
+        # ── SYSTEM-HB ──────────────────────────────────────────────────────────────
         try:
-            # SYSTEM-HB(스레드 수 포함) ~ DIAG-TELEGRAM 전체 로그 출력
+            # elapsed, self._diag_proc.num_threads() 등
             ...
-        except Exception as _diag_e:
-            _diag_e_type = type(_diag_e).__name__
-            if _diag_e_type != getattr(self, "_diag_last_error_type", None):
-                self._diag_last_error_type = _diag_e_type
-                _log.error("DIAG 로깅 오류 (감지 계속): %s\n%s", _diag_e, traceback.format_exc())
+        except Exception as _e:
+            _etype = type(_e).__name__
+            if _etype != self._diag_last_errors.get("SYSTEM-HB"):
+                self._diag_last_errors["SYSTEM-HB"] = _etype
+                try:
+                    _log.error("DIAG-SYSTEM-HB 오류 (감지 계속): %s\n%s", _e, traceback.format_exc())
+                except Exception as _log_e:
+                    try:
+                        print(f"[FATAL] DIAG-SYSTEM-HB 로까 실패: {_e} / {_log_e}", file=sys.stderr, flush=True)
+                    except Exception:
+                        pass
             else:
-                _log.error("DIAG 로깅 오류 반복 (감지 계속): %s", _diag_e)
+                _log.error("DIAG-SYSTEM-HB 오류 반복 (감지 계속): %s", _e)
+
+        # ── DIAG-V / DIAG-ALARM / DIAG-SIGNOFF / DIAG-AUDIO / DIAG-TELEGRAM ──
+        # 각 섹션 동일 패턴: 독립 try-except + inner-try traceback 보호 + sys.stderr 폴백
+        try:
+            ...
+        except Exception as _e:
+            _etype = type(_e).__name__
+            if _etype != self._diag_last_errors.get("섹션명"):
+                self._diag_last_errors["섹션명"] = _etype
+                try:
+                    _log.error("DIAG-섹션명 오류 (감지 계속): %s\n%s", _e, traceback.format_exc())
+                except Exception as _log_e:
+                    try:
+                        print(f"[FATAL] DIAG-섹션명 로까 실패: {_e} / {_log_e}", file=sys.stderr, flush=True)
+                    except Exception:
+                        pass
+            else:
+                _log.error("DIAG-섹션명 오류 반복 (감지 계속): %s", _e)
 
     self._last_detection_time = time.time()    # DIAG 이후·감지 try 이전
 
@@ -89,13 +116,18 @@ def _run_detection(self):
         _log.error("감지 루프 오류 (silent fail 방지): %s", e)
 ```
 
-- **DIAG 블록 독립 try-except**: SYSTEM-HB~DIAG-TELEGRAM 로그 출력 중 예외가 발생해도 감지 로직은 반드시 실행됨
+- **DIAG 블록 6개 섹션 독립 격리**: SYSTEM-HB / DIAG-V / DIAG-ALARM / DIAG-SIGNOFF / DIAG-AUDIO / DIAG-TELEGRAM 각각 독립 try-except → 하나가 실패해도 나머지 5개 계속 실행
   - 동일 예외 타입 반복 시 traceback 생략, 한 줄 요약만 출력 (로그 폭풍 방지)
+  - `_diag_last_errors: dict = {}` — 섹션명 키로 에러 타입 추적 (`__init__`에서 초기화)
+  - traceback inner-try 보호: `traceback.format_exc()` 자체 실패 시 `sys.stderr` 폴백
   - SYSTEM-HB에 `threads=py:N/os:N` 포함 — OS 스레드 자원 고갈 진단용
+- **`_diag_proc`**: `__init__`에서 `psutil.Process(os.getpid())`로 1회만 생성, 매 사이클 재생성 금지
+  - 이유: `psutil.Process()` 매 사이클 재생성이 장기 실행 후 `TypeError: __init__()` 유발 (2026-04-07 장애)
+- **`_now_hb = time.time()`**: `if self._detection_count % 150 == 0:` 블록 최상단(try 외부)에서 정의
+  - 이유: SYSTEM-HB try 안에서 정의하면 SYSTEM-HB 실패 시 DIAG-V가 NameError로 연썼 실패
 - **`_last_detection_time` 위치**: DIAG 블록 이후·감지 try 이전 — DIAG 예외로 함수 조기 종료 시에도 health check가 오탐하지 않도록
-- **감지 루프 보호**: 예외 발생 시 타이머는 살아있어 겉으론 정상처럼 보이지만 매 주기 fail → 감지 완전 중단 방지
-- **이력**: 장기 실행(20h+) 후 DIAG 블록 예외 → 감지 skip 버그 발생 (2026-04-04, v1.6.12에서 수정)
-
+- **감지 루프 보호**: 예외 발생 시 타이머는 살아있어 걉으론 정상처럼 보이지만 매 주기 fail → 감지 완전 중단 방지
+- **이력**: 장기 실행(20h+) 후 DIAG 블록 예외 → 감지 skip 버그 (2026-04-04, v1.6.12에서 수정) / DIAG 블록 단일 try-except → 25시간 침넜 (2026-04-07, v1.6.15에서 섹션별 분리)
 ### `VideoCaptureThread.run()` — while 루프 try-except 보호
 
 ```python

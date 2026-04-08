@@ -101,6 +101,16 @@ class MainWindow(QMainWindow):
         # 타이머 200ms 기준: 1500회 ≈ 5분
         self._detection_count: int = 0
 
+        # DIAG 섹션별 에러 타입 추적 (로그 폭풍 방지)
+        self._diag_last_errors: dict = {}
+
+        # DIAG SYSTEM-HB용 psutil Process 객체 (매 사이클 재생성 금지)
+        try:
+            import psutil as _psutil_init
+            self._diag_proc = _psutil_init.Process(os.getpid())
+        except Exception:
+            self._diag_proc = None
+
         # Health Check: 감지 루프 staleness 추적
         self._last_detection_time: float = time.time()
         self._health_alarm_logged: bool = False
@@ -280,8 +290,10 @@ class MainWindow(QMainWindow):
         # 주기적 정상 작동 로그 (200ms × 150 ≈ 30초) — 파일 로그 전용 (UI 미출력)
         self._detection_count += 1
         if self._detection_count % 150 == 0:
+            _now_hb = time.time()
+
+            # ── SYSTEM-HB ──────────────────────────────────────────────────
             try:
-                import psutil as _psutil
                 total_sec = self._detection_count // 5
                 days, rem = divmod(total_sec, 86400)
                 hours, mins_rem = divmod(rem, 3600)
@@ -294,7 +306,7 @@ class MainWindow(QMainWindow):
                     elapsed_str = f"{mins}분 {secs}초"
                 else:
                     elapsed_str = f"{secs}초"
-                _proc = _psutil.Process()
+                _os_threads = self._diag_proc.num_threads() if self._diag_proc is not None else -1
                 _log.info(
                     "SYSTEM-HB [%s 경과] detect=%s summary=%s restart=%s threads=py:%d/os:%d",
                     elapsed_str,
@@ -302,16 +314,33 @@ class MainWindow(QMainWindow):
                     "ON" if self._summary_timer.isActive() else "OFF",
                     "ON" if self._restart_timer.isActive() else "OFF",
                     threading.active_count(),
-                    _proc.num_threads(),
+                    _os_threads,
                 )
-                now_hb = time.time()
+            except Exception as _e:
+                _etype = type(_e).__name__
+                if _etype != self._diag_last_errors.get("SYSTEM-HB"):
+                    self._diag_last_errors["SYSTEM-HB"] = _etype
+                    try:
+                        _log.error("DIAG-SYSTEM-HB 오류 (감지 계속): %s\n%s",
+                                   _e, traceback.format_exc())
+                    except Exception as _log_e:
+                        try:
+                            print(f"[FATAL] DIAG-SYSTEM-HB 로깅 실패: {_e} / {_log_e}",
+                                  file=sys.stderr, flush=True)
+                        except Exception:
+                            pass
+                else:
+                    _log.error("DIAG-SYSTEM-HB 오류 반복 (감지 계속): %s", _e)
+
+            # ── DIAG-V ──────────────────────────────────────────────────────────────
+            try:
                 for lbl, raw in self._detector._last_raw.items():
                     still_state = self._detector._still_states.get(lbl)
                     dark_r = raw.get("dark_ratio", -1.0)
                     changed_r = raw.get("changed_ratio", -1.0)
                     still_timer = still_state.alert_duration if still_state else 0.0
                     if still_state and still_state._last_reset_time:
-                        reset_ago_str = f"직전리셋={now_hb - still_state._last_reset_time:.1f}s전"
+                        reset_ago_str = f"직전리셋={_now_hb - still_state._last_reset_time:.1f}s전"
                     else:
                         reset_ago_str = "리셋없음"
                     changed_str = (
@@ -330,8 +359,24 @@ class MainWindow(QMainWindow):
                         changed_str, reset_ago_str,
                         alerting_str, resolve_cnt, "Y" if has_start else "N",
                     )
+            except Exception as _e:
+                _etype = type(_e).__name__
+                if _etype != self._diag_last_errors.get("DIAG-V"):
+                    self._diag_last_errors["DIAG-V"] = _etype
+                    try:
+                        _log.error("DIAG-V 오류 (감지 계속): %s\n%s",
+                                   _e, traceback.format_exc())
+                    except Exception as _log_e:
+                        try:
+                            print(f"[FATAL] DIAG-V 로긹 실패: {_e} / {_log_e}",
+                                  file=sys.stderr, flush=True)
+                        except Exception:
+                            pass
+                else:
+                    _log.error("DIAG-V 오류 반복 (감지 계속): %s", _e)
 
-                # ── DIAG-ALARM: 활성 알람이 있을 때만 기록 ──
+            # ── DIAG-ALARM ─────────────────────────────────────────────────────────
+            try:
                 active_alarms = self._alarm._active_alarms
                 if active_alarms:
                     alarm_parts = []
@@ -343,8 +388,24 @@ class MainWindow(QMainWindow):
                         )
                         alarm_parts.append(f"{key}{'(억제중)' if suppressed else ''}")
                     _log.info("DIAG-ALARM - 활성: [%s]", ", ".join(alarm_parts))
+            except Exception as _e:
+                _etype = type(_e).__name__
+                if _etype != self._diag_last_errors.get("DIAG-ALARM"):
+                    self._diag_last_errors["DIAG-ALARM"] = _etype
+                    try:
+                        _log.error("DIAG-ALARM 오류 (감지 계속): %s\n%s",
+                                   _e, traceback.format_exc())
+                    except Exception as _log_e:
+                        try:
+                            print(f"[FATAL] DIAG-ALARM 로긹 실패: {_e} / {_log_e}",
+                                  file=sys.stderr, flush=True)
+                        except Exception:
+                            pass
+                else:
+                    _log.error("DIAG-ALARM 오류 반복 (감지 계속): %s", _e)
 
-                # ── DIAG-SIGNOFF: 정파 그룹별 상태 ──
+            # ── DIAG-SIGNOFF ──────────────────────────────────────────────────────────
+            try:
                 signoff_parts = []
                 video_name_map_hb = {r.label: r.media_name for r in self._roi_manager.video_rois}
                 for gid, group in self._signoff_manager.get_groups().items():
@@ -359,8 +420,24 @@ class MainWindow(QMainWindow):
                         f"그룹{gid}=[{group.name}/{state.value}/진입:{enter_str}/억제:{sup_labels}/{flags}]"
                     )
                 _log.info("DIAG-SIGNOFF - %s", " ".join(signoff_parts) if signoff_parts else "그룹없음")
+            except Exception as _e:
+                _etype = type(_e).__name__
+                if _etype != self._diag_last_errors.get("DIAG-SIGNOFF"):
+                    self._diag_last_errors["DIAG-SIGNOFF"] = _etype
+                    try:
+                        _log.error("DIAG-SIGNOFF 오류 (감지 계속): %s\n%s",
+                                   _e, traceback.format_exc())
+                    except Exception as _log_e:
+                        try:
+                            print(f"[FATAL] DIAG-SIGNOFF 로긹 실패: {_e} / {_log_e}",
+                                  file=sys.stderr, flush=True)
+                        except Exception:
+                            pass
+                else:
+                    _log.error("DIAG-SIGNOFF 오류 반복 (감지 계속): %s", _e)
 
-                # ── DIAG-AUDIO: 오디오레벨미터 ROI + 임베디드 오디오 상태 ──
+            # ── DIAG-AUDIO ──────────────────────────────────────────────────────────────
+            try:
                 audio_diag_parts = []
                 if self._audio_detect_enabled:
                     for lbl, a_state in self._detector._audio_level_states.items():
@@ -376,7 +453,6 @@ class MainWindow(QMainWindow):
                         audio_diag_parts.append("오디오ROI없음")
                 else:
                     audio_diag_parts.append("오디오레벨미터감지 비활성")
-
                 if self._embedded_detect_enabled:
                     emb_alert_str = "알람중" if self._detector.embedded_alerting else "정상"
                     silence_elapsed = (
@@ -391,8 +467,24 @@ class MainWindow(QMainWindow):
                 else:
                     audio_diag_parts.append("임베디드감지 비활성")
                 _log.info("DIAG-AUDIO - %s", " | ".join(audio_diag_parts))
+            except Exception as _e:
+                _etype = type(_e).__name__
+                if _etype != self._diag_last_errors.get("DIAG-AUDIO"):
+                    self._diag_last_errors["DIAG-AUDIO"] = _etype
+                    try:
+                        _log.error("DIAG-AUDIO 오류 (감지 계속): %s\n%s",
+                                   _e, traceback.format_exc())
+                    except Exception as _log_e:
+                        try:
+                            print(f"[FATAL] DIAG-AUDIO 로긹 실패: {_e} / {_log_e}",
+                                  file=sys.stderr, flush=True)
+                        except Exception:
+                            pass
+                else:
+                    _log.error("DIAG-AUDIO 오류 반복 (감지 계속): %s", _e)
 
-                # ── DIAG-TELEGRAM: 비정상 상태(worker 사망 또는 큐 누적)일 때만 기록 ──
+            # ── DIAG-TELEGRAM ──────────────────────────────────────────────────────────────
+            try:
                 tg_enabled = self._telegram._enabled
                 tg_worker_alive = self._telegram._worker_thread.is_alive()
                 tg_queue_size = self._telegram._queue.qsize()
@@ -402,16 +494,21 @@ class MainWindow(QMainWindow):
                         "alive" if tg_worker_alive else "DEAD",
                         tg_queue_size,
                     )
-            except Exception as _diag_e:
-                _diag_e_type = type(_diag_e).__name__
-                if _diag_e_type != getattr(self, "_diag_last_error_type", None):
-                    # 예외 타입이 바뀔 때만 traceback 전체 출력 (로그 폭풍 방지)
-                    self._diag_last_error_type = _diag_e_type
-                    _log.error("DIAG 로깅 오류 (감지 계속): %s\n%s",
-                               _diag_e, traceback.format_exc())
+            except Exception as _e:
+                _etype = type(_e).__name__
+                if _etype != self._diag_last_errors.get("DIAG-TELEGRAM"):
+                    self._diag_last_errors["DIAG-TELEGRAM"] = _etype
+                    try:
+                        _log.error("DIAG-TELEGRAM 오류 (감지 계속): %s\n%s",
+                                   _e, traceback.format_exc())
+                    except Exception as _log_e:
+                        try:
+                            print(f"[FATAL] DIAG-TELEGRAM 로긹 실패: {_e} / {_log_e}",
+                                  file=sys.stderr, flush=True)
+                        except Exception:
+                            pass
                 else:
-                    _log.error("DIAG 로깅 오류 반복 (감지 계속): %s", _diag_e)
-
+                    _log.error("DIAG-TELEGRAM 오류 반복 (감지 계속): %s", _e)
         self._last_detection_time = time.time()
 
         try:

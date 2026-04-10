@@ -217,6 +217,11 @@ class AutoRecorder:
                 self._record_end = new_end
             return
 
+        # 이전 스레드 alive 체크 — 상태 변경 이전에 배치 (ffmpeg 합성 중이면 스킵)
+        if self._record_thread is not None and self._record_thread.is_alive():
+            _log.warning("이전 녹화 스레드 실행 중 (ffmpeg 합성) — 새 녹화 스킵 (%s %s)", alarm_type, label)
+            return
+
         # 새 녹화 시작
         self._recording = True
         self._record_end = new_end
@@ -242,9 +247,6 @@ class AutoRecorder:
             filename = f"{ts}_{safe_label}_{safe_type}.mp4"
         filepath = os.path.join(self._save_dir, filename)
 
-        if self._record_thread is not None and self._record_thread.is_alive():
-            _log.warning("이전 녹화 스레드 실행 중 (ffmpeg 합성) — 새 녹화 스킵 (%s %s)", alarm_type, label)
-            return
         self._record_thread = threading.Thread(
             target=self._record_worker,
             args=(pre_frames, pre_audio, filepath),

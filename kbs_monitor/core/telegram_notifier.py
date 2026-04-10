@@ -82,7 +82,7 @@ class TelegramNotifier:
         if self._running and not self._worker_thread.is_alive():
             with self._worker_lock:
                 if not self._worker_thread.is_alive():
-                    self._log("워커 스레드 비정상 종료 감지 (DIAG 주기) — 재시작", error=True)
+                    self._log("워커 스레드 비정상 종료 감지 — 재시작", error=True)
                     self._worker_thread = threading.Thread(
                         target=self._worker_loop, daemon=True, name="TelegramWorker"
                     )

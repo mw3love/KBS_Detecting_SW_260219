@@ -496,6 +496,8 @@ class MainWindow(QMainWindow):
                         "alive" if tg_worker_alive else "DEAD",
                         tg_queue_size,
                     )
+                if tg_enabled:
+                    self._telegram.ensure_worker_alive()
                 self._diag_last_errors.pop("DIAG-TELEGRAM", None)
             except Exception as _e:
                 _etype = type(_e).__name__

@@ -172,7 +172,10 @@ class AlarmSystem(QObject):
             args=(sound_file,),
             daemon=True,
         )
-        self._sound_thread.start()
+        try:
+            self._sound_thread.start()
+        except OSError as e:
+            _log.error("테스트 사운드 스레드 시작 실패: %s", e)
 
     def _play_test_worker(self, sound_file: str | None):
         """테스트 전용 1회 재생 (winsound → sounddevice → 내장음 순)"""
@@ -250,7 +253,7 @@ class AlarmSystem(QObject):
             except Exception:
                 pass
 
-        self._stop_sound.clear()
+        self._stop_sound = threading.Event()  # 새 인스턴스 — clear()만 하면 이전 스레드와 충돌 가능
         self._sound_thread = threading.Thread(
             target=self._play_sound_worker,
             args=("default", alarm_duration),

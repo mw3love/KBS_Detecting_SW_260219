@@ -77,6 +77,17 @@ class TelegramNotifier:
         self._running = True
         self._worker_thread.start()
 
+    def ensure_worker_alive(self):
+        """워커 스레드 상태 확인, 사망 시 재시작 (DIAG-TELEGRAM에서 30초마다 호출)"""
+        if self._running and not self._worker_thread.is_alive():
+            with self._worker_lock:
+                if not self._worker_thread.is_alive():
+                    self._log("워커 스레드 비정상 종료 감지 (DIAG 주기) — 재시작", error=True)
+                    self._worker_thread = threading.Thread(
+                        target=self._worker_loop, daemon=True, name="TelegramWorker"
+                    )
+                    self._worker_thread.start()
+
     def stop(self):
         """워커 스레드 정지 (프로그램 종료 시 호출)"""
         self._running = False

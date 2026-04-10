@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.6.18")
+        self.setWindowTitle("KBS Peacock v1.6.19")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -1369,7 +1369,9 @@ class MainWindow(QMainWindow):
             now = datetime.datetime.now()
             today_str = datetime.date.today().isoformat()
 
-            time_slots = [sys_cfg.get("scheduled_restart_time", "03:00")]
+            time_slots = []
+            if sys_cfg.get("scheduled_restart_enabled", True):
+                time_slots.append(sys_cfg.get("scheduled_restart_time", "03:00"))
             time2 = sys_cfg.get("scheduled_restart_time_2", "")
             if time2:
                 time_slots.append(time2)

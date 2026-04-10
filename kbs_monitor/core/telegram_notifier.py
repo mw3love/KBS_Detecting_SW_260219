@@ -150,14 +150,7 @@ class TelegramNotifier:
             self._log(f"[DIAG] notify() 비활성 상태 — 스킵 (alarm_type={alarm_type}, label={label})", error=False)
             return
         # 워커 스레드 사망 감지 → 자동 재시작 (장기 실행 안정성)
-        if self._running and not self._worker_thread.is_alive():
-            with self._worker_lock:
-                if not self._worker_thread.is_alive():  # double-check
-                    self._log("워커 스레드 비정상 종료 감지 — 재시작", error=True)
-                    self._worker_thread = threading.Thread(
-                        target=self._worker_loop, daemon=True, name="TelegramWorker"
-                    )
-                    self._worker_thread.start()
+        self.ensure_worker_alive()
         if not self._bot_token or not self._chat_id:
             self._log("Bot Token 또는 Chat ID가 설정되지 않았습니다.", error=True)
             return

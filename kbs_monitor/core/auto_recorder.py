@@ -243,7 +243,8 @@ class AutoRecorder:
         filepath = os.path.join(self._save_dir, filename)
 
         if self._record_thread is not None and self._record_thread.is_alive():
-            _log.warning("이전 녹화 스레드 실행 중 (ffmpeg 합성) — 새 녹화 병렬 시작 (파일 충돌 없음)")
+            _log.warning("이전 녹화 스레드 실행 중 (ffmpeg 합성) — 새 녹화 스킵 (%s %s)", alarm_type, label)
+            return
         self._record_thread = threading.Thread(
             target=self._record_worker,
             args=(pre_frames, pre_audio, filepath),

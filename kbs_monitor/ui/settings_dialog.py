@@ -1589,12 +1589,22 @@ class SettingsDialog(QDialog):
         restart_layout.addWidget(self._chk_restart_enabled)
 
         restart_time_row = QHBoxLayout()
-        restart_time_row.addWidget(QLabel("재시작 시각:"))
+        restart_time_row.addWidget(QLabel("재시작 시각 1:"))
         self._restart_time = _TimeWidget(3, 0)
         self._restart_time.valueChanged.connect(self._save_system_params)
         restart_time_row.addWidget(self._restart_time)
         restart_time_row.addStretch()
         restart_layout.addLayout(restart_time_row)
+
+        restart_time2_row = QHBoxLayout()
+        self._chk_restart_time2 = QCheckBox("재시작 시각 2:")
+        self._chk_restart_time2.stateChanged.connect(self._save_system_params)
+        restart_time2_row.addWidget(self._chk_restart_time2)
+        self._restart_time_2 = _TimeWidget(15, 0)
+        self._restart_time_2.valueChanged.connect(self._save_system_params)
+        restart_time2_row.addWidget(self._restart_time_2)
+        restart_time2_row.addStretch()
+        restart_layout.addLayout(restart_time2_row)
 
         restart_hint = QLabel("프로그램을 종료 후 재시작하여 OS 리소스(GDI, 메모리 등)를 초기화합니다.")
         restart_hint.setStyleSheet("color: #888888; font-size: 11px;")
@@ -1870,7 +1880,7 @@ class SettingsDialog(QDialog):
         about_layout.setColumnStretch(1, 1)
 
         about_layout.addWidget(QLabel("Version:"), 0, 0)
-        lbl_version = QLabel("KBS Peacock v1.6.17")
+        lbl_version = QLabel("KBS Peacock v1.6.18")
         about_layout.addWidget(lbl_version, 0, 1)
 
         about_layout.addWidget(QLabel("Date:"), 1, 0)
@@ -2585,10 +2595,10 @@ class SettingsDialog(QDialog):
                 "name":              "1TV",
                 "enter_roi":         {"video_label": ""},
                 "suppressed_labels": [],
-                "start_time":        "03:00",
+                "start_time":        "03:30",
                 "end_time":          "05:00",
                 "prep_minutes":      150,
-                "exit_prep_minutes": 30,
+                "exit_prep_minutes": 180,
                 "weekdays":          [0, 1],
             },
             "group2": {
@@ -3064,9 +3074,16 @@ class SettingsDialog(QDialog):
         """자동 재시작 설정을 config에 저장하고 시그널 발송"""
         h = self._restart_time.hour()
         m = self._restart_time.minute()
+        if self._chk_restart_time2.isChecked():
+            h2 = self._restart_time_2.hour()
+            m2 = self._restart_time_2.minute()
+            time2_str = f"{h2:02d}:{m2:02d}"
+        else:
+            time2_str = ""
         params = {
             "scheduled_restart_enabled": self._chk_restart_enabled.isChecked(),
-            "scheduled_restart_time": f"{h:02d}:{m:02d}",
+            "scheduled_restart_time":    f"{h:02d}:{m:02d}",
+            "scheduled_restart_time_2":  time2_str,
         }
         self._config["system"] = params
         self.system_settings_changed.emit(params)
@@ -3086,6 +3103,19 @@ class SettingsDialog(QDialog):
             self._restart_time.setTime(int(parts[0]), int(parts[1]))
         except (ValueError, IndexError):
             self._restart_time.setTime(3, 0)
+
+        time2_str = sys_cfg.get("scheduled_restart_time_2", "")
+        self._chk_restart_time2.blockSignals(True)
+        if time2_str:
+            self._chk_restart_time2.setChecked(True)
+            try:
+                p2 = time2_str.split(":")
+                self._restart_time_2.setTime(int(p2[0]), int(p2[1]))
+            except (ValueError, IndexError):
+                self._restart_time_2.setTime(15, 0)
+        else:
+            self._chk_restart_time2.setChecked(False)
+        self._chk_restart_time2.blockSignals(False)
 
     # ── 알림설정 탭 헬퍼 ─────────────────────────────
 

@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KBS Peacock v1.6.17")
+        self.setWindowTitle("KBS Peacock v1.6.18")
         self.setMinimumSize(1280, 720)
         self.resize(1600, 900)
 
@@ -150,13 +150,15 @@ class MainWindow(QMainWindow):
         self._startup_complete = False
         QTimer.singleShot(3000, lambda: setattr(self, '_startup_complete', True))
 
-        # 예약 재시작: 마지막으로 재시작을 실행한 날짜(YYYY-MM-DD) 기록 (같은 날 재트리거 방지)
-        # --restarted HH:MM 인자가 있으면 오늘 날짜를 기록하여 당일 반복 방지
-        self._restart_done_date: str = ""
+        # 예약 재시작: 실행 완료된 슬롯을 "YYYY-MM-DD_HH:MM" 형태로 기록 (같은 슬롯 재트리거 방지)
+        # --restarted HH:MM 인자가 있으면 해당 슬롯을 done 처리하여 재트리거 방지
+        self._restart_done_slots: set = set()
         if "--restarted" in sys.argv:
             idx = sys.argv.index("--restarted")
             if idx + 1 < len(sys.argv):
-                self._restart_done_date = datetime.date.today().isoformat()
+                restarted_time = sys.argv[idx + 1]  # "HH:MM"
+                today = datetime.date.today().isoformat()
+                self._restart_done_slots.add(f"{today}_{restarted_time}")
 
         self._logger.info("SYSTEM - 프로그램 시작")
 
@@ -1364,24 +1366,31 @@ class MainWindow(QMainWindow):
             if not sys_cfg.get("scheduled_restart_enabled", True):
                 return
 
-            time_str = sys_cfg.get("scheduled_restart_time", "03:00")
-            try:
-                t = datetime.datetime.strptime(time_str, "%H:%M")
-                restart_hour, restart_minute = t.hour, t.minute
-            except ValueError:
-                return
-
             now = datetime.datetime.now()
             today_str = datetime.date.today().isoformat()
-            if (now.hour == restart_hour and now.minute == restart_minute
-                    and self._restart_done_date != today_str):
-                self._do_scheduled_restart(time_str)
+
+            time_slots = [sys_cfg.get("scheduled_restart_time", "03:00")]
+            time2 = sys_cfg.get("scheduled_restart_time_2", "")
+            if time2:
+                time_slots.append(time2)
+
+            for time_str in time_slots:
+                try:
+                    t = datetime.datetime.strptime(time_str, "%H:%M")
+                except ValueError:
+                    continue
+                slot_key = f"{today_str}_{time_str}"
+                if (now.hour == t.hour and now.minute == t.minute
+                        and slot_key not in self._restart_done_slots):
+                    self._do_scheduled_restart(time_str)
+                    return  # 재시작 트리거 후 즉시 종료
         except Exception as e:
             _log.error("_check_scheduled_restart 오류 (silent fail 방지): %s", e)
 
     def _do_scheduled_restart(self, time_str: str):
         """새 프로세스를 시작하고 현재 프로세스를 종료한다."""
-        self._restart_done_date = datetime.date.today().isoformat()
+        today_str = datetime.date.today().isoformat()
+        self._restart_done_slots.add(f"{today_str}_{time_str}")
         self._logger.info("SYSTEM - 예약 재시작 실행 (설정된 시각) — 30초 후 재시작")
         # --restarted HH:MM 전달: 새 프로세스에서 같은 시각 재트리거 방지
         clean = []

@@ -217,7 +217,10 @@ class AutoRecorder:
                 self._record_end = new_end
             return
 
-        # 이전 스레드 alive 체크 — 상태 변경 이전에 배치 (ffmpeg 합성 중이면 스킵)
+        # 이전 스레드 alive 체크 — 상태 변경(_recording=True) 이전에 배치
+        # _MAX_RECORD_FRAMES 도달 시 push_frame()이 _recording=False로 전환하지만,
+        # 그 이후에도 _record_worker는 ffmpeg 합성(최대 120초)을 계속 실행 중일 수 있음.
+        # → 이 체크가 없으면 ffmpeg 합성 중에 새 스레드가 시작되어 동시 실행 가능
         if self._record_thread is not None and self._record_thread.is_alive():
             _log.warning("이전 녹화 스레드 실행 중 (ffmpeg 합성) — 새 녹화 스킵 (%s %s)", alarm_type, label)
             return

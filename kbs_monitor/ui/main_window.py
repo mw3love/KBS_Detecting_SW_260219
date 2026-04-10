@@ -316,6 +316,7 @@ class MainWindow(QMainWindow):
                     threading.active_count(),
                     _os_threads,
                 )
+                self._diag_last_errors.pop("SYSTEM-HB", None)
             except Exception as _e:
                 _etype = type(_e).__name__
                 if _etype != self._diag_last_errors.get("SYSTEM-HB"):
@@ -359,6 +360,7 @@ class MainWindow(QMainWindow):
                         changed_str, reset_ago_str,
                         alerting_str, resolve_cnt, "Y" if has_start else "N",
                     )
+                self._diag_last_errors.pop("DIAG-V", None)
             except Exception as _e:
                 _etype = type(_e).__name__
                 if _etype != self._diag_last_errors.get("DIAG-V"):
@@ -388,6 +390,7 @@ class MainWindow(QMainWindow):
                         )
                         alarm_parts.append(f"{key}{'(억제중)' if suppressed else ''}")
                     _log.info("DIAG-ALARM - 활성: [%s]", ", ".join(alarm_parts))
+                self._diag_last_errors.pop("DIAG-ALARM", None)
             except Exception as _e:
                 _etype = type(_e).__name__
                 if _etype != self._diag_last_errors.get("DIAG-ALARM"):
@@ -420,6 +423,7 @@ class MainWindow(QMainWindow):
                         f"그룹{gid}=[{group.name}/{state.value}/진입:{enter_str}/억제:{sup_labels}/{flags}]"
                     )
                 _log.info("DIAG-SIGNOFF - %s", " ".join(signoff_parts) if signoff_parts else "그룹없음")
+                self._diag_last_errors.pop("DIAG-SIGNOFF", None)
             except Exception as _e:
                 _etype = type(_e).__name__
                 if _etype != self._diag_last_errors.get("DIAG-SIGNOFF"):
@@ -455,11 +459,8 @@ class MainWindow(QMainWindow):
                     audio_diag_parts.append("오디오레벨미터감지 비활성")
                 if self._embedded_detect_enabled:
                     emb_alert_str = "알람중" if self._detector.embedded_alerting else "정상"
-                    silence_elapsed = (
-                        (time.time() - self._detector._embedded_alert_start)
-                        if self._detector._embedded_alert_start is not None
-                        else 0.0
-                    )
+                    _emb_start = self._detector._embedded_alert_start
+                    silence_elapsed = (time.time() - _emb_start) if _emb_start is not None else 0.0
                     audio_diag_parts.append(
                         f"임베디드:{emb_alert_str}"
                         f"[무음{silence_elapsed:.1f}s/기준{self._detector.embedded_silence_duration:.0f}s]"
@@ -467,6 +468,7 @@ class MainWindow(QMainWindow):
                 else:
                     audio_diag_parts.append("임베디드감지 비활성")
                 _log.info("DIAG-AUDIO - %s", " | ".join(audio_diag_parts))
+                self._diag_last_errors.pop("DIAG-AUDIO", None)
             except Exception as _e:
                 _etype = type(_e).__name__
                 if _etype != self._diag_last_errors.get("DIAG-AUDIO"):
@@ -494,6 +496,7 @@ class MainWindow(QMainWindow):
                         "alive" if tg_worker_alive else "DEAD",
                         tg_queue_size,
                     )
+                self._diag_last_errors.pop("DIAG-TELEGRAM", None)
             except Exception as _e:
                 _etype = type(_e).__name__
                 if _etype != self._diag_last_errors.get("DIAG-TELEGRAM"):

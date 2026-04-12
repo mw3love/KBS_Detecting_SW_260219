@@ -115,16 +115,47 @@
   > **주의**: `pop()` 후 동일 오류가 재발하면 traceback이 다시 출력됨 (의도된 동작).
   > 간헐적 오류가 30초 주기로 반복되는 경우 traceback 반복 출력 가능. 허용 범위 확인 필요.
 
-- [ ] 커밋: `fix: DIAG TOCTOU 방어 + 오류 상태 클리어 추가`
-- [ ] eval-plan evaluate HEAD~1 자동 실행 (Agent 도구, 포그라운드)
-- [ ] eval-freeze evaluate HEAD~1 자동 실행 (Agent 도구, 포그라운드)
+- [x] 커밋: `fix: DIAG TOCTOU 방어 + 오류 상태 클리어 추가`
+- [x] eval-plan evaluate HEAD~1 자동 실행 (Agent 도구, 포그라운드)
+- [x] eval-freeze evaluate HEAD~1 자동 실행 (Agent 도구, 포그라운드)
 
 ### Phase 2 — 검증
+- [x] 현장 테스트 (24시간+ 운영)
+- [x] **재발 확인 (2026-04-12)**: v1.6.19에서 동일 TypeError 재현 (로컬 캡처 적용 후에도)
+  - Phase 1 추론(TOCTOU) 이 틀렸을 가능성 확정 → Phase 3 추가 방어로 전환
+
+### Phase 3 — 타입 방어 강화 + Watchdog 강화 (2026-04-12)
+
+**배경**: Phase 1 수정(로컬 캡처) 후에도 v1.6.19에서 동일 TypeError 재발.
+에이전트 분석 결과 `is not None` 후에도 TypeError가 발생하는 정확한 메커니즘 미확정.
+근본 원인을 확정할 수 없으므로 실용적 방어 코드로 접근.
+
+**수정 1: DIAG-AUDIO 타입 방어 강화**
+- [x] `main_window.py` DIAG-AUDIO 블록 L462 이하 수정
+  ```python
+  # After — 비-float 타입 감지 시 실제 타입/값 로그 출력 후 None으로 강제
+  _emb_start = self._detector._embedded_alert_start
+  if _emb_start is not None and not isinstance(_emb_start, (int, float)):
+      _log.error("DIAG-AUDIO _emb_start 타입 이상: %r (type=%s) — None으로 강제", ...)
+      _emb_start = None
+  silence_elapsed = (time.time() - _emb_start) if _emb_start is not None else 0.0
+  ```
+  - 효과: TypeError 완전 차단. 재발 시 실제 타입/값이 로그에 기록되어 근본 원인 확정 가능.
+
+**수정 2: Watchdog 로그 강화 + 텔레그램 알림**
+- [x] `main_window.py` Health Check 섹션 수정
+  - 로그에 `detect_timer`, `latest_frame`, `py_threads` 추가
+  - 감지 루프 중단 감지 시 텔레그램 즉시 발송 (사용자가 즉시 인지 → 로그 수집 가능)
+
+- [ ] 커밋: `fix: DIAG-AUDIO 타입 방어 강화 + watchdog 텔레그램 알림 추가`
+- [ ] eval-plan evaluate HEAD~1 자동 실행
+- [ ] eval-freeze evaluate HEAD~1 자동 실행
+
+### Phase 4 — 검증
 - [ ] 현장 테스트 (24시간+ 운영)
-- [ ] 로그 확인: DIAG-AUDIO가 30초마다 지속 출력되는지 (소멸 없음)
-- [ ] 로그 확인: ERROR 라인에 `DIAG-AUDIO 오류` 없는지
-- [ ] 임베디드 오디오 무음→정상 복구 사이클 후 DIAG-AUDIO 정상 출력 유지 확인
-- [ ] **재발 시**: 이 수정계획의 추론이 틀렸을 가능성 있음 → 원인 재분석 필요
+- [ ] DIAG-AUDIO TypeError 미발생 확인
+- [ ] 감지 루프 중단 시 텔레그램 수신 확인
+- [ ] **재발 시**: `_emb_start 타입 이상` 로그 내용으로 근본 원인 확정
 
 ## 참고
 - **관련 설계 원칙**: `kbs_monitor/core/CLAUDE.md` — 감지 루프 안정성 원칙, `_diag_last_errors` 설계

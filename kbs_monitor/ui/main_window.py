@@ -462,6 +462,10 @@ class MainWindow(QMainWindow):
                 if self._embedded_detect_enabled:
                     emb_alert_str = "알람중" if self._detector.embedded_alerting else "정상"
                     _emb_start = self._detector._embedded_alert_start
+                    if _emb_start is not None and not isinstance(_emb_start, (int, float)):
+                        _log.error("DIAG-AUDIO _emb_start 타입 이상: %r (type=%s) — None으로 강제",
+                                   _emb_start, type(_emb_start).__name__)
+                        _emb_start = None
                     silence_elapsed = (time.time() - _emb_start) if _emb_start is not None else 0.0
                     audio_diag_parts.append(
                         f"임베디드:{emb_alert_str}"
@@ -739,8 +743,15 @@ class MainWindow(QMainWindow):
                 self._logger.error(
                     f"SYSTEM - 감지 루프 중단 감지 (health check) | "
                     f"마지막 감지: {elapsed_d:.1f}초 전 | "
-                    f"감지횟수: {self._detection_count}"
+                    f"감지횟수: {self._detection_count} | "
+                    f"detect_timer={'ON' if self._detect_timer.isActive() else 'OFF'} | "
+                    f"latest_frame={'있음' if self._latest_frame is not None else '없음'} | "
+                    f"py_threads={threading.active_count()}"
                 )
+                try:
+                    self._telegram.notify("시스템", "WATCHDOG", f"감지중단{elapsed_d:.0f}초", self._latest_frame)
+                except Exception as _tg_e:
+                    _log.error("watchdog 텔레그램 알림 실패: %s", _tg_e)
                 self._health_alarm_logged = True
             elif not detect_stale and self._health_alarm_logged:
                 self._logger.info("SYSTEM - 감지 루프 정상 복구")

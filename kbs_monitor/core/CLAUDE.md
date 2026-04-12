@@ -230,3 +230,26 @@ self._latest_frame = frame.copy()  # 캡처 스레드 버퍼 공유 방지
 
 ❌ `_on_embedded_silence` / `_on_audio_level_for_silence`에서 `is_any_signoff()` 사용
 → 한 채널만 정파여도 임베디드 오디오 알림 **전체** 차단됨 (v1.5.2에서 수정)
+
+---
+
+## 버그 수정 이력
+
+> **AI 참고용**: 과거 수정의 원인 확신도와 검증 여부를 기록.
+> - 확신도 **낮음**인 항목은 해당 코드 수정 시 더 신중하게 접근할 것
+> - 검증 **미완**인 항목은 재발 시 원인 추론 자체가 틀렸을 가능성을 먼저 고려할 것
+
+| 날짜 | 수정 버전 | 증상 | 수정 내용 | 원인 확신도 | 검증 |
+|------|----------|------|----------|------------|------|
+| 2026-03-27 | v?.?? | 정파 해제 후 즉시 SIGNOFF 재진입 | `SignoffManager` SIGNOFF 진입 시 `_reset_exit_timers()` 추가 | 높음 | ✅ |
+| 2026-03-30 | v?.?? | 다음 날 PREPARATION 진입 시 SIGNOFF 즉시 조기 전환 | `SignoffManager` IDLE 진입 시 `_reset_enter_timers()` 추가 | 높음 | ✅ |
+| ~2026-04 | v1.5.2 | 한 채널 정파 시 임베디드 오디오 알림 전체 차단 | `_on_embedded_silence`에서 `is_any_signoff()` 제거 | 높음 | ✅ |
+| 2026-04-04 | v1.6.12 | 장기 실행(20h+) 후 DIAG 블록 예외 → 감지 완전 중단 | `_run_detection()` 최외곽 try-except 추가 | 높음 | ✅ |
+| 2026-04-07 | v1.6.15 | 25시간 운영 후 DIAG 블록 단일 예외로 이후 섹션 전체 중단 | DIAG 블록 6개 섹션 독립 try-except 분리 | 높음 | ✅ |
+| 2026-04-10 | v1.6.17 | 장기 실행 후 DIAG-AUDIO 출력 소실 (감지는 유지) | DIAG-AUDIO `_embedded_alert_start` 로컬 캡처(TOCTOU 방어) + `_diag_last_errors` 정상 복구 시 클리어 | **낮음 (추정)** | ❌ 재발 |
+| 2026-04-12 | v1.6.20 예정 | 동일 TypeError 재발 (v1.6.19, 로컬 캡처 적용 후에도) | DIAG-AUDIO 비-float 타입 감지 시 로그+None 강제 방어 추가. Watchdog 로그 강화 + 텔레그램 알림 | **낮음 (근본 원인 미확정)** | 🔲 미검증 |
+
+> **DIAG-AUDIO TypeError 주의**: `is not None` 체크 후에도 TypeError 발생하는 정확한 메커니즘 미확정.
+> 로컬 캡처(Phase 1), 타입 방어(Phase 3) 순으로 수정했으나 재발 가능성 있음.
+> 재발 시 `_emb_start 타입 이상` 로그로 실제 타입 확인 후 근본 원인 추적.
+> 관련 수정계획: `Fix/260410_DIAG오디오None_수정계획.md`

@@ -9,7 +9,8 @@ PySide6 기반 방송 현장용 16채널 비디오 모니터링 솔루션.
 
 | 버전 | 주요 변경사항 |
 |------|--------------|
-| **v1.6.19** | 자동 재시작 UI 개선 — 개별 체크박스 + GridLayout 정렬 |
+| **v1.6.20** | DIAG-AUDIO 타입 방어 강화 + watchdog 텔레그램 알림 추가 — 장기 실행 후 TypeError 재발 차단, 감지 루프 중단 시 즉시 텔레그램 발송 |
+| v1.6.19 | 자동 재시작 UI 개선 — 개별 체크박스 + GridLayout 정렬 |
 | v1.6.18 | 예약 재시작 하루 2회 지원 (시각 2 선택적 활성화) |
 | v1.6.17 | DIAG-AUDIO 오류 고착 수정 + alarm/telegram/recorder 장기 실행 안정성 개선 |
 | v1.6.16 | install.bat 상대경로 절대경로화 + pycaw 버전 제한 제거 — 다른 PC 설치 시 requirements.txt 탐색 실패·pycaw 버전 불일치 오류 해결 |

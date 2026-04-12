@@ -1,5 +1,5 @@
 {
-  "port": 0,
+  "port": 1,
   "detection": {
     "black_threshold": 5,
     "black_dark_ratio": 98.0,
@@ -29,7 +29,7 @@
     "audio_tone_min_level": 5
   },
   "alarm": {
-    "sound_enabled": true,
+    "sound_enabled": false,
     "volume": 0,
     "sounds_dir": "resources/sounds",
     "sound_files": {
@@ -67,7 +67,7 @@
     "max_keep_days": 7,
     "output_width": 960,
     "output_height": 540,
-    "output_fps": 5
+    "output_fps": 30
   },
   "ui_state": {
     "detection_enabled": false,
@@ -85,10 +85,10 @@
         "video_label": ""
       },
       "suppressed_labels": [],
-      "start_time": "03:00",
+      "start_time": "03:30",
       "end_time": "05:00",
       "prep_minutes": 180,
-      "exit_prep_minutes": 30,
+      "exit_prep_minutes": 180,
       "exit_trigger_sec": 5,
       "end_next_day": false,
       "weekdays": [
@@ -120,7 +120,8 @@
     }
   },
   "system": {
-    "scheduled_restart_enabled": true,
-    "scheduled_restart_time": "03:00"
+    "scheduled_restart_enabled": false,
+    "scheduled_restart_time": "21:46",
+    "scheduled_restart_time_2": ""
   }
 }

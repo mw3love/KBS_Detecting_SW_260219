@@ -1,4 +1,5 @@
 ---
+name: eval-plan
 description: "수정계획 사전 검토(review) 및 구현 후 범용 평가(evaluate) 에이전트. 먹통 특화가 아닌 모든 종류의 코드 수정에 사용한다."
 ---
 

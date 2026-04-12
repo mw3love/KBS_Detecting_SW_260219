@@ -22,7 +22,7 @@ import numpy as np
 _log = logging.getLogger(__name__)
 
 _JPEG_QUALITY = 85
-_MAX_RECORD_FRAMES = 3000  # 녹화 큐 최대 프레임 수 (10fps × 300초 = 5분 상한, 메모리 보호)
+_MAX_RECORD_FRAMES = 9000  # 녹화 큐 최대 프레임 수 (30fps × 300초 = 5분 상한, 메모리 보호)
 
 # AudioMonitorThread 와 동일한 오디오 파라미터
 _AUDIO_SR    = 44100   # 샘플레이트 (Hz)

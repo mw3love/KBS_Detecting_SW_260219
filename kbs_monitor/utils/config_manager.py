@@ -101,7 +101,7 @@ DEFAULT_CONFIG = {
             "end_time":          "05:00",
             "end_next_day":      False,
             "prep_minutes":      150,
-            "exit_prep_minutes": 30,
+            "exit_prep_minutes": 180,
             "exit_trigger_sec":  5,
             "weekdays":          [0, 1],
         },

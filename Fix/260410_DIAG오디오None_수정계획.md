@@ -147,9 +147,9 @@
   - 로그에 `detect_timer`, `latest_frame`, `py_threads` 추가
   - 감지 루프 중단 감지 시 텔레그램 즉시 발송 (사용자가 즉시 인지 → 로그 수집 가능)
 
-- [ ] 커밋: `fix: DIAG-AUDIO 타입 방어 강화 + watchdog 텔레그램 알림 추가`
-- [ ] eval-plan evaluate HEAD~1 자동 실행
-- [ ] eval-freeze evaluate HEAD~1 자동 실행
+- [x] 커밋: `fix: DIAG-AUDIO 타입 방어 강화 + watchdog 텔레그램 알림 추가` (cf864a1)
+- [x] eval-plan evaluate HEAD~1 자동 실행 — Critical 0, High 1(기능 문제 없음)
+- [x] eval-freeze evaluate HEAD~1 자동 실행 — Critical 0, 먹통 해소 기여도 낮음(진단 품질 개선)
 
 ### Phase 4 — 검증
 - [ ] 현장 테스트 (24시간+ 운영)
